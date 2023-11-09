@@ -1,0 +1,6 @@
+some-service-tree:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    trackMutableRef: main
+    ref: old

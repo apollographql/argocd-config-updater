@@ -1,0 +1,48 @@
+source:
+  gitConfig:
+    path: foo/bar
+    ref: source-ref
+  dockerImage:
+    tag: source-tag
+
+source-just-git-config:
+  gitConfig:
+    ref: source-ref-just
+
+target-both:
+  promote:
+    from: source
+  gitConfig:
+    ref: overwrite-me-1
+  dockerImage:
+    tag: overwrite-me-2
+
+target-just-git-config:
+  promote:
+    from: source
+  gitConfig:
+    ref: overwrite-me-3
+
+target-just-docker-image:
+  promote:
+    from: source
+  dockerImage:
+    tag: overwrite-me-4
+
+target-has-both-but-source-has-one:
+  promote:
+    from: source-just-git-config
+  gitConfig:
+    ref: overwrite-me-1
+  dockerImage:
+    tag: do-not-overwrite-me
+
+completely-different-fields:
+  promote:
+    from: source
+    yamlPaths: [[gitConfig, path]]
+  gitConfig:
+    path: overwrite-this-instead
+    ref: do-not-overwrite-me
+  dockerImage:
+    tag: or-me

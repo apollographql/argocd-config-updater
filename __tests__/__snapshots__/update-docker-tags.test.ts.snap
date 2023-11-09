@@ -1,0 +1,35 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`action updates docker tags 1`] = `
+"some-service-dev0:
+  dockerImage:
+    repository: foo
+    trackMutableTag: from-mutable
+    tag: from-mutable---000123-abcd
+
+some-service-dev1:
+  dockerImage:
+    repository: foo
+    trackMutableTag: from-something-random
+    tag: from-something-random---000123-abcd
+
+some-service-dev2:
+  dockerImage:
+    repository: foo
+    trackMutableTag: needs-update
+    tag: needs-update---000200-dbca
+
+
+some-service-dev3:
+  dockerImage:
+    repository: foo
+    trackMutableTag: can-stay-same
+    tag: can-stay-same---0123-abcd
+
+some-service-dev4:
+  dockerImage:
+    repository: foo
+    trackMutableTag: should-roll-back-not-forward
+    tag: should-roll-back-not-forward---000100-abcd
+"
+`;
