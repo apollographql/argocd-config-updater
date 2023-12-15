@@ -25,6 +25,10 @@ inputs:
   promotion-target-regexp:
     description: 'Only process promote instructions for targets matching this regexp'
 
+outputs:
+  sanitized-promotion-target-regexp:
+    description: 'The promotion-target-regexp input with special characters changed to underscores; appropriate for constructing a branch name'
+
 runs:
   using: node20
   main: dist/index.js
