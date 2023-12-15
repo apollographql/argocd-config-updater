@@ -50,9 +50,14 @@ async function processFile(filename: string): Promise<void> {
     }
 
     if (core.getBooleanInput('update-promoted-values')) {
+      const promotionTargetRegexp = core.getInput('promotion-target-regexp');
       contents = await updatePromotedValues(
         contents,
-        core.getInput('promotion-target-regexp') || null,
+        promotionTargetRegexp || null,
+      );
+      core.setOutput(
+        'sanitized-promotion-target-regexp',
+        promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-0._]/g, '_'),
       );
     }
 
