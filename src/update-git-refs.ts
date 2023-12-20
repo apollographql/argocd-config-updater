@@ -6,6 +6,7 @@ import {
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
+  parseYAML,
 } from './yaml';
 
 interface Trackable {
@@ -21,55 +22,20 @@ export async function updateGitRefs(
   gitHubClient: GitHubClient,
 ): Promise<string> {
   return core.group('Processing trackMutableRef', async () => {
-    // The yaml module lets us parse YAML into three layers of abstraction:
-    // - It can create raw JS arrays/objects/etc, which is simple to dealing
-    //   with but loses track of everything relating to formatting.
-    // - It can create a low-level "Concrete Syntax Tree" (CST) which lets us
-    //   re-create the original document with byte-by-byte accuracy, but is
-    //   awkward to read from (eg, you have to navigate maps item by item rather
-    //   than using keys).
-    // - It can create a high-level "Abstract Syntax Tree" (AST) which is easier
-    //   to read from but loses some formatting details.
-    //
-    // We'd prefer to read ASTs and write CSTs, and in fact the module lets us
-    // do exactly that. We first create CSTs with the "Parser". We then convert
-    // it into ASTs with the Composer, passing in the `keepSourceTokens` option
-    // which means that every node in the AST will have a `srcToken` reference
-    // to the underlying CST node that created it. When we want to make changes,
-    // we do that by writing to the CST node found in a `srcToken` reference.
-    // Finally, when we're done, we stringify the CSTs (which have been mutated)
-    // rather than the ASTs.
-    core.info('Parsing');
-    const topLevelTokens = [...new yaml.Parser().parse(contents)];
-    const documents = [
-      ...new yaml.Composer({ keepSourceTokens: true }).compose(topLevelTokens),
-    ];
-
-    // These files are all Helm values.yaml files, and Helm doesn't support a
-    // multiple-document stream (with ---) for its value files. Or well, it
-    // ignores any documents after the first, so there's no point in allowing
-    // folks to put them in our codebase.
-    if (documents.length > 1) {
-      throw new Error('Multiple documents in YAML file');
-    }
+    const { document, stringify } = parseYAML(contents);
 
     // If the file is empty (or just whitespace or whatever), that's fine; we
     // can just leave it alone.
-    if (documents.length < 1) {
+    if (!document) {
       return contents;
     }
-
-    const document = documents[0];
 
     core.info('Looking for trackMutableRef');
     const trackables = findTrackables(document);
 
     core.info('Checking refs against GitHub');
     await checkRefsAgainstGitHubAndModifyScalars(trackables, gitHubClient);
-    core.info('Stringifying');
-    return topLevelTokens
-      .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
-      .join('');
+    return stringify();
   });
 }
 
