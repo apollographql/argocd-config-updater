@@ -12,6 +12,7 @@
   packageRules: [
     {
       // Override automerge set in apollo-open-source, as this is deployment infrastructure.
+      matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
       automerge: false,
     },
     // Bunch up all non-major dependencies into a single PR.  In the common case
