@@ -7,6 +7,7 @@ import {
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
+  parseYAML,
 } from './yaml';
 
 interface Trackable {
@@ -21,22 +22,13 @@ export async function updateDockerTags(
   dockerRegistryClient: DockerRegistryClient,
 ): Promise<string> {
   return core.group('Processing trackMutableTag', async () => {
-    // See updateGitRefs for an explanation about our approach to parsing YAML.
-    core.info('Parsing');
-    const topLevelTokens = [...new yaml.Parser().parse(contents)];
-    const documents = [
-      ...new yaml.Composer({ keepSourceTokens: true }).compose(topLevelTokens),
-    ];
+    const { document, stringify } = parseYAML(contents);
 
-    if (documents.length > 1) {
-      throw new Error('Multiple documents in YAML file');
-    }
-
-    if (documents.length < 1) {
+    // If the file is empty (or just whitespace or whatever), that's fine; we
+    // can just leave it alone.
+    if (!document) {
       return contents;
     }
-
-    const document = documents[0];
 
     core.info('Looking for trackMutableTag');
     const trackables = findTrackables(document);
@@ -46,10 +38,7 @@ export async function updateDockerTags(
       trackables,
       dockerRegistryClient,
     );
-    core.info('Stringifying');
-    return topLevelTokens
-      .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
-      .join('');
+    return stringify();
   });
 }
 

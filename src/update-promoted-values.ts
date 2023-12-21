@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { RE2 } from 're2-wasm';
 import * as yaml from 'yaml';
-import { ScalarTokenWriter, getTopLevelBlocks } from './yaml';
+import { ScalarTokenWriter, getTopLevelBlocks, parseYAML } from './yaml';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -24,28 +24,24 @@ export async function updatePromotedValues(
       ? new RE2(promotionTargetRegexp, 'u')
       : null;
 
-    // See updateGitRefs for an explanation about our approach to parsing YAML.
-    core.info('Parsing');
-    const topLevelTokens = [...new yaml.Parser().parse(contents)];
-    const documents = [
-      ...new yaml.Composer({ keepSourceTokens: true }).compose(topLevelTokens),
-    ];
+    const { document, stringify } = parseYAML(contents);
+
+    // If the file is empty (or just whitespace or whatever), that's fine; we
+    // can just leave it alone.
+    if (!document) {
+      return contents;
+    }
 
     // We decide what to do and then we do it, just in case there are any
     // overlaps between our reads and writes.
     core.info('Looking for promote');
-    const promotes = documents.flatMap((document) =>
-      findPromotes(document, promotionTargetRE2),
-    );
+    const promotes = findPromotes(document, promotionTargetRE2);
 
     core.info('Copying values');
     for (const { scalarTokenWriter, value } of promotes) {
       scalarTokenWriter.write(value);
     }
-    core.info('Stringifying');
-    return topLevelTokens
-      .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
-      .join('');
+    return stringify();
   });
 }
 
