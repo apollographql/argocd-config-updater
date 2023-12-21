@@ -9,9 +9,11 @@
   // It's nice to be able to see PRs for everything in the Dependency Dashboard.
   prCreation: 'immediate',
   dependencyDashboard: true,
-  // Override automerge set in apollo-open-source, as this is deployment infrastructure.
-  automerge: false,
   packageRules: [
+    {
+      // Override automerge set in apollo-open-source, as this is deployment infrastructure.
+      automerge: false,
+    },
     // Bunch up all non-major dependencies into a single PR.  In the common case
     // where the upgrades apply cleanly, this causes less noise and is resolved faster
     // than starting a bunch of upgrades in parallel for what may turn out to be
