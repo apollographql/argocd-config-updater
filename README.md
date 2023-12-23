@@ -72,6 +72,13 @@ Running this action can do three different things, depending on which inputs are
 provided. You must provide the `files` input, which is a glob pattern for which
 files to update.
 
+The effect of this action is to rewrite YAML files in the repository.
+It is designed for use with other actions that can
+[commit and push the changes](https://github.com/stefanzweifel/git-auto-commit-action)
+or [maintain PRs containing the changes](https://github.com/peter-evans/create-pull-request/).
+Specifically, Apollo uses `git-auto-commit-action` for `trackMutableRef` and
+`trackMutableTag`, and `create-pull-request` for `promote`.
+
 ## Updating git refs
 
 For each top-level section with a `gitConfig` block, if the `gitConfig` block
