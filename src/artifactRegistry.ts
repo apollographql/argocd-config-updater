@@ -14,13 +14,34 @@ export interface DockerRegistryClient {
 
 export class ArtifactRegistryDockerRegistryClient {
   private client: ArtifactRegistryClient;
+  private repositoryFields: {
+    project: string;
+    location: string;
+    repository: string;
+  };
   constructor(
     /** A string of the form
      * `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`; this is an
      * Artifact Registry repository, which is a set of Docker repositories. */
-    private artifactRegistryRepository: string,
+    artifactRegistryRepository: string,
   ) {
     this.client = new ArtifactRegistryClient();
+    const { project, location, repository } =
+      this.client.pathTemplates.repositoryPathTemplate.match(
+        artifactRegistryRepository,
+      );
+
+    if (typeof project !== 'string') {
+      throw Error(`String expected for 'project'`);
+    }
+    if (typeof location !== 'string') {
+      throw Error(`String expected for 'location'`);
+    }
+    if (typeof repository !== 'string') {
+      throw Error(`String expected for 'repository'`);
+    }
+
+    this.repositoryFields = { project, location, repository };
   }
 
   async getAllEquivalentTags({
@@ -36,31 +57,40 @@ export class ArtifactRegistryDockerRegistryClient {
       throw Error('tag cannot contain a slash');
     }
 
-    const tagPrefix = `${this.artifactRegistryRepository}/packages/${dockerImageRepository}/tags/`;
-
-    core.info(`Fetching tag ${tagPrefix}${tag}`);
-    // Note: this throws if the repository or tag are not found.
-    const { version } = (
-      await this.client.getTag({ name: `${tagPrefix}${tag}` })
-    )[0];
-    if (!version) {
-      throw Error(`No version found for ${dockerImageRepository}@${tag}`);
-    }
-
-    core.info(`Fetching version ${version}`);
-    const { relatedTags } = (
-      await this.client.getVersion({ name: version, view: 'FULL' })
-    )[0];
-    if (!relatedTags) {
-      throw Error(`No related tags returned for ${version}`);
-    }
-    return relatedTags.map(({ name }) => {
-      if (!name?.startsWith(tagPrefix)) {
-        throw Error(
-          `Expected tag name to start with '${tagPrefix}'; got '${name}'`,
-        );
-      }
-      return name.slice(tagPrefix.length);
+    const tagPath = this.client.pathTemplates.tagPathTemplate.render({
+      ...this.repositoryFields,
+      package: dockerImageRepository,
+      tag,
     });
+
+    core.info(`Fetching tag ${tagPath}`);
+    // Note: this throws if the repository or tag are not found.
+    const { version } = (await this.client.getTag({ name: tagPath }))[0];
+    if (!version) {
+      throw Error(`No version found for ${tagPath}`);
+    }
+
+    // It may seem like you can just use `this.client.getVersion({name: version,
+    // view: 'FULL'})` here and look in the "relatedTags" field, but that field
+    // only shows at most 100 tags. Instead, use the Docker Image-specific API
+    // which returns all tags.
+
+    const parsedVersion =
+      this.client.pathTemplates.versionPathTemplate.match(version);
+
+    const dockerImagePath =
+      this.client.pathTemplates.dockerImagePathTemplate.render({
+        ...this.repositoryFields,
+        docker_image: `${parsedVersion.package}@${parsedVersion.version}`,
+      });
+
+    core.info(`Fetching Docker image ${dockerImagePath}`);
+    const { tags } = (
+      await this.client.getDockerImage({ name: dockerImagePath })
+    )[0];
+    if (!tags) {
+      throw Error(`No tags returned for ${dockerImagePath}`);
+    }
+    return tags;
   }
 }
