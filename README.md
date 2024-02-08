@@ -94,6 +94,9 @@ If the value at `ref` is already a git commit SHA, and the subtree named by
 This means that changes to other parts of the repository will not result in
 "no-op" changes to this line.
 
+As a convenience, if `trackMutableRef` has the form `pr-123` followed by digits,
+it is converted to `pull/123/head`, which is the ref syntax GitHub uses for PRs.
+
 The effect of using `trackMutableRef` is similar to just specifying the mutable
 ref directly as the ref which the ArgoCD application tracks. But by explicitly
 changing the config file for each update, you can clearly see the difference

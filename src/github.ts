@@ -37,11 +37,12 @@ export class OctokitGitHubClient {
     ref,
   }: ResolveRefToShaOptions): Promise<string> {
     const { owner, repo } = parseRepoURL(repoURL);
+    const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
         repo,
-        ref,
+        ref: prNumber ? `pull/${prNumber}/head` : ref,
         mediaType: {
           format: 'sha',
         },
