@@ -8,6 +8,7 @@ import { OctokitGitHubClient } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
+import { updateHelmChartDependencies } from './update-helm-chart-version';
 
 /**
  * The main function for the action.
@@ -58,6 +59,20 @@ async function processFile(filename: string): Promise<void> {
       core.setOutput(
         'sanitized-promotion-target-regexp',
         promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-0._]/g, '_'),
+      );
+    }
+
+    const artifactRegistryRepositoryHelm = core.getInput(
+      'update-helm-chart-for-artifact-registry-repository',
+    );
+
+    if (artifactRegistryRepositoryHelm) {
+      const artifactRegistryClient = new ArtifactRegistryDockerRegistryClient(
+        artifactRegistryRepositoryHelm,
+      );
+      contents = await updateHelmChartDependencies(
+        contents,
+        artifactRegistryClient,
       );
     }
 
