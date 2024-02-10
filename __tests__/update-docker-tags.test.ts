@@ -38,6 +38,9 @@ describe('action', () => {
           }[tag] ?? []
         );
       },
+      async getLatestChartVersion() {
+        return '1.2.3';
+      },
     };
     const newContents = await updateDockerTags(contents, dockerRegistryClient);
     expect(newContents).toMatchSnapshot();

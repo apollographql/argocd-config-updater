@@ -3,7 +3,6 @@ import * as yaml from 'yaml';
 import { DockerRegistryClient } from './artifactRegistry';
 import {
   ScalarTokenWriter,
-  getStringAndScalarTokenFromMap,
   getStringValue,
   parseYAML,
   getScalarTokenFromMap,
