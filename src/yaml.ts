@@ -89,6 +89,27 @@ export function getStringValue(node: yaml.YAMLMap, key: string): string | null {
 }
 
 /**  Returns null if the value isn't there at all; throws if it's there but isn't
+ * a scalar. */
+export function getScalarTokenFromMap(
+  node: yaml.YAMLMap,
+  key: string,
+): { scalarToken: CSTScalarToken } | null {
+  if (!node.has(key)) {
+    return null;
+  }
+  const scalar = node.get(key, true);
+  if (!yaml.isScalar(scalar)) {
+    throw Error(`${key} value must be a scalar`);
+  }
+  const scalarToken = scalar?.srcToken;
+  if (!yaml.CST.isScalar(scalarToken)) {
+    // this probably can't happen, but let's make the types happy
+    throw Error(`${key} value must come from a scalar token`);
+  }
+  return { scalarToken };
+}
+
+/**  Returns null if the value isn't there at all; throws if it's there but isn't
  * a string. */
 export function getStringAndScalarTokenFromMap(
   node: yaml.YAMLMap,

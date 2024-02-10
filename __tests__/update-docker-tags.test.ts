@@ -38,6 +38,12 @@ describe('action', () => {
           }[tag] ?? []
         );
       },
+      async getLatestChartVersion() {
+        return '1.2.3';
+      },
+      ociString(): string {
+        return 'oci://gcr.io/project/repo';
+      },
     };
     const newContents = await updateDockerTags(contents, dockerRegistryClient);
     expect(newContents).toMatchSnapshot();
