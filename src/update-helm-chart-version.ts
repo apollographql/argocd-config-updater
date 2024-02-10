@@ -45,10 +45,11 @@ export async function updateHelmChartDependencies(
       const repository = getStringValue(dep, 'repository');
       const version = getScalarTokenFromMap(dep, 'version');
       if (depName && repository && version) {
-        if (repository.startsWith('oci://')) {
+        if (repository === dockerRegistryClient.ociString()) {
           // TODO: This could be cached
           const newVersion =
             await dockerRegistryClient.getLatestChartVersion(depName);
+
           if (newVersion) {
             core.info(
               `Updating helm chart ${depName} to use version ${newVersion}`,

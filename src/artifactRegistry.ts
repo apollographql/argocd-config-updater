@@ -12,6 +12,7 @@ export interface GetAllEquivalentTagsOptions {
 export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getLatestChartVersion(helmChart: string): Promise<string | null>;
+  ociString(): string;
 }
 
 export class ArtifactRegistryDockerRegistryClient {
@@ -45,6 +46,10 @@ export class ArtifactRegistryDockerRegistryClient {
     }
 
     this.repositoryFields = { project, location, repository };
+  }
+
+  ociString(): string {
+    return `oci://${this.repositoryFields.location}-docker.pkg.dev/${this.repositoryFields.project}/${this.repositoryFields.repository}`;
   }
 
   async getAllEquivalentTags({
