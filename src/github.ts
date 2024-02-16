@@ -1,4 +1,5 @@
 import { getOctokit } from '@actions/github';
+import { LRUCache } from 'lru-cache';
 
 export interface ResolveRefToShaOptions {
   repoURL: string;
@@ -97,5 +98,42 @@ export class OctokitGitHubClient {
       throw Error('response does not appear to be a tree');
     }
     return data.sha;
+  }
+}
+
+export class CachingGitHubClient {
+  constructor(private wrapped: GitHubClient) {}
+
+  private resolveRefToShaCache = new LRUCache<string, string>({ max: 1024 });
+  // LRUCache can't store null, so we box it.
+  private getTreeSHAForPathCache = new LRUCache<
+    string,
+    { boxed: string | null }
+  >({
+    max: 1024,
+  });
+
+  async resolveRefToSha(options: ResolveRefToShaOptions): Promise<string> {
+    const cacheKey = JSON.stringify(options);
+    const cached = this.resolveRefToShaCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const ret = await this.wrapped.resolveRefToSha(options);
+    this.resolveRefToShaCache.set(cacheKey, ret);
+    return ret;
+  }
+
+  async getTreeSHAForPath(
+    options: GetTreeSHAForPathOptions,
+  ): Promise<string | null> {
+    const cacheKey = JSON.stringify(options);
+    const cached = this.getTreeSHAForPathCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached.boxed;
+    }
+    const ret = await this.wrapped.getTreeSHAForPath(options);
+    this.getTreeSHAForPathCache.set(cacheKey, { boxed: ret });
+    return ret;
   }
 }
