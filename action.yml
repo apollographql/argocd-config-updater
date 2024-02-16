@@ -24,6 +24,10 @@ inputs:
   
   promotion-target-regexp:
     description: 'Only process promote instructions for targets matching this regexp'
+  
+  parallelism:
+    description: 'How many files to process in parallel'
+    default: '1'
 
 outputs:
   sanitized-promotion-target-regexp:
