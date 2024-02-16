@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import { ArtifactRegistryClient } from '@google-cloud/artifact-registry';
+import { LRUCache } from 'lru-cache';
 
 export interface GetAllEquivalentTagsOptions {
   /** The name of the specific Docker image in question (ie, a Docker
@@ -92,5 +93,25 @@ export class ArtifactRegistryDockerRegistryClient {
       throw Error(`No tags returned for ${dockerImagePath}`);
     }
     return tags;
+  }
+}
+
+export class CachingDockerRegistryClient {
+  constructor(private wrapped: DockerRegistryClient) {}
+  private getAllEquivalentTagsCache = new LRUCache<string, string[]>({
+    max: 1024,
+  });
+
+  async getAllEquivalentTags(
+    options: GetAllEquivalentTagsOptions,
+  ): Promise<string[]> {
+    const cacheKey = JSON.stringify(options);
+    const cached = this.getAllEquivalentTagsCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const ret = await this.wrapped.getAllEquivalentTags(options);
+    this.getAllEquivalentTagsCache.set(cacheKey, ret);
+    return ret;
   }
 }

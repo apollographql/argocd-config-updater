@@ -3,8 +3,11 @@ import * as github from '@actions/github';
 import * as glob from '@actions/glob';
 import { throttling } from '@octokit/plugin-throttling';
 import { readFile, writeFile } from 'fs/promises';
-import { ArtifactRegistryDockerRegistryClient } from './artifactRegistry';
-import { OctokitGitHubClient } from './github';
+import {
+  ArtifactRegistryDockerRegistryClient,
+  CachingDockerRegistryClient,
+} from './artifactRegistry';
+import { CachingGitHubClient, OctokitGitHubClient } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
@@ -34,7 +37,9 @@ async function processFile(filename: string): Promise<void> {
     if (core.getBooleanInput('update-git-refs')) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(githubToken, throttling);
-      const gitHubClient = new OctokitGitHubClient(octokit);
+      const gitHubClient = new CachingGitHubClient(
+        new OctokitGitHubClient(octokit),
+      );
       contents = await updateGitRefs(contents, gitHubClient);
     }
 
@@ -43,8 +48,8 @@ async function processFile(filename: string): Promise<void> {
     );
 
     if (artifactRegistryRepository) {
-      const dockerRegistryClient = new ArtifactRegistryDockerRegistryClient(
-        artifactRegistryRepository,
+      const dockerRegistryClient = new CachingDockerRegistryClient(
+        new ArtifactRegistryDockerRegistryClient(artifactRegistryRepository),
       );
       contents = await updateDockerTags(contents, dockerRegistryClient);
     }
