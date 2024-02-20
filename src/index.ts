@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as glob from '@actions/glob';
 import { throttling } from '@octokit/plugin-throttling';
+import { eachLimit } from 'async';
 import { readFile, writeFile } from 'fs/promises';
 import {
   ArtifactRegistryDockerRegistryClient,
@@ -21,9 +22,8 @@ export async function main(): Promise<void> {
     const files = core.getInput('files');
     const globber = await glob.create(files);
     const filenames = await globber.glob();
-    for (const filename of filenames) {
-      await processFile(filename);
-    }
+    const parallelism = +core.getInput('parallelism');
+    await eachLimit(filenames, parallelism, processFile);
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
