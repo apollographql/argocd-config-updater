@@ -86,7 +86,9 @@ contains the keys `repoURL`, `path`, `trackMutableRef` and `ref`, then this
 action can update the value at `ref` to be equal to the current git SHA for the
 ref named by `trackMutableRef` in the repository named by `repoURL`. (The
 `repoURL` and `path` keys may also be found in a `gitConfig` block under the
-top-level `global` block.)
+top-level `global` block. You may also specify the mutable ref to track under
+the key `track` at the same level as `gitConfig`; in this case, the same value
+will be used for Docker tag tracking.)
 
 If the value at `ref` is already a git commit SHA, and the subtree named by
 `path` is identical at the commit it names and the commit named by
@@ -115,7 +117,9 @@ block contains the keys `repository`, `trackMutableTag` and `tag`, then this
 action can update the value at `tag` to be equal to an "immutable" tag which
 points at the same image version as the tag named in `trackMutableTag` for the
 image named by `repository`. (The `repository` key may also be found in a
-`dockerImage` block under the top-level `global` block.)
+`dockerImage` block under the top-level `global` block. You may also specify the
+mutable tag to track under the key `track` at the same level as `dockerImage`;
+in this case, the same value will be used for git ref tracking.)
 
 Specifically, this automation treats as immutable any tag starting with the
 value of `trackMutableTag` followed by `---`. The assumption is that a build

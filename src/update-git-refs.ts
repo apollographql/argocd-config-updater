@@ -69,7 +69,11 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
 
     const repoURL = getStringValue(gitConfigBlock, 'repoURL') ?? globalRepoURL;
     const path = getStringValue(gitConfigBlock, 'path') ?? globalPath;
-    const trackMutableRef = getStringValue(gitConfigBlock, 'trackMutableRef');
+    // Tracking can be specified at `gitConfig.trackMutableRef` or just at
+    // `track`.
+    const trackMutableRef =
+      getStringValue(gitConfigBlock, 'trackMutableRef') ??
+      getStringValue(value, 'track');
     const refScalarTokenAndValue = getStringAndScalarTokenFromMap(
       gitConfigBlock,
       'ref',

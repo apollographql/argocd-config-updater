@@ -12,11 +12,11 @@ inputs:
     description: 'GitHub token to read refs and trees; only needed if update-git-refs is set'
   
   update-git-refs:
-    description: 'Process trackMutableRef instructions'
+    description: 'Update tracked gitConfig.ref fields'
     default: 'false'
   
   update-docker-tags-for-artifact-registry-repository:
-    description: 'Process trackMutableTag instructions; must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
+    description: 'Updated tracked dockerImage.tag fields; must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
   
   update-promoted-values:
     description: 'Process promote instructions'

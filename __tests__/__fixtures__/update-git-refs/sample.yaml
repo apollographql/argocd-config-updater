@@ -32,3 +32,10 @@ another:
     path: services/hello-world
     ref: abcdef   # this becomes a number and will definitely need to be quoted
     trackMutableRef: make-it-numeric
+
+some-service-top-level:
+  track: pr-1234
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: "abcdef"   # this should change but stay double-quoted!
