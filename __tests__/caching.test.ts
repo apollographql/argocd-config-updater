@@ -67,11 +67,13 @@ describe('CachingGitHubClient caches', () => {
 
     async function exp(
       repoURL: string,
-      ref: string,
+      commitSHA: string,
       path: string,
       ret: string,
     ): Promise<void> {
-      expect(await client.getTreeSHAForPath({ repoURL, ref, path })).toBe(ret);
+      expect(await client.getTreeSHAForPath({ repoURL, commitSHA, path })).toBe(
+        ret,
+      );
     }
 
     await exp('x', 'y', 'p', '1');

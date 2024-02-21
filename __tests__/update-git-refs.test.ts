@@ -42,11 +42,11 @@ describe('action', () => {
   it('only changes ref when tree sha changes', async () => {
     let treeSHAForNew = 'aaaa';
     const mockGithubClientTreeSHA: GitHubClient = {
-      async resolveRefToSha() {
-        return 'new';
+      async resolveRefToSha({ ref }) {
+        return ref === 'main' ? 'new' : 'old';
       },
-      async getTreeSHAForPath({ ref }) {
-        return ref === 'old' ? 'aaaa' : treeSHAForNew;
+      async getTreeSHAForPath({ commitSHA }) {
+        return commitSHA === 'old' ? 'aaaa' : treeSHAForNew;
       },
     };
 

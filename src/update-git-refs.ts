@@ -97,7 +97,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
   gitHubClient: GitHubClient,
 ): Promise<void> {
   for (const trackable of trackables) {
-    const mutableRefCurrentSHA = await gitHubClient.resolveRefToSha({
+    const trackedRefCommitSHA = await gitHubClient.resolveRefToSha({
       repoURL: trackable.repoURL,
       ref: trackable.trackMutableRef,
     });
@@ -108,14 +108,21 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       // because they're the same). This is something that might happen when
       // you're first adding an app (ie just writing the same thing twice and
       // letting the automation "correct" it to a SHA).
-      trackable.refScalarTokenWriter.write(mutableRefCurrentSHA);
+      trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
       continue;
     }
 
-    if (trackable.ref === mutableRefCurrentSHA) {
+    if (trackable.ref === trackedRefCommitSHA) {
       // The thing we would write is already in the file.
       continue;
     }
+
+    // Convert trackable.ref to SHA too, because getTreeSHAForPath requires you
+    // to pass a commit SHA (due to the particular GitHub APIs it uses).
+    const currentRefCommitSHA = await gitHubClient.resolveRefToSha({
+      repoURL: trackable.repoURL,
+      ref: trackable.ref,
+    });
 
     // OK, we've got a SHA that we could overwrite the current ref
     // (`trackable.ref`) with in the config file. But we don't want to do this
@@ -125,29 +132,29 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // the SHA we're thinking about replacing it with.
     const currentTreeSHA = await gitHubClient.getTreeSHAForPath({
       repoURL: trackable.repoURL,
-      ref: trackable.ref,
+      commitSHA: currentRefCommitSHA,
       path: trackable.path,
     });
-    const newTreeSHA = await gitHubClient.getTreeSHAForPath({
+    const trackedTreeSHA = await gitHubClient.getTreeSHAForPath({
       repoURL: trackable.repoURL,
-      ref: mutableRefCurrentSHA,
+      commitSHA: trackedRefCommitSHA,
       path: trackable.path,
     });
-    if (newTreeSHA === null) {
+    if (trackedTreeSHA === null) {
       throw Error(
-        `Could not get tree SHA for ${mutableRefCurrentSHA} in ${trackable.repoURL} for ref ${trackable.path}`,
+        `Could not get tree SHA for ${trackedRefCommitSHA} in ${trackable.repoURL} for ref ${trackable.path}`,
       );
     }
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
     core.info(
-      `for path ${trackable.path}, got tree shas ${currentTreeSHA} for ${trackable.ref} and ${newTreeSHA} for ${mutableRefCurrentSHA}`,
+      `for path ${trackable.path}, got tree shas ${currentTreeSHA} for ${trackable.ref} and ${trackedTreeSHA} for ${trackedRefCommitSHA}`,
     );
-    if (currentTreeSHA === newTreeSHA) {
+    if (currentTreeSHA === trackedTreeSHA) {
       core.info('(unchanged)');
     } else {
       core.info('(changed!)');
-      trackable.refScalarTokenWriter.write(mutableRefCurrentSHA);
+      trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }
 }

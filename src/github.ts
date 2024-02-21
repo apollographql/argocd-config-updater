@@ -8,7 +8,7 @@ export interface ResolveRefToShaOptions {
 
 export interface GetTreeSHAForPathOptions {
   repoURL: string;
-  ref: string;
+  commitSHA: string;
   path: string;
 }
 
@@ -60,7 +60,7 @@ export class OctokitGitHubClient {
 
   async getTreeSHAForPath({
     repoURL,
-    ref,
+    commitSHA,
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
@@ -70,7 +70,7 @@ export class OctokitGitHubClient {
         await this.octokit.rest.repos.getContent({
           owner,
           repo,
-          ref,
+          ref: commitSHA,
           path,
           mediaType: {
             format: 'object',
