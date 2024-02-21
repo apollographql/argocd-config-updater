@@ -60,9 +60,17 @@ async function processFile(filename: string): Promise<void> {
         contents,
         promotionTargetRegexp || null,
       );
+      // Legacy: remove this once users switch over to suggested-promotion-branch-name.
       core.setOutput(
         'sanitized-promotion-target-regexp',
-        promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-0._]/g, '_'),
+        promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-9._]/g, '_'),
+      );
+      core.setOutput(
+        'suggested-promotion-branch-name',
+        `${promotionTargetRegexp}_${core.getInput('files')}`.replaceAll(
+          /[^-a-zA-Z0-9._]/g,
+          '_',
+        ),
       );
     }
 

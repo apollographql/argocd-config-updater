@@ -31,7 +31,10 @@ inputs:
 
 outputs:
   sanitized-promotion-target-regexp:
-    description: 'The promotion-target-regexp input with special characters changed to underscores; appropriate for constructing a branch name'
+    description: 'DEPRECATED: The promotion-target-regexp input with special characters changed to underscores; appropriate for constructing a branch name'
+
+  suggested-promotion-branch-name:
+    description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
 
 runs:
   using: node20
