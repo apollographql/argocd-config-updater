@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { LRUCache } from 'lru-cache';
 
@@ -51,6 +52,7 @@ export class OctokitGitHubClient {
     fetchMethod: async (_key, _staleValue, { context }) => {
       const { repoURL, commitSHA } = context;
       const { owner, repo } = parseRepoURL(repoURL);
+      core.info(`GH API: git.getCommit ${owner}/${repo} ${commitSHA}`);
       const rootTreeSHA = (
         await this.octokit.rest.git.getCommit({
           owner,
@@ -58,6 +60,7 @@ export class OctokitGitHubClient {
           commit_sha: commitSHA,
         })
       ).data.tree.sha;
+      core.info(`GH API: git.getTree ${owner}/${repo} ${rootTreeSHA}`);
       const { tree, truncated } = (
         await this.octokit.rest.git.getTree({
           owner,
@@ -92,11 +95,13 @@ export class OctokitGitHubClient {
   }: ResolveRefToSHAOptions): Promise<string> {
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
+    const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
+    core.info(`GH API: repos.getCommit ${owner}/${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
         repo,
-        ref: prNumber ? `pull/${prNumber}/head` : ref,
+        ref: refParameter,
         mediaType: {
           format: 'sha',
         },
@@ -148,6 +153,7 @@ export class OctokitGitHubClient {
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
+    core.info(`GH API: repos.getContent ${owner}/${repo} ${commitSHA}`);
     let data;
     try {
       data = (

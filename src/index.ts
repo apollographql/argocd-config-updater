@@ -7,8 +7,13 @@ import { readFile, writeFile } from 'fs/promises';
 import {
   ArtifactRegistryDockerRegistryClient,
   CachingDockerRegistryClient,
+  DockerRegistryClient,
 } from './artifactRegistry';
-import { CachingGitHubClient, OctokitGitHubClient } from './github';
+import {
+  CachingGitHubClient,
+  GitHubClient,
+  OctokitGitHubClient,
+} from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
@@ -22,35 +27,47 @@ export async function main(): Promise<void> {
     const files = core.getInput('files');
     const globber = await glob.create(files);
     const filenames = await globber.glob();
+
+    let gitHubClient: GitHubClient | null = null;
+    if (core.getBooleanInput('update-git-refs')) {
+      const githubToken = core.getInput('github-token');
+      const octokit = github.getOctokit(githubToken, throttling);
+      gitHubClient = new CachingGitHubClient(new OctokitGitHubClient(octokit));
+    }
+
+    let dockerRegistryClient: DockerRegistryClient | null = null;
+    const artifactRegistryRepository = core.getInput(
+      'update-docker-tags-for-artifact-registry-repository',
+    );
+    if (artifactRegistryRepository) {
+      dockerRegistryClient = new CachingDockerRegistryClient(
+        new ArtifactRegistryDockerRegistryClient(artifactRegistryRepository),
+      );
+    }
+
     const parallelism = +core.getInput('parallelism');
-    await eachLimit(filenames, parallelism, processFile);
+    await eachLimit(filenames, parallelism, async (f) =>
+      processFile(f, gitHubClient, dockerRegistryClient),
+    );
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
   }
 }
 
-async function processFile(filename: string): Promise<void> {
+async function processFile(
+  filename: string,
+  gitHubClient: GitHubClient | null,
+  dockerRegistryClient: DockerRegistryClient | null,
+): Promise<void> {
   return core.group(`Processing ${filename}`, async () => {
     let contents = await readFile(filename, 'utf-8');
 
-    if (core.getBooleanInput('update-git-refs')) {
-      const githubToken = core.getInput('github-token');
-      const octokit = github.getOctokit(githubToken, throttling);
-      const gitHubClient = new CachingGitHubClient(
-        new OctokitGitHubClient(octokit),
-      );
+    if (gitHubClient) {
       contents = await updateGitRefs(contents, gitHubClient);
     }
 
-    const artifactRegistryRepository = core.getInput(
-      'update-docker-tags-for-artifact-registry-repository',
-    );
-
-    if (artifactRegistryRepository) {
-      const dockerRegistryClient = new CachingDockerRegistryClient(
-        new ArtifactRegistryDockerRegistryClient(artifactRegistryRepository),
-      );
+    if (dockerRegistryClient) {
       contents = await updateDockerTags(contents, dockerRegistryClient);
     }
 
