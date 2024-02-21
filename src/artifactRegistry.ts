@@ -98,20 +98,29 @@ export class ArtifactRegistryDockerRegistryClient {
 
 export class CachingDockerRegistryClient {
   constructor(private wrapped: DockerRegistryClient) {}
-  private getAllEquivalentTagsCache = new LRUCache<string, string[]>({
+  private getAllEquivalentTagsCache = new LRUCache<
+    string,
+    string[],
+    GetAllEquivalentTagsOptions
+  >({
     max: 1024,
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return this.wrapped.getAllEquivalentTags(context);
+    },
   });
 
   async getAllEquivalentTags(
     options: GetAllEquivalentTagsOptions,
   ): Promise<string[]> {
-    const cacheKey = JSON.stringify(options);
-    const cached = this.getAllEquivalentTagsCache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached;
+    const tags = await this.getAllEquivalentTagsCache.fetch(
+      JSON.stringify(options),
+      { context: options },
+    );
+    if (!tags) {
+      throw Error(
+        'getAllEquivalentTagsCache.fetch should never resolve without a list of tags',
+      );
     }
-    const ret = await this.wrapped.getAllEquivalentTags(options);
-    this.getAllEquivalentTagsCache.set(cacheKey, ret);
-    return ret;
+    return tags;
   }
 }
