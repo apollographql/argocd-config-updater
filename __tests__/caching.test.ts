@@ -29,10 +29,10 @@ describe('CachingDockerRegistryClient caches', () => {
 });
 
 describe('CachingGitHubClient caches', () => {
-  it('resolveRefToSha caches', async () => {
+  it('resolveRefToSHA caches', async () => {
     let call = 0;
     const client = new CachingGitHubClient({
-      async resolveRefToSha() {
+      async resolveRefToSHA() {
         return (++call).toString();
       },
       async getTreeSHAForPath() {
@@ -45,7 +45,7 @@ describe('CachingGitHubClient caches', () => {
       ref: string,
       ret: string,
     ): Promise<void> {
-      expect(await client.resolveRefToSha({ repoURL, ref })).toBe(ret);
+      expect(await client.resolveRefToSHA({ repoURL, ref })).toBe(ret);
     }
 
     await exp('x', 'y', '1');
@@ -57,7 +57,7 @@ describe('CachingGitHubClient caches', () => {
   it('getTreeSHAForPath caches', async () => {
     let call = 0;
     const client = new CachingGitHubClient({
-      async resolveRefToSha() {
+      async resolveRefToSHA() {
         return '';
       },
       async getTreeSHAForPath() {

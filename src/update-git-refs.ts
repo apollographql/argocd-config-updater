@@ -97,7 +97,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
   gitHubClient: GitHubClient,
 ): Promise<void> {
   for (const trackable of trackables) {
-    const trackedRefCommitSHA = await gitHubClient.resolveRefToSha({
+    const trackedRefCommitSHA = await gitHubClient.resolveRefToSHA({
       repoURL: trackable.repoURL,
       ref: trackable.trackMutableRef,
     });
@@ -119,7 +119,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
 
     // Convert trackable.ref to SHA too, because getTreeSHAForPath requires you
     // to pass a commit SHA (due to the particular GitHub APIs it uses).
-    const currentRefCommitSHA = await gitHubClient.resolveRefToSha({
+    const currentRefCommitSHA = await gitHubClient.resolveRefToSHA({
       repoURL: trackable.repoURL,
       ref: trackable.ref,
     });

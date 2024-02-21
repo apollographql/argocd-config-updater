@@ -1,7 +1,7 @@
 import { getOctokit } from '@actions/github';
 import { LRUCache } from 'lru-cache';
 
-export interface ResolveRefToShaOptions {
+export interface ResolveRefToSHAOptions {
   repoURL: string;
   ref: string;
 }
@@ -13,7 +13,7 @@ export interface GetTreeSHAForPathOptions {
 }
 
 export interface GitHubClient {
-  resolveRefToSha(options: ResolveRefToShaOptions): Promise<string>;
+  resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string>;
   getTreeSHAForPath(options: GetTreeSHAForPathOptions): Promise<string | null>;
 }
 
@@ -33,10 +33,10 @@ function parseRepoURL(repoURL: string): OwnerAndRepo {
 export class OctokitGitHubClient {
   constructor(private octokit: ReturnType<typeof getOctokit>) {}
 
-  async resolveRefToSha({
+  async resolveRefToSHA({
     repoURL,
     ref,
-  }: ResolveRefToShaOptions): Promise<string> {
+  }: ResolveRefToSHAOptions): Promise<string> {
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
     const sha = (
@@ -104,7 +104,7 @@ export class OctokitGitHubClient {
 export class CachingGitHubClient {
   constructor(private wrapped: GitHubClient) {}
 
-  private resolveRefToShaCache = new LRUCache<string, string>({ max: 1024 });
+  private resolveRefToSHACache = new LRUCache<string, string>({ max: 1024 });
   // LRUCache can't store null, so we box it.
   private getTreeSHAForPathCache = new LRUCache<
     string,
@@ -113,14 +113,14 @@ export class CachingGitHubClient {
     max: 1024,
   });
 
-  async resolveRefToSha(options: ResolveRefToShaOptions): Promise<string> {
+  async resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string> {
     const cacheKey = JSON.stringify(options);
-    const cached = this.resolveRefToShaCache.get(cacheKey);
+    const cached = this.resolveRefToSHACache.get(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
-    const ret = await this.wrapped.resolveRefToSha(options);
-    this.resolveRefToShaCache.set(cacheKey, ret);
+    const ret = await this.wrapped.resolveRefToSHA(options);
+    this.resolveRefToSHACache.set(cacheKey, ret);
     return ret;
   }
 

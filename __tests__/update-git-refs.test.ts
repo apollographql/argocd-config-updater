@@ -4,7 +4,7 @@ import { GitHubClient } from '../src/github';
 import { updateGitRefs } from '../src/update-git-refs';
 
 const mockGitHubClient: GitHubClient = {
-  async resolveRefToSha({ ref }) {
+  async resolveRefToSHA({ ref }) {
     if (ref === 'make-it-numeric') {
       return '12345678';
     }
@@ -42,7 +42,7 @@ describe('action', () => {
   it('only changes ref when tree sha changes', async () => {
     let treeSHAForNew = 'aaaa';
     const mockGithubClientTreeSHA: GitHubClient = {
-      async resolveRefToSha({ ref }) {
+      async resolveRefToSHA({ ref }) {
         return ref === 'main' ? 'new' : 'old';
       },
       async getTreeSHAForPath({ commitSHA }) {
