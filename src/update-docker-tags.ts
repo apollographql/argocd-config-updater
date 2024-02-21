@@ -74,7 +74,11 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
     const dockerImageRepository =
       getStringValue(dockerImageBlock, 'repository') ??
       globalDockerImageRepository;
-    const trackMutableTag = getStringValue(dockerImageBlock, 'trackMutableTag');
+    // Tracking can be specified at `dockerImage.trackMutableTag` or just at
+    // `track`.
+    const trackMutableTag =
+      getStringValue(dockerImageBlock, 'trackMutableTag') ??
+      getStringValue(value, 'track');
     const tagScalarTokenAndValue = getStringAndScalarTokenFromMap(
       dockerImageBlock,
       'tag',

@@ -31,5 +31,11 @@ some-service-dev4:
     repository: foo
     trackMutableTag: should-roll-back-not-forward
     tag: should-roll-back-not-forward---000100-abcd
+
+some-service-top-level:
+  track: from-mutable
+  dockerImage:
+    repository: foo
+    tag: from-mutable---000123-abcd
 "
 `;
