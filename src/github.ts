@@ -30,8 +30,61 @@ function parseRepoURL(repoURL: string): OwnerAndRepo {
   return { owner: m[1], repo: m[2] };
 }
 
+interface AllTreesForCommit {
+  pathToTreeSHA: Map<string, string>;
+  // If true, GitHub's response to the recursive tree fetch was truncated, so on
+  // cache miss we fall back to the getContent API.
+  truncated: boolean;
+}
 export class OctokitGitHubClient {
   constructor(private octokit: ReturnType<typeof getOctokit>) {}
+
+  // The cache key is JSON-ification of `{repoURL, commitSHA}`.
+  private allTreesForCommitCache = new LRUCache<
+    string,
+    AllTreesForCommit,
+    { repoURL: string; commitSHA: string }
+  >({
+    max: 1024,
+    // We ignore the key itself and treat the context as the key
+    // (the key is just the JSON-ification of context).
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      const { repoURL, commitSHA } = context;
+      const { owner, repo } = parseRepoURL(repoURL);
+      const rootTreeSHA = (
+        await this.octokit.rest.git.getCommit({
+          owner,
+          repo,
+          commit_sha: commitSHA,
+        })
+      ).data.tree.sha;
+      const { tree, truncated } = (
+        await this.octokit.rest.git.getTree({
+          owner,
+          repo,
+          tree_sha: rootTreeSHA,
+          recursive: 'true',
+        })
+      ).data;
+      const allTreesForCommit: AllTreesForCommit = {
+        pathToTreeSHA: new Map(),
+        truncated,
+      };
+      for (const { path, type, sha } of tree) {
+        if (
+          type === 'tree' &&
+          typeof path === 'string' &&
+          typeof sha === 'string'
+        ) {
+          allTreesForCommit.pathToTreeSHA.set(path, sha);
+        }
+      }
+      // Also set the root itself in case we're tracking the root of a repo for
+      // some reason.
+      allTreesForCommit.pathToTreeSHA.set('', rootTreeSHA);
+      return allTreesForCommit;
+    },
+  });
 
   async resolveRefToSHA({
     repoURL,
@@ -59,6 +112,37 @@ export class OctokitGitHubClient {
   }
 
   async getTreeSHAForPath({
+    repoURL,
+    commitSHA,
+    path,
+  }: GetTreeSHAForPathOptions): Promise<string | null> {
+    const allTreesForCommit = await this.allTreesForCommitCache.fetch(
+      JSON.stringify({ repoURL, commitSHA }),
+      { context: { repoURL, commitSHA } },
+    );
+    if (!allTreesForCommit) {
+      // This shouldn't happen: errors should lead to an error being thrown from
+      // the previous line, but the fetchMethod always returns an actual item.
+      throw Error(`Unexpected missing entry in allTreesForCommitCache`);
+    }
+    const shaFromCache = allTreesForCommit.pathToTreeSHA.get(path);
+    if (shaFromCache) {
+      return shaFromCache;
+    }
+    if (!allTreesForCommit.truncated) {
+      // The recursive listing we got from GitHub is complete, so if it doesn't
+      // have the tree in question, then the path just doesn't exist (as a tree)
+      // at the given commit.
+      return null;
+    }
+    // Hmm, we haven't heard of this tree but our listing was truncated. Fall
+    // back to the one-at-a-time API.
+    return this.getTreeSHAForPathViaGetContent({ repoURL, commitSHA, path });
+  }
+
+  // Fall back to asking the GitHub API for the tree hash directly if our cache
+  // was truncated.
+  private async getTreeSHAForPathViaGetContent({
     repoURL,
     commitSHA,
     path,
@@ -104,36 +188,55 @@ export class OctokitGitHubClient {
 export class CachingGitHubClient {
   constructor(private wrapped: GitHubClient) {}
 
-  private resolveRefToSHACache = new LRUCache<string, string>({ max: 1024 });
-  // LRUCache can't store null, so we box it.
-  private getTreeSHAForPathCache = new LRUCache<
+  private resolveRefToSHACache = new LRUCache<
     string,
-    { boxed: string | null }
+    string,
+    ResolveRefToSHAOptions
   >({
     max: 1024,
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return this.wrapped.resolveRefToSHA(context);
+    },
+  });
+
+  private getTreeSHAForPathCache = new LRUCache<
+    string,
+    // LRUCache can't store null, so we box it.
+    { boxed: string | null },
+    GetTreeSHAForPathOptions
+  >({
+    max: 1024,
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return { boxed: await this.wrapped.getTreeSHAForPath(context) };
+    },
   });
 
   async resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string> {
-    const cacheKey = JSON.stringify(options);
-    const cached = this.resolveRefToSHACache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached;
+    const sha = await this.resolveRefToSHACache.fetch(JSON.stringify(options), {
+      context: options,
+    });
+    if (!sha) {
+      throw Error(
+        'resolveRefToSHACache.fetch should never resolve without a real SHA',
+      );
     }
-    const ret = await this.wrapped.resolveRefToSHA(options);
-    this.resolveRefToSHACache.set(cacheKey, ret);
-    return ret;
+    return sha;
   }
 
   async getTreeSHAForPath(
     options: GetTreeSHAForPathOptions,
   ): Promise<string | null> {
-    const cacheKey = JSON.stringify(options);
-    const cached = this.getTreeSHAForPathCache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached.boxed;
+    const cached = await this.getTreeSHAForPathCache.fetch(
+      JSON.stringify(options),
+      {
+        context: options,
+      },
+    );
+    if (!cached) {
+      throw Error(
+        'getTreeSHAForPathCache.fetch should never resolve without a boxed value',
+      );
     }
-    const ret = await this.wrapped.getTreeSHAForPath(options);
-    this.getTreeSHAForPathCache.set(cacheKey, { boxed: ret });
-    return ret;
+    return cached.boxed;
   }
 }

@@ -1,3 +1,4 @@
+import { setImmediate } from 'timers/promises';
 import { CachingDockerRegistryClient } from '../src/artifactRegistry';
 import { CachingGitHubClient } from '../src/github';
 
@@ -33,6 +34,8 @@ describe('CachingGitHubClient caches', () => {
     let call = 0;
     const client = new CachingGitHubClient({
       async resolveRefToSHA() {
+        // Yield so that the parallel calls are parallel.
+        await setImmediate();
         return (++call).toString();
       },
       async getTreeSHAForPath() {
@@ -53,6 +56,12 @@ describe('CachingGitHubClient caches', () => {
     await exp('x', 'z', '2');
     await exp('w', 'y', '3');
     await exp('x', 'y', '1');
+
+    // Now try fetching two in parallel. We should only do one underlying fetch.
+    const p1 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
+    const p2 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
+    expect(await p1).toBe('4');
+    expect(await p2).toBe('4');
   });
   it('getTreeSHAForPath caches', async () => {
     let call = 0;
