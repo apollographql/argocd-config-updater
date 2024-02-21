@@ -1,3 +1,4 @@
+import { setImmediate } from 'timers/promises';
 import { CachingDockerRegistryClient } from '../src/artifactRegistry';
 import { CachingGitHubClient } from '../src/github';
 
@@ -29,10 +30,12 @@ describe('CachingDockerRegistryClient caches', () => {
 });
 
 describe('CachingGitHubClient caches', () => {
-  it('resolveRefToSha caches', async () => {
+  it('resolveRefToSHA caches', async () => {
     let call = 0;
     const client = new CachingGitHubClient({
-      async resolveRefToSha() {
+      async resolveRefToSHA() {
+        // Yield so that the parallel calls are parallel.
+        await setImmediate();
         return (++call).toString();
       },
       async getTreeSHAForPath() {
@@ -45,7 +48,7 @@ describe('CachingGitHubClient caches', () => {
       ref: string,
       ret: string,
     ): Promise<void> {
-      expect(await client.resolveRefToSha({ repoURL, ref })).toBe(ret);
+      expect(await client.resolveRefToSHA({ repoURL, ref })).toBe(ret);
     }
 
     await exp('x', 'y', '1');
@@ -53,11 +56,17 @@ describe('CachingGitHubClient caches', () => {
     await exp('x', 'z', '2');
     await exp('w', 'y', '3');
     await exp('x', 'y', '1');
+
+    // Now try fetching two in parallel. We should only do one underlying fetch.
+    const p1 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
+    const p2 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
+    expect(await p1).toBe('4');
+    expect(await p2).toBe('4');
   });
   it('getTreeSHAForPath caches', async () => {
     let call = 0;
     const client = new CachingGitHubClient({
-      async resolveRefToSha() {
+      async resolveRefToSHA() {
         return '';
       },
       async getTreeSHAForPath() {
@@ -67,11 +76,13 @@ describe('CachingGitHubClient caches', () => {
 
     async function exp(
       repoURL: string,
-      ref: string,
+      commitSHA: string,
       path: string,
       ret: string,
     ): Promise<void> {
-      expect(await client.getTreeSHAForPath({ repoURL, ref, path })).toBe(ret);
+      expect(await client.getTreeSHAForPath({ repoURL, commitSHA, path })).toBe(
+        ret,
+      );
     }
 
     await exp('x', 'y', 'p', '1');
