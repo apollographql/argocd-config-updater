@@ -177,10 +177,20 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       commitSHA: trackedRefCommitSHA,
       path: trackable.path,
     });
-    const dockerTreeSha = trackable.maybeDockerCommit
+
+    // The docker commit is usually a short sha, which we can't get the tree path for
+    // This converts it to a full sha so we can get the tree sha later
+    const dockerRefCommitSHA = trackable.maybeDockerCommit
+      ? await gitHubClient.resolveRefToSHA({
+          repoURL: trackable.repoURL,
+          ref: trackable.maybeDockerCommit,
+        })
+      : null;
+
+    const dockerTreeSha = dockerRefCommitSHA
       ? await gitHubClient.getTreeSHAForPath({
           repoURL: trackable.repoURL,
-          commitSHA: trackable.maybeDockerCommit,
+          commitSHA: dockerRefCommitSHA,
           path: trackable.path,
         })
       : null;
@@ -197,10 +207,10 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     );
 
     // The second check shouldn't be neccesary since dockerTreeSha is only
-    // defined if trackable.dockerRef is defined, but TypeScript doesn't know
-    if (dockerTreeSha === trackedTreeSHA && trackable.maybeDockerCommit) {
+    // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
+    if (dockerTreeSha === trackedTreeSHA && dockerRefCommitSHA) {
       core.info('(changed!)');
-      trackable.refScalarTokenWriter.write(trackable.maybeDockerCommit);
+      trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
     } else if (currentTreeSHA === trackedTreeSHA) {
       core.info('(unchanged)');
     } else {

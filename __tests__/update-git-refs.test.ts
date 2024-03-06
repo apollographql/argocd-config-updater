@@ -67,7 +67,7 @@ describe('action', () => {
   it('handle docker tag', async () => {
     const mockGithubClientTreeSHA: GitHubClient = {
       async resolveRefToSHA({ ref }) {
-        return ref === 'main' ? 'new' : 'old';
+        return ref === 'main' ? 'new' : ref;
       },
       async getTreeSHAForPath({ commitSHA }) {
         return commitSHA === 'd97b3a3240' ? 'bad' : 'aaaa';
