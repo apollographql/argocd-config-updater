@@ -203,7 +203,10 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
     core.info(
-      `for path ${trackable.path}, got tree shas ${currentTreeSHA} for ${trackable.ref} and ${trackedTreeSHA} for ${trackedRefCommitSHA}`,
+      `for path ${trackable.path}, got tree shas` +
+        ` current: ${currentTreeSHA} for ${trackable.ref}` +
+        ` tracked: ${trackedTreeSHA} for ${trackedRefCommitSHA}` +
+        ` docker: ${dockerTreeSha} for ${dockerRefCommitSHA}`,
     );
 
     // The second check shouldn't be neccesary since dockerTreeSha is only
