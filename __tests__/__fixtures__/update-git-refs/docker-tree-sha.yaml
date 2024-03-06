@@ -1,0 +1,27 @@
+updated:
+  track: main
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: old
+  dockerImage:
+    tag: main---0013323-2024.03-gd97b3a3241
+
+
+not-updated:
+  gitConfig:
+    trackMutableRef: main
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: old
+  dockerImage:
+    tag: main---0013323-2024.03-gd97b3a3241
+
+diff-tree-sha:
+  track: main
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: old
+  dockerImage:
+    tag: main---0013323-2024.03-gd97b3a3240
