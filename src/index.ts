@@ -67,6 +67,8 @@ async function processFile(
       contents = await updateDockerTags(contents, dockerRegistryClient);
     }
 
+    // The git refs depend on the docker tag potentially so we want to update it after the
+    // docker tags are updated.
     if (gitHubClient) {
       contents = await updateGitRefs(contents, gitHubClient);
     }
