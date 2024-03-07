@@ -88,10 +88,9 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
         throw Error(`Document has \`${key}.dockerImage\` that is not a map`);
       }
 
-      const tagScalarTokenAndValue = getStringValue(dockerImageBlock, 'tag');
+      const tag = getStringValue(dockerImageBlock, 'tag');
 
-      const gitCommitMatches =
-        tagScalarTokenAndValue?.match(/-g([0-9a-fA-F]+)$/);
+      const gitCommitMatches = tag?.match(/-g([0-9a-fA-F]+)$/);
       if (gitCommitMatches) {
         maybeDockerCommit = gitCommitMatches[1];
       }
@@ -158,7 +157,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
         })
       : null;
 
-    const dockerTreeSha = dockerRefCommitSHA
+    const dockerTreeSHA = dockerRefCommitSHA
       ? await gitHubClient.getTreeSHAForPath({
           repoURL: trackable.repoURL,
           commitSHA: dockerRefCommitSHA,
@@ -177,18 +176,18 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       `for path ${trackable.path}, got tree shas` +
         ` current: ${currentTreeSHA} for ${trackable.ref}` +
         ` tracked: ${trackedTreeSHA} for ${trackedRefCommitSHA}` +
-        ` docker: ${dockerTreeSha} for ${dockerRefCommitSHA}`,
+        ` docker: ${dockerTreeSHA} for ${dockerRefCommitSHA}`,
     );
 
-    // The second check shouldn't be neccesary since dockerTreeSha is only
+    // The second check shouldn't be neccesary since dockerTreeSHA is only
     // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
-    if (dockerTreeSha === trackedTreeSHA && dockerRefCommitSHA) {
+    if (dockerTreeSHA === trackedTreeSHA && dockerRefCommitSHA) {
       if (dockerRefCommitSHA !== trackable.ref) {
         core.info('(using docker sha)');
         trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
       } else {
         // Commit sha is already whats written so no changes
-        core.info('(unchanged)');
+        core.info('(matches docker, unchanged)');
       }
     } else if (currentTreeSHA === trackedTreeSHA) {
       if (currentRefCommitSHA !== trackable.ref) {
@@ -200,7 +199,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
         core.info('(unchanged)');
       }
     } else {
-      core.info('(updated to latest form ref!)');
+      core.info('(updated to latest from ref!)');
       trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }
