@@ -63,4 +63,21 @@ describe('action', () => {
       await updateGitRefs(contents, mockGithubClientTreeSHA),
     ).toMatchSnapshot();
   });
+
+  it('handle docker tag', async () => {
+    const mockGithubClientTreeSHA: GitHubClient = {
+      async resolveRefToSHA({ ref }) {
+        return ref === 'main' ? 'new' : ref;
+      },
+      async getTreeSHAForPath({ commitSHA }) {
+        return commitSHA === 'd97b3a3240' ? 'bad' : 'aaaa';
+      },
+    };
+
+    const contents = await fixture('docker-tree-sha.yaml');
+
+    expect(
+      await updateGitRefs(contents, mockGithubClientTreeSHA),
+    ).toMatchSnapshot();
+  });
 });

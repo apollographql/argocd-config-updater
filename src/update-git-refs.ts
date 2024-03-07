@@ -14,6 +14,7 @@ interface Trackable {
   repoURL: string;
   path: string;
   ref: string;
+  maybeDockerCommit: string | null;
   refScalarTokenWriter: ScalarTokenWriter;
 }
 
@@ -79,6 +80,22 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
       'ref',
     );
 
+    let maybeDockerCommit: string | null = null;
+
+    if (value.has('dockerImage')) {
+      const dockerImageBlock = value.get('dockerImage');
+      if (!yaml.isMap(dockerImageBlock)) {
+        throw Error(`Document has \`${key}.dockerImage\` that is not a map`);
+      }
+
+      const tag = getStringValue(dockerImageBlock, 'tag');
+
+      const gitCommitMatches = tag?.match(/-g([0-9a-fA-F]+)$/);
+      if (gitCommitMatches) {
+        maybeDockerCommit = gitCommitMatches[1];
+      }
+    }
+
     if (trackMutableRef && repoURL && path && refScalarTokenAndValue) {
       trackables.push({
         trackMutableRef,
@@ -89,6 +106,7 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
           refScalarTokenAndValue.scalarToken,
           doc.schema,
         ),
+        maybeDockerCommit,
       });
     }
   }
@@ -105,21 +123,6 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       repoURL: trackable.repoURL,
       ref: trackable.trackMutableRef,
     });
-
-    if (trackable.ref === trackable.trackMutableRef) {
-      // The mutable ref was written down in ref too. We always want to replace
-      // that with the SHA (and if we do the path-based check below we won't,
-      // because they're the same). This is something that might happen when
-      // you're first adding an app (ie just writing the same thing twice and
-      // letting the automation "correct" it to a SHA).
-      trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
-      continue;
-    }
-
-    if (trackable.ref === trackedRefCommitSHA) {
-      // The thing we would write is already in the file.
-      continue;
-    }
 
     // Convert trackable.ref to SHA too, because getTreeSHAForPath requires you
     // to pass a commit SHA (due to the particular GitHub APIs it uses).
@@ -144,6 +147,24 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       commitSHA: trackedRefCommitSHA,
       path: trackable.path,
     });
+
+    // The docker commit is usually a short sha, which we can't get the tree path for
+    // This converts it to a full sha so we can get the tree sha later
+    const dockerRefCommitSHA = trackable.maybeDockerCommit
+      ? await gitHubClient.resolveRefToSHA({
+          repoURL: trackable.repoURL,
+          ref: trackable.maybeDockerCommit,
+        })
+      : null;
+
+    const dockerTreeSHA = dockerRefCommitSHA
+      ? await gitHubClient.getTreeSHAForPath({
+          repoURL: trackable.repoURL,
+          commitSHA: dockerRefCommitSHA,
+          path: trackable.path,
+        })
+      : null;
+
     if (trackedTreeSHA === null) {
       throw Error(
         `Could not get tree SHA for ${trackedRefCommitSHA} in ${trackable.repoURL} for ref ${trackable.path}`,
@@ -152,12 +173,33 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
     core.info(
-      `for path ${trackable.path}, got tree shas ${currentTreeSHA} for ${trackable.ref} and ${trackedTreeSHA} for ${trackedRefCommitSHA}`,
+      `for path ${trackable.path}, got tree shas` +
+        ` current: ${currentTreeSHA} for ${trackable.ref}` +
+        ` tracked: ${trackedTreeSHA} for ${trackedRefCommitSHA}` +
+        ` docker: ${dockerTreeSHA} for ${dockerRefCommitSHA}`,
     );
-    if (currentTreeSHA === trackedTreeSHA) {
-      core.info('(unchanged)');
+
+    // The second check shouldn't be neccesary since dockerTreeSHA is only
+    // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
+    if (dockerTreeSHA === trackedTreeSHA && dockerRefCommitSHA) {
+      if (dockerRefCommitSHA !== trackable.ref) {
+        core.info('(using docker sha)');
+        trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
+      } else {
+        // Commit sha is already whats written so no changes
+        core.info('(matches docker, unchanged)');
+      }
+    } else if (currentTreeSHA === trackedTreeSHA) {
+      if (currentRefCommitSHA !== trackable.ref) {
+        // This will freeze the current ref if it is a mutable ref.
+        core.info('(freezing current ref)');
+        trackable.refScalarTokenWriter.write(currentRefCommitSHA);
+      } else {
+        // Commit sha is already whats written so no changes
+        core.info('(unchanged)');
+      }
     } else {
-      core.info('(changed!)');
+      core.info('(updated to latest from ref!)');
       trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }

@@ -63,12 +63,14 @@ async function processFile(
   return core.group(`Processing ${filename}`, async () => {
     let contents = await readFile(filename, 'utf-8');
 
-    if (gitHubClient) {
-      contents = await updateGitRefs(contents, gitHubClient);
-    }
-
     if (dockerRegistryClient) {
       contents = await updateDockerTags(contents, dockerRegistryClient);
+    }
+
+    // The git refs depend on the docker tag potentially so we want to update it after the
+    // docker tags are updated.
+    if (gitHubClient) {
+      contents = await updateGitRefs(contents, gitHubClient);
     }
 
     if (core.getBooleanInput('update-promoted-values')) {
