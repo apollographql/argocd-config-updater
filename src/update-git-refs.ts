@@ -82,25 +82,17 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
 
     let maybeDockerCommit: string | null = null;
 
-    // We only care about using the potential docker commit sha if we are using the global tracker
-    // as opposed to defining a tracker for the git config by itself. We don't need to care if no track is present because we will not update those anyway
-    if (
-      value.has('dockerImage') &&
-      !getStringValue(gitConfigBlock, 'trackMutableRef')
-    ) {
+    if (value.has('dockerImage')) {
       const dockerImageBlock = value.get('dockerImage');
       if (!yaml.isMap(dockerImageBlock)) {
         throw Error(`Document has \`${key}.dockerImage\` that is not a map`);
       }
 
-      const tagScalarTokenAndValue = getStringAndScalarTokenFromMap(
-        dockerImageBlock,
-        'tag',
-      );
+      const tagScalarTokenAndValue = getStringValue(dockerImageBlock, 'tag');
 
       const gitCommitMatches =
-        tagScalarTokenAndValue?.value?.match(/-g([0-9a-fA-F]*)$/);
-      if (gitCommitMatches && gitCommitMatches.length > 1) {
+        tagScalarTokenAndValue?.match(/-g([0-9a-fA-F]+)$/);
+      if (gitCommitMatches) {
         maybeDockerCommit = gitCommitMatches[1];
       }
     }
@@ -132,27 +124,6 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       repoURL: trackable.repoURL,
       ref: trackable.trackMutableRef,
     });
-
-    // If a trackable docker ref is defined we want to set it to that
-    // commit if the tree sha is the same as the tracked ref tree sha
-    // Otherwise we could "bounce back" to the docker ref if someone
-    // pushes to the tracked ref but doesn't change the tree sha.
-    if (!trackable.maybeDockerCommit) {
-      if (trackable.ref === trackable.trackMutableRef) {
-        // The mutable ref was written down in ref too. We always want to replace
-        // that with the SHA (and if we do the path-based check below we won't,
-        // because they're the same). This is something that might happen when
-        // you're first adding an app (ie just writing the same thing twice and
-        // letting the automation "correct" it to a SHA).
-        trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
-        continue;
-      }
-
-      if (trackable.ref === trackedRefCommitSHA) {
-        // The thing we would write is already latest
-        continue;
-      }
-    }
 
     // Convert trackable.ref to SHA too, because getTreeSHAForPath requires you
     // to pass a commit SHA (due to the particular GitHub APIs it uses).
@@ -212,12 +183,24 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // The second check shouldn't be neccesary since dockerTreeSha is only
     // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
     if (dockerTreeSha === trackedTreeSHA && dockerRefCommitSHA) {
-      core.info('(changed!)');
-      trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
+      if (dockerRefCommitSHA !== trackable.ref) {
+        core.info('(using docker sha)');
+        trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
+      } else {
+        // Commit sha is already whats written so no changes
+        core.info('(unchanged)');
+      }
     } else if (currentTreeSHA === trackedTreeSHA) {
-      core.info('(unchanged)');
+      if (currentRefCommitSHA !== trackable.ref) {
+        // This will freeze the current ref if it is a mutable ref.
+        core.info('(freezing current ref)');
+        trackable.refScalarTokenWriter.write(currentRefCommitSHA);
+      } else {
+        // Commit sha is already whats written so no changes
+        core.info('(unchanged)');
+      }
     } else {
-      core.info('(changed!)');
+      core.info('(updated to latest form ref!)');
       trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }
