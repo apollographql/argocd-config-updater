@@ -17,6 +17,7 @@ import {
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
+import { TrackingUpdates, updateTracking } from './update-tracking-ref';
 
 /**
  * The main function for the action.
@@ -27,6 +28,16 @@ export async function main(): Promise<void> {
     const files = core.getInput('files');
     const globber = await glob.create(files);
     const filenames = await globber.glob();
+
+    const trackingUpdateValues = core.getInput('updater-tracker-value');
+    const stacks = core.getMultilineInput('update-tracker-stacks');
+    let tracking:  TrackingUpdates | null = null;
+    if (trackingUpdateValues && stacks) {
+      tracking = {
+        tracking: trackingUpdateValues,
+        stacks: stacks
+      }
+    }
 
     let gitHubClient: GitHubClient | null = null;
     if (core.getBooleanInput('update-git-refs')) {
@@ -47,7 +58,7 @@ export async function main(): Promise<void> {
 
     const parallelism = +core.getInput('parallelism');
     await eachLimit(filenames, parallelism, async (f) =>
-      processFile(f, gitHubClient, dockerRegistryClient),
+      processFile(f, tracking, gitHubClient, dockerRegistryClient),
     );
   } catch (error) {
     // Fail the workflow run if an error occurs
@@ -57,11 +68,16 @@ export async function main(): Promise<void> {
 
 async function processFile(
   filename: string,
+  trackingUpdate: TrackingUpdates | null,
   gitHubClient: GitHubClient | null,
   dockerRegistryClient: DockerRegistryClient | null,
 ): Promise<void> {
   return core.group(`Processing ${filename}`, async () => {
     let contents = await readFile(filename, 'utf-8');
+
+    if (trackingUpdate) {
+      contents = await updateTracking(contents, trackingUpdate);
+    }
 
     if (dockerRegistryClient) {
       contents = await updateDockerTags(contents, dockerRegistryClient);

@@ -10,7 +10,13 @@ inputs:
 
   github-token:
     description: 'GitHub token to read refs and trees; only needed if update-git-refs is set'
-  
+
+  update-tracker-value:
+    description: 'Update track references'
+
+  update-tracker-stack:
+    description: 'Stacks to update'
+
   update-git-refs:
     description: 'Update tracked gitConfig.ref fields'
     default: 'false'
