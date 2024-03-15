@@ -9,8 +9,19 @@ export interface GetAllEquivalentTagsOptions {
   tag: string;
 }
 
+export interface GitCommitsBetweenTagsOptions {
+  prevTag: string;
+  nextTag: string;
+  /** The name of the specific Docker image in question (ie, a Docker
+   * "repository", not an Artifact Registry "repository" that contains them.) */
+  dockerImageRepository: string;
+}
+
 export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
+  getGitCommitsBetweenTags(
+    options: GitCommitsBetweenTagsOptions,
+  ): Promise<string[]>;
 }
 
 export class ArtifactRegistryDockerRegistryClient {
@@ -43,6 +54,84 @@ export class ArtifactRegistryDockerRegistryClient {
     }
 
     this.repositoryFields = { project, location, repository };
+  }
+
+  async getGitCommitsBetweenTags({
+    prevTag,
+    nextTag,
+    dockerImageRepository,
+  }: {
+    prevTag: string;
+    nextTag: string;
+    dockerImageRepository: string;
+  }): Promise<string[]> {
+    core.info(
+      `running diff docker tags ${prevTag} ${nextTag} ${dockerImageRepository}`,
+    );
+    // Input is relatively trusted; this is largely to prevent mistaken uses
+    // like specifying a full Docker-style repository with slashes.
+    if (dockerImageRepository.includes('/')) {
+      throw Error('repository cannot contain a slash');
+    }
+
+    const dockerInfos = (
+      await this.client.listTags({
+        parent: this.client.pathTemplates.packagePathTemplate.render({
+          ...this.repositoryFields,
+          package: dockerImageRepository,
+        }),
+      })
+    )[0];
+
+    // We want to get the minimum tag for each version, since this implies those commits
+    // made a change to the docker image so are relevant to the diff.
+    const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+    for (const dockerInfo of dockerInfos) {
+      if (!dockerInfo.version || !dockerInfo.name) continue;
+
+      const tag = this.client.pathTemplates.tagPathTemplate.match(
+        dockerInfo.name,
+      ).tag;
+
+      // If it is a number we can ignore the tag
+      if (typeof tag !== 'string') continue;
+
+      // We only care about the tags between prev and next that have a git commit
+      const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
+      if (
+        ((tag >= prevTag && tag <= nextTag) ||
+          (tag <= prevTag && tag >= nextTag)) &&
+        gitCommitMatches
+      ) {
+        const minTag = tagBoundsMap.get(dockerInfo.version);
+        if (minTag && minTag.tag > tag) {
+          minTag.tag = tag;
+          minTag.commit = gitCommitMatches[1];
+        } else {
+          tagBoundsMap.set(dockerInfo.version, {
+            tag,
+            commit: gitCommitMatches[1],
+          });
+        }
+      }
+    }
+
+    const relevantCommits = new Array<{ tag: string; commit: string }>();
+
+    for (const tagBound of tagBoundsMap.values()) {
+      // We can skip the tag we are just coming from as a min
+      if (tagBound.tag === prevTag) {
+        continue;
+      }
+      relevantCommits.push(tagBound);
+    }
+
+    core.info(`Relevant Commits ${Array.from(relevantCommits).join(', ')}`);
+
+    // Sort commits ascending
+    return relevantCommits
+      .sort((a, b) => a.tag.localeCompare(b.tag))
+      .map((c) => c.commit);
   }
 
   async getAllEquivalentTags({
@@ -108,6 +197,13 @@ export class CachingDockerRegistryClient {
       return this.wrapped.getAllEquivalentTags(context);
     },
   });
+
+  async getGitCommitsBetweenTags(
+    options: GitCommitsBetweenTagsOptions,
+  ): Promise<string[]> {
+    // For now we aren't caching anything since this will on run on promotion prs
+    return this.wrapped.getGitCommitsBetweenTags(options);
+  }
 
   async getAllEquivalentTags(
     options: GetAllEquivalentTagsOptions,

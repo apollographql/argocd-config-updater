@@ -156,6 +156,12 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
       );
     }
 
+    await dockerRegistryClient.getGitCommitsBetweenTags({
+      prevTag: trackable.tag,
+      nextTag: earliestMatchingTag,
+      dockerImageRepository: trackable.dockerImageRepository,
+    });
+
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
     core.info(
