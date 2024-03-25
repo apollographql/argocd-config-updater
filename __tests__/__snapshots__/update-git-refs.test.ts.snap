@@ -30,6 +30,46 @@ diff-tree-sha:
     tag: main---0013323-2024.03-gd97b3a3240"
 `;
 
+exports[`action handle docker tag with unknown commit 1`] = `
+"updated:
+  track: main
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: d97b3a3241
+  dockerImage:
+    tag: main---0013323-2024.03-gd97b3a3241
+
+
+no-sha-found:
+  gitConfig:
+    trackMutableRef: main
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: new
+  dockerImage:
+    tag: main---0013323-2024.03-d97b3a3
+
+diff-tree-sha:
+  track: main
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: new
+  dockerImage:
+    tag: main---0013323-2024.03-gd97b3a3240"
+`;
+
+exports[`action handles unknown current ref 1`] = `
+"some-service-tree:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    trackMutableRef: main
+    ref: new
+"
+`;
+
 exports[`action only changes ref when tree sha changes 1`] = `
 "some-service-tree:
   gitConfig:

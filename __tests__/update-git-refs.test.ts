@@ -64,6 +64,26 @@ describe('action', () => {
     ).toMatchSnapshot();
   });
 
+  it('handles unknown current ref', async () => {
+    const mockGithubClientTreeSHA: GitHubClient = {
+      async resolveRefToSHA({ ref }) {
+        if (ref === 'old') {
+          throw Error('unknown ref');
+        }
+        return 'new';
+      },
+      async getTreeSHAForPath() {
+        return 'aaaa';
+      },
+    };
+
+    const contents = await fixture('tree-sha.yaml');
+
+    expect(
+      await updateGitRefs(contents, mockGithubClientTreeSHA),
+    ).toMatchSnapshot();
+  });
+
   it('handle docker tag', async () => {
     const mockGithubClientTreeSHA: GitHubClient = {
       async resolveRefToSHA({ ref }) {
@@ -71,6 +91,26 @@ describe('action', () => {
       },
       async getTreeSHAForPath({ commitSHA }) {
         return commitSHA === 'd97b3a3240' ? 'bad' : 'aaaa';
+      },
+    };
+
+    const contents = await fixture('docker-tree-sha.yaml');
+
+    expect(
+      await updateGitRefs(contents, mockGithubClientTreeSHA),
+    ).toMatchSnapshot();
+  });
+
+  it('handle docker tag with unknown commit', async () => {
+    const mockGithubClientTreeSHA: GitHubClient = {
+      async resolveRefToSHA({ ref }) {
+        if (ref === 'd97b3a3240') {
+          throw Error('unknown commit');
+        }
+        return ref === 'main' ? 'new' : ref;
+      },
+      async getTreeSHAForPath({ commitSHA }) {
+        return commitSHA === 'old' ? 'oldaaaa' : 'aaaa';
       },
     };
 
