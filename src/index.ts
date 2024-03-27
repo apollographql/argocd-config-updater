@@ -11,8 +11,10 @@ import {
 } from './artifactRegistry';
 import {
   CachingGitHubClient,
+  CachingGitHubClientDump,
   GitHubClient,
   OctokitGitHubClient,
+  isCachingGitHubClientDump,
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
@@ -37,17 +39,37 @@ export async function main(): Promise<void> {
     );
 
     let gitHubClient: GitHubClient | null = null;
-    let logOctokitStats: (() => void) | null = null;
+    let finalizeGitHubClient: (() => Promise<void>) | null = null;
     if (core.getBooleanInput('update-git-refs')) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(githubToken, throttling);
       const octokitGitHubClient = new OctokitGitHubClient(octokit);
-      logOctokitStats = () => {
+
+      const apiCacheFileName = core.getInput('api-cache');
+      let initialAPICache: APICache | null = null;
+      if (apiCacheFileName) {
+        initialAPICache = await maybeReadAPICache(apiCacheFileName);
+      }
+
+      const cachingGitHubClient = new CachingGitHubClient(
+        octokitGitHubClient,
+        initialAPICache?.gitHub,
+      );
+
+      gitHubClient = cachingGitHubClient;
+
+      finalizeGitHubClient = async () => {
         for (const [name, count] of octokitGitHubClient.apiCalls) {
           core.info(`Total GH API calls for ${name}: ${count}`);
         }
+        if (apiCacheFileName) {
+          const finalAPICache: APICache = {
+            version: 1,
+            gitHub: cachingGitHubClient.dump(),
+          };
+          await writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
+        }
       };
-      gitHubClient = new CachingGitHubClient(octokitGitHubClient);
     }
 
     let dockerRegistryClient: DockerRegistryClient | null = null;
@@ -65,7 +87,7 @@ export async function main(): Promise<void> {
       processFile(f, gitHubClient, dockerRegistryClient),
     );
 
-    logOctokitStats?.();
+    await finalizeGitHubClient?.();
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -100,6 +122,53 @@ async function processFile(
 
     await writeFile(filename, contents);
   });
+}
+
+interface APICache {
+  version: 1;
+  gitHub: CachingGitHubClientDump;
+}
+
+async function maybeReadAPICache(
+  apiCacheFileName: string,
+): Promise<APICache | null> {
+  let apiCacheText: string;
+  try {
+    apiCacheText = await readFile(apiCacheFileName, 'utf8');
+  } catch (e) {
+    core.error(`Error reading cache file ${apiCacheFileName}, ignoring: ${e}`);
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(apiCacheText);
+  } catch (e) {
+    core.error(`Error parsing cache file ${apiCacheFileName}, ignoring: ${e}`);
+    return null;
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('gitHub' in parsed) ||
+    !('version' in parsed) ||
+    parsed.version !== 1
+  ) {
+    core.error(
+      `Cache file ${apiCacheFileName} has the wrong structure; ignoring`,
+    );
+    return null;
+  }
+
+  if (!isCachingGitHubClientDump(parsed.gitHub)) {
+    core.error(
+      `Cache file ${apiCacheFileName} has the wrong structure under 'gitHub'; ignoring`,
+    );
+    return null;
+  }
+
+  return { version: parsed.version, gitHub: parsed.gitHub };
 }
 
 main();

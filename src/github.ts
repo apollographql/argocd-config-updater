@@ -205,7 +205,14 @@ export class OctokitGitHubClient {
 }
 
 export class CachingGitHubClient {
-  constructor(private wrapped: GitHubClient) {}
+  constructor(
+    private wrapped: GitHubClient,
+    dump?: CachingGitHubClientDump,
+  ) {
+    if (dump) {
+      this.getTreeSHAForPathCache.load(dump.treeSHAs);
+    }
+  }
 
   private resolveRefToSHACache = new LRUCache<
     string,
@@ -258,4 +265,37 @@ export class CachingGitHubClient {
     }
     return cached.boxed;
   }
+
+  dump(): CachingGitHubClientDump {
+    // We don't dump resolveRefToSHACache because it is not immutable (it tracks
+    // the current commits on main, etc).
+    return { treeSHAs: this.getTreeSHAForPathCache.dump() };
+  }
+}
+
+export interface CachingGitHubClientDump {
+  treeSHAs: [
+    string,
+    LRUCache.Entry<{
+      boxed: string | null;
+    }>,
+  ][];
+}
+
+export function isCachingGitHubClientDump(
+  dump: unknown,
+): dump is CachingGitHubClientDump {
+  if (!dump || typeof dump !== 'object') {
+    return false;
+  }
+  if (!('treeSHAs' in dump)) {
+    return false;
+  }
+  const { treeSHAs } = dump;
+  if (!Array.isArray(treeSHAs)) {
+    return false;
+  }
+
+  // XXX we could check the values further if we want to be more anal
+  return true;
 }
