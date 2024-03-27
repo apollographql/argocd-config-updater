@@ -38,7 +38,13 @@ interface AllTreesForCommit {
   truncated: boolean;
 }
 export class OctokitGitHubClient {
+  apiCalls = new Map<string, number>();
   constructor(private octokit: ReturnType<typeof getOctokit>) {}
+
+  private logAPICall(name: string, description: string): void {
+    core.info(`GH API: ${name} ${description}`);
+    this.apiCalls.set(name, (this.apiCalls.get(name) ?? 0) + 1);
+  }
 
   // The cache key is JSON-ification of `{repoURL, commitSHA}`.
   private allTreesForCommitCache = new LRUCache<
@@ -52,7 +58,7 @@ export class OctokitGitHubClient {
     fetchMethod: async (_key, _staleValue, { context }) => {
       const { repoURL, commitSHA } = context;
       const { owner, repo } = parseRepoURL(repoURL);
-      core.info(`GH API: git.getCommit ${owner}/${repo} ${commitSHA}`);
+      this.logAPICall('git.getCommit', `${owner}/${repo} ${commitSHA}`);
       const rootTreeSHA = (
         await this.octokit.rest.git.getCommit({
           owner,
@@ -60,7 +66,7 @@ export class OctokitGitHubClient {
           commit_sha: commitSHA,
         })
       ).data.tree.sha;
-      core.info(`GH API: git.getTree ${owner}/${repo} ${rootTreeSHA}`);
+      this.logAPICall('git.getTree', `${owner}/${repo} ${rootTreeSHA}`);
       const { tree, truncated } = (
         await this.octokit.rest.git.getTree({
           owner,
@@ -93,10 +99,17 @@ export class OctokitGitHubClient {
     repoURL,
     ref,
   }: ResolveRefToSHAOptions): Promise<string> {
+    // If the ref already looks like a SHA, just return it.
+    // This does not validate that the commit actually exists in the repo,
+    // but in practice the next thing we're going to do is call getTreeSHAForPath
+    // with the SHA and that will apply that validation.
+    if (ref.match(/^[0-9a-f]{40}$/)) {
+      return ref;
+    }
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
     const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
-    core.info(`GH API: repos.getCommit ${owner}/${repo} ${refParameter}`);
+    this.logAPICall('repos.getCommit', `${owner}/${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
@@ -153,7 +166,7 @@ export class OctokitGitHubClient {
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
-    core.info(`GH API: repos.getContent ${owner}/${repo} ${commitSHA}`);
+    this.logAPICall('repos.getContent', `${owner}/${repo} ${commitSHA}`);
     let data;
     try {
       data = (

@@ -28,11 +28,26 @@ export async function main(): Promise<void> {
     const globber = await glob.create(files);
     const filenames = await globber.glob();
 
+    core.setOutput(
+      'suggested-promotion-branch-name',
+      `${core.getInput('promotion-target-regexp')}_${core.getInput('files')}`.replaceAll(
+        /[^-a-zA-Z0-9._]/g,
+        '_',
+      ),
+    );
+
     let gitHubClient: GitHubClient | null = null;
+    let logOctokitStats: (() => void) | null = null;
     if (core.getBooleanInput('update-git-refs')) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(githubToken, throttling);
-      gitHubClient = new CachingGitHubClient(new OctokitGitHubClient(octokit));
+      const octokitGitHubClient = new OctokitGitHubClient(octokit);
+      logOctokitStats = () => {
+        for (const [name, count] of octokitGitHubClient.apiCalls) {
+          core.info(`Total GH API calls for ${name}: ${count}`);
+        }
+      };
+      gitHubClient = new CachingGitHubClient(octokitGitHubClient);
     }
 
     let dockerRegistryClient: DockerRegistryClient | null = null;
@@ -49,6 +64,8 @@ export async function main(): Promise<void> {
     await eachLimit(filenames, parallelism, async (f) =>
       processFile(f, gitHubClient, dockerRegistryClient),
     );
+
+    logOctokitStats?.();
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -78,18 +95,6 @@ async function processFile(
       contents = await updatePromotedValues(
         contents,
         promotionTargetRegexp || null,
-      );
-      // Legacy: remove this once users switch over to suggested-promotion-branch-name.
-      core.setOutput(
-        'sanitized-promotion-target-regexp',
-        promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-9._]/g, '_'),
-      );
-      core.setOutput(
-        'suggested-promotion-branch-name',
-        `${promotionTargetRegexp}_${core.getInput('files')}`.replaceAll(
-          /[^-a-zA-Z0-9._]/g,
-          '_',
-        ),
       );
     }
 
