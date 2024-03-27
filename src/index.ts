@@ -11,8 +11,10 @@ import {
 } from './artifactRegistry';
 import {
   CachingGitHubClient,
+  CachingGitHubClientDump,
   GitHubClient,
   OctokitGitHubClient,
+  isCachingGitHubClientDump,
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
@@ -28,11 +30,46 @@ export async function main(): Promise<void> {
     const globber = await glob.create(files);
     const filenames = await globber.glob();
 
+    core.setOutput(
+      'suggested-promotion-branch-name',
+      `${core.getInput('promotion-target-regexp')}_${core.getInput('files')}`.replaceAll(
+        /[^-a-zA-Z0-9._]/g,
+        '_',
+      ),
+    );
+
     let gitHubClient: GitHubClient | null = null;
+    let finalizeGitHubClient: (() => Promise<void>) | null = null;
     if (core.getBooleanInput('update-git-refs')) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(githubToken, throttling);
-      gitHubClient = new CachingGitHubClient(new OctokitGitHubClient(octokit));
+      const octokitGitHubClient = new OctokitGitHubClient(octokit);
+
+      const apiCacheFileName = core.getInput('api-cache');
+      let initialAPICache: APICache | null = null;
+      if (apiCacheFileName) {
+        initialAPICache = await maybeReadAPICache(apiCacheFileName);
+      }
+
+      const cachingGitHubClient = new CachingGitHubClient(
+        octokitGitHubClient,
+        initialAPICache?.gitHub,
+      );
+
+      gitHubClient = cachingGitHubClient;
+
+      finalizeGitHubClient = async () => {
+        for (const [name, count] of octokitGitHubClient.apiCalls) {
+          core.info(`Total GH API calls for ${name}: ${count}`);
+        }
+        if (apiCacheFileName) {
+          const finalAPICache: APICache = {
+            version: 1,
+            gitHub: cachingGitHubClient.dump(),
+          };
+          await writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
+        }
+      };
     }
 
     let dockerRegistryClient: DockerRegistryClient | null = null;
@@ -49,6 +86,8 @@ export async function main(): Promise<void> {
     await eachLimit(filenames, parallelism, async (f) =>
       processFile(f, gitHubClient, dockerRegistryClient),
     );
+
+    await finalizeGitHubClient?.();
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -79,22 +118,57 @@ async function processFile(
         contents,
         promotionTargetRegexp || null,
       );
-      // Legacy: remove this once users switch over to suggested-promotion-branch-name.
-      core.setOutput(
-        'sanitized-promotion-target-regexp',
-        promotionTargetRegexp.replaceAll(/[^-a-zA-Z0-9._]/g, '_'),
-      );
-      core.setOutput(
-        'suggested-promotion-branch-name',
-        `${promotionTargetRegexp}_${core.getInput('files')}`.replaceAll(
-          /[^-a-zA-Z0-9._]/g,
-          '_',
-        ),
-      );
     }
 
     await writeFile(filename, contents);
   });
+}
+
+interface APICache {
+  version: 1;
+  gitHub: CachingGitHubClientDump;
+}
+
+async function maybeReadAPICache(
+  apiCacheFileName: string,
+): Promise<APICache | null> {
+  let apiCacheText: string;
+  try {
+    apiCacheText = await readFile(apiCacheFileName, 'utf8');
+  } catch (e) {
+    core.error(`Error reading cache file ${apiCacheFileName}, ignoring: ${e}`);
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(apiCacheText);
+  } catch (e) {
+    core.error(`Error parsing cache file ${apiCacheFileName}, ignoring: ${e}`);
+    return null;
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('gitHub' in parsed) ||
+    !('version' in parsed) ||
+    parsed.version !== 1
+  ) {
+    core.error(
+      `Cache file ${apiCacheFileName} has the wrong structure; ignoring`,
+    );
+    return null;
+  }
+
+  if (!isCachingGitHubClientDump(parsed.gitHub)) {
+    core.error(
+      `Cache file ${apiCacheFileName} has the wrong structure under 'gitHub'; ignoring`,
+    );
+    return null;
+  }
+
+  return { version: parsed.version, gitHub: parsed.gitHub };
 }
 
 main();

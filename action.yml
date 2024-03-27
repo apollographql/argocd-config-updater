@@ -4,6 +4,9 @@ author: 'Apollo GraphQL'
 
 # Define your inputs here.
 inputs:
+  api-cache:
+    description: 'Path to a file used to cache API calls (works well with actions/cache)'
+
   files:
     description: 'Glob pattern for files to search'
     required: true
