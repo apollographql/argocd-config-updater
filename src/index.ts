@@ -42,7 +42,45 @@ export async function main(): Promise<void> {
     let finalizeGitHubClient: (() => Promise<void>) | null = null;
     if (core.getBooleanInput('update-git-refs')) {
       const githubToken = core.getInput('github-token');
-      const octokit = github.getOctokit(githubToken, throttling);
+      const octokit = github.getOctokit(
+        githubToken,
+        {
+          throttle: {
+            onRateLimit: (retryAfter, options) => {
+              core.warning(
+                `Hit GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
+              );
+              return true;
+            },
+            onSecondaryRateLimit: (retryAfter, options) => {
+              core.warning(
+                `Hit secondary GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
+              );
+              return true;
+            },
+          },
+        },
+        throttling,
+      );
+
+      // Log GH rate limit response headers after each response and at the end.
+      let lastRateLimitHeaderInfo: string | null = null;
+      octokit.hook.after('request', async (response) => {
+        const prefix = 'x-ratelimit-';
+        const rateLimitHeaders: string[] = [];
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (name.startsWith(prefix)) {
+            rateLimitHeaders.push(`${name.substring(prefix.length)}=${value}`);
+          }
+        }
+
+        if (rateLimitHeaders.length) {
+          const rateLimitHeaderInfo = rateLimitHeaders.join(', ');
+          lastRateLimitHeaderInfo = rateLimitHeaderInfo;
+          core.info(`GH Rate Limit Info: ${rateLimitHeaderInfo}`);
+        }
+      });
+
       const octokitGitHubClient = new OctokitGitHubClient(octokit);
 
       const apiCacheFileName = core.getInput('api-cache');
@@ -61,6 +99,9 @@ export async function main(): Promise<void> {
       finalizeGitHubClient = async () => {
         for (const [name, count] of octokitGitHubClient.apiCalls) {
           core.info(`Total GH API calls for ${name}: ${count}`);
+        }
+        if (lastRateLimitHeaderInfo) {
+          core.info(`Last GH Rate Limit Info: ${lastRateLimitHeaderInfo}`);
         }
         if (apiCacheFileName) {
           const finalAPICache: APICache = {
