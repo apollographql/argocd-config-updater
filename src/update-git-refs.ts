@@ -1,6 +1,10 @@
 import * as core from '@actions/core';
 import * as yaml from 'yaml';
-import { GitHubClient, ResolveRefToSHAOptions } from './github';
+import {
+  GetTreeSHAForPathOptions,
+  GitHubClient,
+  ResolveRefToSHAOptions,
+} from './github';
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
@@ -133,6 +137,25 @@ async function resolveRefToSHAOrNull(
   }
 }
 
+// While the tree SHA for the actual ref we're tracking needs to resolve, it's
+// OK if the current value we're overwriting in `ref` doesn't have a tree at
+// that path, or if the commit we found in the Docker tag doesn't have a tree at
+// that path. Those are just heuristics that help us choose between multiple git
+// commit SHAs that all have the same subpath tree SHA.
+async function getTreeSHAForPathOrNull(
+  gitHubClient: GitHubClient,
+  options: GetTreeSHAForPathOptions,
+): Promise<string | null> {
+  try {
+    return await gitHubClient.getTreeSHAForPath(options);
+  } catch (e) {
+    console.warn(
+      `Ignoring error getting tree SHA for ${options.path} at ${options.commitSHA} in ${options.repoURL}: ${e}`,
+    );
+    return null;
+  }
+}
+
 async function checkRefsAgainstGitHubAndModifyScalars(
   trackables: Trackable[],
   gitHubClient: GitHubClient,
@@ -157,7 +180,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // at the given path to see if it has changed between `trackable.ref` and
     // the SHA we're thinking about replacing it with.
     const currentTreeSHA = currentRefCommitSHA
-      ? await gitHubClient.getTreeSHAForPath({
+      ? await getTreeSHAForPathOrNull(gitHubClient, {
           repoURL: trackable.repoURL,
           commitSHA: currentRefCommitSHA,
           path: trackable.path,
@@ -179,7 +202,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
       : null;
 
     const dockerTreeSHA = dockerRefCommitSHA
-      ? await gitHubClient.getTreeSHAForPath({
+      ? await getTreeSHAForPathOrNull(gitHubClient, {
           repoURL: trackable.repoURL,
           commitSHA: dockerRefCommitSHA,
           path: trackable.path,
