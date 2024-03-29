@@ -1,7 +1,7 @@
-import * as core from '@actions/core';
 import { RE2 } from 're2-wasm';
 import * as yaml from 'yaml';
 import { ScalarTokenWriter, getTopLevelBlocks, parseYAML } from './yaml';
+import { PrefixingLogger } from './log';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -16,33 +16,34 @@ const DEFAULT_YAML_PATHS = [
 export async function updatePromotedValues(
   contents: string,
   promotionTargetRegexp: string | null,
+  _logger: PrefixingLogger,
 ): Promise<string> {
-  return core.group('Processing promote', async () => {
-    // We use re2-wasm instead of built-in RegExp so we don't have to worry about
-    // REDOS attacks.
-    const promotionTargetRE2 = promotionTargetRegexp
-      ? new RE2(promotionTargetRegexp, 'u')
-      : null;
+  const logger = _logger.withExtendedPrefix('[promote] ');
 
-    const { document, stringify } = parseYAML(contents);
+  // We use re2-wasm instead of built-in RegExp so we don't have to worry about
+  // REDOS attacks.
+  const promotionTargetRE2 = promotionTargetRegexp
+    ? new RE2(promotionTargetRegexp, 'u')
+    : null;
 
-    // If the file is empty (or just whitespace or whatever), that's fine; we
-    // can just leave it alone.
-    if (!document) {
-      return contents;
-    }
+  const { document, stringify } = parseYAML(contents);
 
-    // We decide what to do and then we do it, just in case there are any
-    // overlaps between our reads and writes.
-    core.info('Looking for promote');
-    const promotes = findPromotes(document, promotionTargetRE2);
+  // If the file is empty (or just whitespace or whatever), that's fine; we
+  // can just leave it alone.
+  if (!document) {
+    return contents;
+  }
 
-    core.info('Copying values');
-    for (const { scalarTokenWriter, value } of promotes) {
-      scalarTokenWriter.write(value);
-    }
-    return stringify();
-  });
+  // We decide what to do and then we do it, just in case there are any
+  // overlaps between our reads and writes.
+  logger.info('Looking for promote');
+  const promotes = findPromotes(document, promotionTargetRE2);
+
+  logger.info('Copying values');
+  for (const { scalarTokenWriter, value } of promotes) {
+    scalarTokenWriter.write(value);
+  }
+  return stringify();
 }
 
 function findPromotes(

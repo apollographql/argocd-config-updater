@@ -1,5 +1,4 @@
 import * as yaml from 'yaml';
-import * as core from '@actions/core';
 
 export type CSTScalarToken = yaml.CST.FlowScalar | yaml.CST.BlockScalar;
 
@@ -134,7 +133,6 @@ export function parseYAML(contents: string): {
   // we do that by writing to the CST node found in a `srcToken` reference.
   // Finally, when we're done, we stringify the CSTs (which have been mutated)
   // rather than the ASTs (via the `stringify` function we return).
-  core.info('Parsing');
   const topLevelTokens = [...new yaml.Parser().parse(contents)];
   const documents = [
     ...new yaml.Composer({ keepSourceTokens: true }).compose(topLevelTokens),
@@ -168,7 +166,6 @@ export function parseYAML(contents: string): {
   return {
     document,
     stringify() {
-      core.info('Stringifying');
       return topLevelTokens
         .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
         .join('');

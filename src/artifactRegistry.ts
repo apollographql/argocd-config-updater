@@ -64,7 +64,7 @@ export class ArtifactRegistryDockerRegistryClient {
       tag,
     });
 
-    core.info(`Fetching tag ${tagPath}`);
+    core.info(`[AR API] Fetching tag ${tagPath}`);
     // Note: this throws if the repository or tag are not found.
     const { version } = (await this.client.getTag({ name: tagPath }))[0];
     if (!version) {
@@ -85,7 +85,7 @@ export class ArtifactRegistryDockerRegistryClient {
         docker_image: `${parsedVersion.package}@${parsedVersion.version}`,
       });
 
-    core.info(`Fetching Docker image ${dockerImagePath}`);
+    core.info(`[AR API] Fetching Docker image ${dockerImagePath}`);
     const { tags } = (
       await this.client.getDockerImage({ name: dockerImagePath })
     )[0];

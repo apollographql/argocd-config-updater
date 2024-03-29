@@ -42,7 +42,7 @@ export class OctokitGitHubClient {
   constructor(private octokit: ReturnType<typeof getOctokit>) {}
 
   private logAPICall(name: string, description: string): void {
-    core.info(`GH API: ${name} ${description}`);
+    core.info(`[GH API] ${name} ${description}`);
     this.apiCalls.set(name, (this.apiCalls.get(name) ?? 0) + 1);
   }
 

@@ -19,6 +19,8 @@ import {
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
+import { PrefixingLogger } from './log';
+import { inspect } from 'util';
 
 /**
  * The main function for the action.
@@ -48,13 +50,13 @@ export async function main(): Promise<void> {
           throttle: {
             onRateLimit: (retryAfter, options) => {
               core.warning(
-                `Hit GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
+                `[RATE LIMIT] Hit GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
               );
               return true;
             },
             onSecondaryRateLimit: (retryAfter, options) => {
               core.warning(
-                `Hit secondary GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
+                `[RATE LIMIT] Hit secondary GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
               );
               return true;
             },
@@ -77,7 +79,7 @@ export async function main(): Promise<void> {
         if (rateLimitHeaders.length) {
           const rateLimitHeaderInfo = rateLimitHeaders.join(', ');
           lastRateLimitHeaderInfo = rateLimitHeaderInfo;
-          core.info(`GH Rate Limit Info: ${rateLimitHeaderInfo}`);
+          core.info(`[GH Rate Limit Info] ${rateLimitHeaderInfo}`);
         }
       });
 
@@ -124,11 +126,24 @@ export async function main(): Promise<void> {
     }
 
     const parallelism = +core.getInput('parallelism');
-    await eachLimit(filenames, parallelism, async (f) =>
-      processFile(f, gitHubClient, dockerRegistryClient),
-    );
-
-    await finalizeGitHubClient?.();
+    const errors: { filename: string; error: unknown }[] = [];
+    await eachLimit(filenames, parallelism, async (filename) => {
+      try {
+        await processFile(filename, gitHubClient, dockerRegistryClient);
+      } catch (error) {
+        errors.push({ filename, error });
+      }
+    });
+    if (errors.length) {
+      core.setFailed(
+        `Errors occurred while processing ${errors.length} file${errors.length > 1 ? 's' : ''}`,
+      );
+      for (const { filename, error } of errors) {
+        core.error(`Error while processing ${filename}: ${inspect(error)}`);
+      }
+    } else {
+      await finalizeGitHubClient?.();
+    }
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -140,29 +155,32 @@ async function processFile(
   gitHubClient: GitHubClient | null,
   dockerRegistryClient: DockerRegistryClient | null,
 ): Promise<void> {
-  return core.group(`Processing ${filename}`, async () => {
-    let contents = await readFile(filename, 'utf-8');
+  const shortFilename = filename.startsWith(`${process.cwd()}/`)
+    ? filename.substring(process.cwd().length + 1)
+    : filename;
+  const logger = new PrefixingLogger(`[${shortFilename}] `);
+  let contents = await readFile(filename, 'utf-8');
 
-    if (dockerRegistryClient) {
-      contents = await updateDockerTags(contents, dockerRegistryClient);
-    }
+  if (dockerRegistryClient) {
+    contents = await updateDockerTags(contents, dockerRegistryClient, logger);
+  }
 
-    // The git refs depend on the docker tag potentially so we want to update it after the
-    // docker tags are updated.
-    if (gitHubClient) {
-      contents = await updateGitRefs(contents, gitHubClient);
-    }
+  // The git refs depend on the docker tag potentially so we want to update it after the
+  // docker tags are updated.
+  if (gitHubClient) {
+    contents = await updateGitRefs(contents, gitHubClient, logger);
+  }
 
-    if (core.getBooleanInput('update-promoted-values')) {
-      const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-      contents = await updatePromotedValues(
-        contents,
-        promotionTargetRegexp || null,
-      );
-    }
+  if (core.getBooleanInput('update-promoted-values')) {
+    const promotionTargetRegexp = core.getInput('promotion-target-regexp');
+    contents = await updatePromotedValues(
+      contents,
+      promotionTargetRegexp || null,
+      logger,
+    );
+  }
 
-    await writeFile(filename, contents);
-  });
+  await writeFile(filename, contents);
 }
 
 interface APICache {

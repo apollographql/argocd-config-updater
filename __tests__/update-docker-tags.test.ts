@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { GetAllEquivalentTagsOptions } from '../src/artifactRegistry';
 import { updateDockerTags } from '../src/update-docker-tags';
+import { PrefixingLogger } from '../src/log';
 
 async function fixture(filename: string): Promise<string> {
   return await readFile(
@@ -39,11 +40,16 @@ describe('action', () => {
         );
       },
     };
-    const newContents = await updateDockerTags(contents, dockerRegistryClient);
+    const logger = PrefixingLogger.silent();
+    const newContents = await updateDockerTags(
+      contents,
+      dockerRegistryClient,
+      logger,
+    );
     expect(newContents).toMatchSnapshot();
 
     // It should be idempotent in this case.
-    expect(await updateDockerTags(contents, dockerRegistryClient)).toBe(
+    expect(await updateDockerTags(contents, dockerRegistryClient, logger)).toBe(
       newContents,
     );
   });
