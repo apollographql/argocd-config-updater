@@ -1,4 +1,3 @@
-import * as core from '@actions/core';
 import min from 'lodash/min';
 import * as yaml from 'yaml';
 import { DockerRegistryClient } from './artifactRegistry';
@@ -9,6 +8,7 @@ import {
   getTopLevelBlocks,
   parseYAML,
 } from './yaml';
+import { PrefixingLogger } from './log';
 
 interface Trackable {
   trackMutableTag: string;
@@ -20,26 +20,27 @@ interface Trackable {
 export async function updateDockerTags(
   contents: string,
   dockerRegistryClient: DockerRegistryClient,
+  _logger: PrefixingLogger,
 ): Promise<string> {
-  return core.group('Processing trackMutableTag', async () => {
-    const { document, stringify } = parseYAML(contents);
+  const logger = _logger.withExtendedPrefix('[trackMutableTag] ');
+  const { document, stringify } = parseYAML(contents);
 
-    // If the file is empty (or just whitespace or whatever), that's fine; we
-    // can just leave it alone.
-    if (!document) {
-      return contents;
-    }
+  // If the file is empty (or just whitespace or whatever), that's fine; we
+  // can just leave it alone.
+  if (!document) {
+    return contents;
+  }
 
-    core.info('Looking for trackMutableTag');
-    const trackables = findTrackables(document);
+  logger.info('Looking for trackMutableTag');
+  const trackables = findTrackables(document);
 
-    core.info('Checking tags against Artifact Registry');
-    await checkTagsAgainstArtifactRegistryAndModifyScalars(
-      trackables,
-      dockerRegistryClient,
-    );
-    return stringify();
-  });
+  logger.info('Checking tags against Artifact Registry');
+  await checkTagsAgainstArtifactRegistryAndModifyScalars(
+    trackables,
+    dockerRegistryClient,
+    logger,
+  );
+  return stringify();
 }
 
 function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
@@ -103,6 +104,7 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
 async function checkTagsAgainstArtifactRegistryAndModifyScalars(
   trackables: Trackable[],
   dockerRegistryClient: DockerRegistryClient,
+  logger: PrefixingLogger,
 ): Promise<void> {
   for (const trackable of trackables) {
     const prefix = `${trackable.trackMutableTag}---`;
@@ -122,7 +124,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
     // points to the same image as the mutable tag, leave it alone: there's no
     // reason to create a no-op diff.
     if (equivalentTags.includes(trackable.tag)) {
-      core.info(
+      logger.info(
         `for image ${trackable.dockerImageRepository}:${trackable.trackMutableTag}, preserving current tag ${trackable.tag}`,
       );
       continue;
@@ -158,7 +160,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
 
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
-    core.info(
+    logger.info(
       `for image ${trackable.dockerImageRepository}:${trackable.trackMutableTag}, changing to minimal matching tag ${earliestMatchingTag}`,
     );
     trackable.tagScalarTokenWriter.write(earliestMatchingTag);

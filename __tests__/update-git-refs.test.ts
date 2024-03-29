@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { GitHubClient } from '../src/github';
 import { updateGitRefs } from '../src/update-git-refs';
+import { PrefixingLogger } from '../src/log';
 
 const mockGitHubClient: GitHubClient = {
   async resolveRefToSHA({ ref }) {
@@ -15,6 +16,8 @@ const mockGitHubClient: GitHubClient = {
   },
 };
 
+const logger = PrefixingLogger.silent();
+
 async function fixture(filename: string): Promise<string> {
   return await readFile(
     join(__dirname, '__fixtures__', 'update-git-refs', filename),
@@ -25,18 +28,20 @@ async function fixture(filename: string): Promise<string> {
 describe('action', () => {
   it('updates git refs', async () => {
     const contents = await fixture('sample.yaml');
-    const newContents = await updateGitRefs(contents, mockGitHubClient);
+    const newContents = await updateGitRefs(contents, mockGitHubClient, logger);
     expect(newContents).toMatchSnapshot();
 
     // It should be idempotent in this case.
-    expect(await updateGitRefs(newContents, mockGitHubClient)).toBe(
+    expect(await updateGitRefs(newContents, mockGitHubClient, logger)).toBe(
       newContents,
     );
   });
 
   it('updates git ref when repoURL/path are in `global`', async () => {
     const contents = await fixture('global.yaml');
-    expect(await updateGitRefs(contents, mockGitHubClient)).toMatchSnapshot();
+    expect(
+      await updateGitRefs(contents, mockGitHubClient, logger),
+    ).toMatchSnapshot();
   });
 
   it('only changes ref when tree sha changes', async () => {
@@ -54,13 +59,13 @@ describe('action', () => {
 
     // First snapshot: ref should still be 'old' because tree SHA matches.
     expect(
-      await updateGitRefs(contents, mockGithubClientTreeSHA),
+      await updateGitRefs(contents, mockGithubClientTreeSHA, logger),
     ).toMatchSnapshot();
 
     treeSHAForNew = 'bbbb';
     // Second snapshot: ref should now be 'new' because tree SHA has changed.
     expect(
-      await updateGitRefs(contents, mockGithubClientTreeSHA),
+      await updateGitRefs(contents, mockGithubClientTreeSHA, logger),
     ).toMatchSnapshot();
   });
 
@@ -80,7 +85,7 @@ describe('action', () => {
     const contents = await fixture('tree-sha.yaml');
 
     expect(
-      await updateGitRefs(contents, mockGithubClientTreeSHA),
+      await updateGitRefs(contents, mockGithubClientTreeSHA, logger),
     ).toMatchSnapshot();
   });
 
@@ -97,7 +102,7 @@ describe('action', () => {
     const contents = await fixture('docker-tree-sha.yaml');
 
     expect(
-      await updateGitRefs(contents, mockGithubClientTreeSHA),
+      await updateGitRefs(contents, mockGithubClientTreeSHA, logger),
     ).toMatchSnapshot();
   });
 
@@ -117,7 +122,7 @@ describe('action', () => {
     const contents = await fixture('docker-tree-sha.yaml');
 
     expect(
-      await updateGitRefs(contents, mockGithubClientTreeSHA),
+      await updateGitRefs(contents, mockGithubClientTreeSHA, logger),
     ).toMatchSnapshot();
   });
 });

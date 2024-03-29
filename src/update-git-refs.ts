@@ -1,4 +1,3 @@
-import * as core from '@actions/core';
 import * as yaml from 'yaml';
 import {
   GetTreeSHAForPathOptions,
@@ -12,6 +11,7 @@ import {
   getTopLevelBlocks,
   parseYAML,
 } from './yaml';
+import { PrefixingLogger } from './log';
 
 interface Trackable {
   trackMutableRef: string;
@@ -25,23 +25,28 @@ interface Trackable {
 export async function updateGitRefs(
   contents: string,
   gitHubClient: GitHubClient,
+  _logger: PrefixingLogger,
 ): Promise<string> {
-  return core.group('Processing trackMutableRef', async () => {
-    const { document, stringify } = parseYAML(contents);
+  const logger = _logger.withExtendedPrefix('[trackMutableRef] ');
 
-    // If the file is empty (or just whitespace or whatever), that's fine; we
-    // can just leave it alone.
-    if (!document) {
-      return contents;
-    }
+  const { document, stringify } = parseYAML(contents);
 
-    core.info('Looking for trackMutableRef');
-    const trackables = findTrackables(document);
+  // If the file is empty (or just whitespace or whatever), that's fine; we
+  // can just leave it alone.
+  if (!document) {
+    return contents;
+  }
 
-    core.info('Checking refs against GitHub');
-    await checkRefsAgainstGitHubAndModifyScalars(trackables, gitHubClient);
-    return stringify();
-  });
+  logger.info('Looking for trackMutableRef');
+  const trackables = findTrackables(document);
+
+  logger.info('Checking refs against GitHub');
+  await checkRefsAgainstGitHubAndModifyScalars(
+    trackables,
+    gitHubClient,
+    logger,
+  );
+  return stringify();
 }
 
 function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
@@ -159,6 +164,7 @@ async function getTreeSHAForPathOrNull(
 async function checkRefsAgainstGitHubAndModifyScalars(
   trackables: Trackable[],
   gitHubClient: GitHubClient,
+  logger: PrefixingLogger,
 ): Promise<void> {
   for (const trackable of trackables) {
     const trackedRefCommitSHA = await gitHubClient.resolveRefToSHA({
@@ -216,7 +222,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     }
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.
-    core.info(
+    logger.info(
       `for path ${trackable.path}, got tree shas` +
         ` current: ${currentTreeSHA} for ${trackable.ref}` +
         ` tracked: ${trackedTreeSHA} for ${trackedRefCommitSHA}` +
@@ -227,23 +233,23 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
     if (dockerTreeSHA === trackedTreeSHA && dockerRefCommitSHA) {
       if (dockerRefCommitSHA !== trackable.ref) {
-        core.info('(using docker sha)');
+        logger.info('(using docker sha)');
         trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
       } else {
         // Commit sha is already whats written so no changes
-        core.info('(matches docker, unchanged)');
+        logger.info('(matches docker, unchanged)');
       }
     } else if (currentRefCommitSHA && currentTreeSHA === trackedTreeSHA) {
       if (currentRefCommitSHA !== trackable.ref) {
         // This will freeze the current ref if it is a mutable ref.
-        core.info('(freezing current ref)');
+        logger.info('(freezing current ref)');
         trackable.refScalarTokenWriter.write(currentRefCommitSHA);
       } else {
         // Commit sha is already whats written so no changes
-        core.info('(unchanged)');
+        logger.info('(unchanged)');
       }
     } else {
-      core.info('(updated to latest from ref!)');
+      logger.info('(updated to latest from ref!)');
       trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }
