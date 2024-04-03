@@ -40,6 +40,14 @@ export async function main(): Promise<void> {
       ),
     );
 
+    // Assumption: Team name is the second position of the filepath
+    const teamLabel = 'team:'.concat(
+      core.getInput('files').split('/')[1]?.toLowerCase() ?? 'unknown',
+    );
+    // Assumption: Environment name is the provided target regexp
+    const envLabel = 'env:'.concat(core.getInput('promotion-target-regexp'));
+    core.setOutput('pr-labels', [envLabel, 'promotion', teamLabel]);
+
     let gitHubClient: GitHubClient | null = null;
     let finalizeGitHubClient: (() => Promise<void>) | null = null;
     if (core.getBooleanInput('update-git-refs')) {
