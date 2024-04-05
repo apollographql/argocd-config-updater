@@ -13,21 +13,21 @@ inputs:
 
   github-token:
     description: 'GitHub token to read refs and trees; only needed if update-git-refs is set'
-  
+
   update-git-refs:
     description: 'Update tracked gitConfig.ref fields'
     default: 'false'
-  
+
   update-docker-tags-for-artifact-registry-repository:
     description: 'Updated tracked dockerImage.tag fields; must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
-  
+
   update-promoted-values:
     description: 'Process promote instructions'
     default: 'false'
-  
+
   promotion-target-regexp:
     description: 'Only process promote instructions for targets matching this regexp'
-  
+
   parallelism:
     description: 'How many files to process in parallel'
     default: '1'
@@ -38,6 +38,15 @@ outputs:
 
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
+
+  target-env:
+    description: 'The target promotion environment'
+
+  team:
+    description: 'The team responsible for the candidate promotion'
+
+  is-migration:
+    description: 'If the promotion is for running DB migrations'
 
 runs:
   using: node20
