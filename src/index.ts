@@ -40,13 +40,16 @@ export async function main(): Promise<void> {
       ),
     );
 
-    // Assumption: Team name is the second position of the filepath
-    const teamLabel = 'team:'.concat(
-      core.getInput('files').split('/')[1]?.toLowerCase() ?? 'unknown',
-    );
+    // Assumption: The filepath is of the format `team/{team-name}` or `team/{team-name}/migrations` (for db migrations)
+    const team =
+      core.getInput('files').split('/')[1]?.toLowerCase() ?? 'unknown';
+    const isMigration = core.getInput('files').includes('migrations');
     // Assumption: Environment name is the provided target regexp
-    const envLabel = 'env:'.concat(core.getInput('promotion-target-regexp'));
-    core.setOutput('pr-labels', [envLabel, 'promotion', teamLabel]);
+    const env = core.getInput('promotion-target-regexp');
+
+    core.setOutput('team', team);
+    core.setOutput('is-migration', isMigration);
+    core.setOutput('target-env', env);
 
     let gitHubClient: GitHubClient | null = null;
     let finalizeGitHubClient: (() => Promise<void>) | null = null;

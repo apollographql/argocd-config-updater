@@ -39,8 +39,14 @@ outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
 
-  pr-labels:
-    description: 'List of PR labels that can be applied to the generated PR'
+  target-env:
+    description: 'The target promotion environment'
+
+  team:
+    description: 'The team responsible for the candidate promotion'
+
+  is-migration:
+    description: 'If the promotion is for running DB migrations'
 
 runs:
   using: node20
