@@ -40,7 +40,7 @@ export async function main(): Promise<void> {
       ),
     );
 
-    // Assumption: The filepath is of the format `team/{team-name}` or `team/{team-name}/migrations` (for db migrations)
+    // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)
     const team =
       core.getInput('files').split('/')[1]?.toLowerCase() ?? 'unknown';
     const isMigration = core.getInput('files').includes('migrations');
