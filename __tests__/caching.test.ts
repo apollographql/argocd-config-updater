@@ -9,6 +9,9 @@ describe('CachingDockerRegistryClient caches', () => {
       async getAllEquivalentTags() {
         return [(++call).toString()];
       },
+      async getGitCommitsBetweenTags() {
+        return [];
+      },
     });
 
     async function exp(

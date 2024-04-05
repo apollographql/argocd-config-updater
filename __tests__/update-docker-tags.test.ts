@@ -39,6 +39,9 @@ describe('action', () => {
           }[tag] ?? []
         );
       },
+      async getGitCommitsBetweenTags() {
+        return [];
+      },
     };
     const logger = PrefixingLogger.silent();
     const newContents = await updateDockerTags(
