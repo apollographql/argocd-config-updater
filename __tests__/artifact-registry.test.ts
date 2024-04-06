@@ -126,4 +126,70 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
     ];
     expect(getTagsInRange(prev, next, tags)).toStrictEqual([tags[3]]);
   });
+
+  it('should dedup consecutive commit hashes', async () => {
+    const prev = makeMainTag(ENGINE_IDENTITY, 5, '2024', 4);
+    const next = makeMainTag(ENGINE_IDENTITY, 20, '2024', 4);
+    const commit1First = makeTag(
+      'main',
+      ENGINE_IDENTITY,
+      6,
+      '2024',
+      4,
+      'commit1hash',
+    );
+    const commit1Second = makeTag(
+      'main',
+      ENGINE_IDENTITY,
+      7,
+      '2024',
+      4,
+      'commit1hash',
+    );
+    const commit1Third = makeTag(
+      'main',
+      ENGINE_IDENTITY,
+      11,
+      '2024',
+      4,
+      'commit1hash',
+    );
+    const commit2First = makeTag(
+      'main',
+      ENGINE_IDENTITY,
+      9,
+      '2024',
+      4,
+      'commit2hash',
+    );
+    const commit2Second = makeTag(
+      'main',
+      ENGINE_IDENTITY,
+      10,
+      '2024',
+      4,
+      'commit2hash',
+    );
+
+    const tags = [
+      prev,
+      next,
+      commit1First,
+      commit1Second,
+      makeMainTag(ENGINE_IDENTITY, 8, '2024', 4),
+      commit2First,
+      commit2Second,
+      commit1Third,
+    ];
+
+    // We expect consecutive duplicate commit hashes to be deduped
+    // However if it returns later, this could imply a revert or rollback.
+    // At the moment, we just keep that in, but later we should explicitly flag as a rollback.
+    expect(getTagsInRange(prev, next, tags)).toStrictEqual([
+      tags[2],
+      tags[4],
+      tags[5],
+      tags[7],
+    ]);
+  });
 });

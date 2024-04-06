@@ -245,14 +245,49 @@ export function getTagsInRange(prevTag: Tag, nextTag: Tag, tags: Tag[]): Tag[] {
   }
 
   const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
-  const res = sortedTags
+
+  const tagsAfterInitialFilters = sortedTags
     .filter((tag) => {
       return tag.version > prevTag.version && tag.version < nextTag.version;
     })
-    .filter((tag) => isMainTag(tag));
+    .filter(isMainTag);
+
+  const res = dedupNeighboringTags(tagsAfterInitialFilters);
   return res;
 }
 
 function isMainTag(tag: Tag): boolean {
   return tag.version.startsWith('main---');
+}
+
+/**
+ *
+ * Tags look like this:
+ * pr-15028---0013576-2024.04-gabcdefge979bd9243574e44a63a73b0f4e12ede56
+ * main---0013572-2024.04-gabcdefg4d7f58193abc9e24a476133a771ca979c2
+ *
+ * So we just split on `-` and get the last value, minus the `g` prefix
+ *
+ * This will error if the tag version is not well-formed.
+ */
+function getTagCommitHash(tag: Tag): string {
+  return (tag.version.split('-').at(-1) as string).substring(1);
+}
+
+function dedupNeighboringTags(tags: Tag[]): Tag[] {
+  if (tags.length === 0) {
+    return [];
+  }
+
+  const res = [tags[0]];
+  for (let i = 1; i < tags.length; i++) {
+    const currTag = tags[i];
+    const prevTag = tags[i - 1];
+    const currTagCommit = getTagCommitHash(currTag);
+    const prevTagCommit = getTagCommitHash(prevTag);
+    if (currTagCommit !== prevTagCommit) {
+      res.push(currTag);
+    }
+  }
+  return res;
 }
