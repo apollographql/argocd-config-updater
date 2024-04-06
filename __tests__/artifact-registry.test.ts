@@ -109,4 +109,16 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
     ];
     expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
   });
+
+  it('should ignore all tags without main--- prefix', async () => {
+    const prev = makeTag(ENGINE_IDENTITY, 5, '2024', 4);
+    const next = makeTag(ENGINE_IDENTITY, 10, '2024', 4);
+    const tags = [
+      prev,
+      next,
+      makePRTag('123', ENGINE_IDENTITY, 7, '2024', 4),
+      makeTag(ENGINE_IDENTITY, 6, '2024', 4),
+    ];
+    expect(getTagsInRange(prev, next, tags)).toStrictEqual([tags[3]]);
+  });
 });
