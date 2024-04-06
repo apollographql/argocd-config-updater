@@ -24,6 +24,23 @@ function makeTag(
   };
 }
 
+function makePRTag(
+  prNumber: string,
+  name: string,
+  count: number,
+  year: string,
+  month: number,
+): Tag {
+  const paddedCount = count.toString().padStart(7, '0');
+  const paddedMonth = month.toString().padStart(2, '0');
+
+  const gitHash = faker.git.commitSha();
+  return {
+    name,
+    version: `pr-${prNumber}---${paddedCount}-${year}.${paddedMonth}-g${gitHash}`,
+  };
+}
+
 const ENGINE_IDENTITY = 'engine-identity';
 
 describe('ArtifactRegistry._getCommitsBetweenTags', () => {
@@ -67,5 +84,29 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makeTag(ENGINE_IDENTITY, 6, '2024', 4),
     ];
     expect(getTagsInRange(prev, next, tags)).toStrictEqual([tags[3], tags[2]]);
+  });
+
+  it('should return an empty list if left bound is not for `main---`', async () => {
+    const prev = makePRTag('123', ENGINE_IDENTITY, 5, '2024', 4);
+    const next = makeTag(ENGINE_IDENTITY, 10, '2024', 4);
+    const tags = [
+      prev,
+      next,
+      makeTag(ENGINE_IDENTITY, 7, '2024', 4),
+      makeTag(ENGINE_IDENTITY, 6, '2024', 4),
+    ];
+    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
+  });
+
+  it('should return an empty list if right bound is not for `main---`', async () => {
+    const prev = makeTag(ENGINE_IDENTITY, 5, '2024', 4);
+    const next = makePRTag('123', ENGINE_IDENTITY, 10, '2024', 4);
+    const tags = [
+      prev,
+      next,
+      makeTag(ENGINE_IDENTITY, 7, '2024', 4),
+      makeTag(ENGINE_IDENTITY, 6, '2024', 4),
+    ];
+    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
   });
 });

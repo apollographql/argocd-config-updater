@@ -240,10 +240,17 @@ export type Tag = {
 };
 
 export function getTagsInRange(prevTag: Tag, nextTag: Tag, tags: Tag[]): Tag[] {
+  if (!(isMainTag(prevTag) && isMainTag(nextTag))) {
+    return [];
+  }
+
   const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
   const res = sortedTags.filter((tag) => {
     return tag.version > prevTag.version && tag.version < nextTag.version;
   });
-  console.log(res);
   return res;
+}
+
+function isMainTag(tag: Tag): boolean {
+  return tag.version.startsWith('main---');
 }
