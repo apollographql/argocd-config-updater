@@ -91,60 +91,18 @@ export class ArtifactRegistryDockerRegistryClient {
     // We want to get the minimum tag for each version, since this implies those commits
     // made a change to the docker image so are relevant to the diff.
     // Tags are of the format `main---0013572-2024.04-acbdef1234558193abc9e24a476133a771ca979c2`
-    const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
-    for (const dockerTag of dockerTags) {
-      if (!dockerTag.version || !dockerTag.name) continue;
+    const tags = dockerTags
+      .filter((tag) => tag.version && tag.name)
+      .map((tag) => {
+        const { tagVersion } = this.client.pathTemplates.tagPathTemplate.match(
+          tag.name as string,
+        );
+        // Tag version can be a number according to the types,
+        // but skimming through our artifact registry, it looks like it is always a string.
+        return { name: tag.name as string, version: tagVersion as string };
+      });
 
-      const { tag } = this.client.pathTemplates.tagPathTemplate.match(
-        dockerTag.name,
-      );
-
-      // If it is a number we can ignore the tag
-      if (typeof tag !== 'string') continue;
-
-      // We only care about the tags between prev and next that have a git commit
-      const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
-      if (!gitCommitMatches) continue;
-
-      // Only include tags newer than previous, and older than next.
-      // Note, this may need some rework later when we explicitly want to call out rollbacks
-      // and other shenanigans.
-      if (tag >= nextTag || tag <= prevTag) continue;
-
-      if (
-        ((tag >= prevTag && tag <= nextTag) ||
-          (tag <= prevTag && tag >= nextTag)) &&
-        gitCommitMatches
-      ) {
-        const minTag = tagBoundsMap.get(dockerTag.version);
-        if (minTag && minTag.tag > tag) {
-          minTag.tag = tag;
-          minTag.commit = gitCommitMatches[1];
-        } else {
-          tagBoundsMap.set(dockerTag.version, {
-            tag,
-            commit: gitCommitMatches[1],
-          });
-        }
-      }
-    }
-
-    const relevantCommits = new Array<{ tag: string; commit: string }>();
-
-    for (const tagBound of tagBoundsMap.values()) {
-      // We can skip the tag we are just coming from as a min
-      if (tagBound.tag === prevTag) {
-        continue;
-      }
-      relevantCommits.push(tagBound);
-    }
-
-    core.info(`Relevant Commits ${Array.from(relevantCommits).join(', ')}`);
-
-    // Sort commits ascending
-    return relevantCommits
-      .sort((a, b) => a.tag.localeCompare(b.tag))
-      .map((c) => c.commit);
+    return getTagsInRange(prevTag, nextTag, tags).map(getTagCommitHash);
   }
 
   async getAllEquivalentTags({
@@ -239,8 +197,12 @@ export type Tag = {
   version: string;
 };
 
-export function getTagsInRange(prevTag: Tag, nextTag: Tag, tags: Tag[]): Tag[] {
-  if (!(isMainTag(prevTag) && isMainTag(nextTag))) {
+export function getTagsInRange(
+  prevVersion: string,
+  nextVersion: string,
+  tags: Tag[],
+): Tag[] {
+  if (!(isMainVersion(prevVersion) && isMainVersion(nextVersion))) {
     return [];
   }
 
@@ -248,16 +210,16 @@ export function getTagsInRange(prevTag: Tag, nextTag: Tag, tags: Tag[]): Tag[] {
 
   const tagsAfterInitialFilters = sortedTags
     .filter((tag) => {
-      return tag.version > prevTag.version && tag.version < nextTag.version;
+      return tag.version > prevVersion && tag.version < nextVersion;
     })
-    .filter(isMainTag);
+    .filter((tag) => isMainVersion(tag.version));
 
   const res = dedupNeighboringTags(tagsAfterInitialFilters);
   return res;
 }
 
-function isMainTag(tag: Tag): boolean {
-  return tag.version.startsWith('main---');
+function isMainVersion(version: string): boolean {
+  return version.startsWith('main---');
 }
 
 /**

@@ -52,7 +52,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
   it('should return nothing when given an empty list', async () => {
     const prev = makeMainTag(ENGINE_IDENTITY, 1, '2024', 4);
     const next = makeMainTag(ENGINE_IDENTITY, 2, '2024', 4);
-    expect(getTagsInRange(prev, next, [])).toStrictEqual([]);
+    expect(getTagsInRange(prev.version, next.version, [])).toStrictEqual([]);
   });
 
   it('should filter commits before prev (inclusive)', async () => {
@@ -64,7 +64,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       prev,
       makeMainTag(ENGINE_IDENTITY, 0, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([]);
   });
 
   it('should filter commits after next (inclusive)', async () => {
@@ -76,7 +76,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makeMainTag(ENGINE_IDENTITY, 12, '2024', 4),
       makeMainTag(ENGINE_IDENTITY, 100, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([]);
   });
 
   it('should include commits between prev and next (in sorted order)', async () => {
@@ -88,7 +88,10 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makeMainTag(ENGINE_IDENTITY, 7, '2024', 4),
       makeMainTag(ENGINE_IDENTITY, 6, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([tags[3], tags[2]]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([
+      tags[3],
+      tags[2],
+    ]);
   });
 
   it('should return an empty list if left bound is not for `main---`', async () => {
@@ -100,7 +103,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makeMainTag(ENGINE_IDENTITY, 7, '2024', 4),
       makeMainTag(ENGINE_IDENTITY, 6, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([]);
   });
 
   it('should return an empty list if right bound is not for `main---`', async () => {
@@ -112,7 +115,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makeMainTag(ENGINE_IDENTITY, 7, '2024', 4),
       makeMainTag(ENGINE_IDENTITY, 6, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([]);
   });
 
   it('should ignore all tags without main--- prefix', async () => {
@@ -124,7 +127,9 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
       makePRTag('123', ENGINE_IDENTITY, 7, '2024', 4),
       makeMainTag(ENGINE_IDENTITY, 6, '2024', 4),
     ];
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([tags[3]]);
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([
+      tags[3],
+    ]);
   });
 
   it('should dedup consecutive commit hashes', async () => {
@@ -185,7 +190,7 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
     // We expect consecutive duplicate commit hashes to be deduped
     // However if it returns later, this could imply a revert or rollback.
     // At the moment, we just keep that in, but later we should explicitly flag as a rollback.
-    expect(getTagsInRange(prev, next, tags)).toStrictEqual([
+    expect(getTagsInRange(prev.version, next.version, tags)).toStrictEqual([
       tags[2],
       tags[4],
       tags[5],
