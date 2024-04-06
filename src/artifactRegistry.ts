@@ -239,10 +239,11 @@ export type Tag = {
   version: string;
 };
 
-export function getCommitsBetweenTags(
-  prevTag: Tag,
-  nextTag: Tag,
-  tags: Tag[],
-): string[] {
-  return [];
+export function getTagsInRange(prevTag: Tag, nextTag: Tag, tags: Tag[]): Tag[] {
+  const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
+  const res = sortedTags.filter((tag) => {
+    return tag.version > prevTag.version && tag.version < nextTag.version;
+  });
+  console.log(res);
+  return res;
 }
