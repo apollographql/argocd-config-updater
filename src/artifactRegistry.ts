@@ -221,11 +221,11 @@ export function getTagsInRange(
     })
     .filter((tag) => isMainVersion(tag.version));
 
-  const res = dtedupNeighboringTags(tagsAfterInitialFilters);
+  const res = dedupNeighboringTags(tagsAfterInitialFilters);
   return res;
 }
 
-function isMsainVersion(version: string): boolean {
+function isMainVersion(version: string): boolean {
   return version.startsWith('main---');
 }
 
