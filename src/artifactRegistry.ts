@@ -102,7 +102,14 @@ export class ArtifactRegistryDockerRegistryClient {
         return { name: tag.name as string, version: tagVersion as string };
       });
 
-    return getTagsInRange(prevTag, nextTag, tags).map(getTagCommitHash);
+    const relevantCommits: string[] = getTagsInRange(
+      prevTag,
+      nextTag,
+      tags,
+    ).map(getTagCommitHash);
+    core.info(`Relevant Commits ${Array.from(relevantCommits).join(', ')}`);
+
+    return relevantCommits;
   }
 
   async getAllEquivalentTags({
@@ -214,11 +221,11 @@ export function getTagsInRange(
     })
     .filter((tag) => isMainVersion(tag.version));
 
-  const res = dedupNeighboringTags(tagsAfterInitialFilters);
+  const res = dtedupNeighboringTags(tagsAfterInitialFilters);
   return res;
 }
 
-function isMainVersion(version: string): boolean {
+function isMsainVersion(version: string): boolean {
   return version.startsWith('main---');
 }
 
@@ -228,7 +235,7 @@ function isMainVersion(version: string): boolean {
  * pr-15028---0013576-2024.04-gabcdefge979bd9243574e44a63a73b0f4e12ede56
  * main---0013572-2024.04-gabcdefg4d7f58193abc9e24a476133a771ca979c2
  *
- * So we just split on `-` and get the last value, minus the `g` prefix
+ * So nwe just split on `-` and get the last value, minus the `g` prefix
  *
  * This will error if the tag version is not well-formed.
  */
