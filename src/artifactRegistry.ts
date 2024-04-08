@@ -100,6 +100,8 @@ export class ArtifactRegistryDockerRegistryClient {
     const tags = dockerTags
       .filter((tag) => tag.version && tag.name)
       .map((tag) => {
+        core.info('Tag in map');
+        core.info(JSON.stringify(tag));
         const { tagVersion } = this.client.pathTemplates.tagPathTemplate.match(
           tag.name as string,
         );
