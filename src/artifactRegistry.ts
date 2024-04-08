@@ -56,6 +56,16 @@ export class ArtifactRegistryDockerRegistryClient {
     this.repositoryFields = { project, location, repository };
   }
 
+  /**
+   *
+   *
+   *
+   *
+   *
+   *
+   *
+   *
+   */
   async getGitCommitsBetweenTags({
     prevTag,
     nextTag,
@@ -79,8 +89,8 @@ export class ArtifactRegistryDockerRegistryClient {
     // https://github.com/googleapis/gax-nodejs/blob/main/client-libraries.md#auto-pagination
     // These tags look like the following:
     // {
-    //   "name":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g16607e3143",
-    //   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:ef8b944a2c6fc5e20b3df6a1500292cf65e28039f3daa8a6df55b84c5eaaecca"
+    //   "name":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g123456789",
+    //   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
     // }
     const dockerTags = (
       await this.client.listTags({
@@ -90,7 +100,6 @@ export class ArtifactRegistryDockerRegistryClient {
         }),
       })
     )[0].filter((tag) => tag.version && tag.name);
-    core.info(`Docker Tags ${JSON.stringify(dockerTags.slice(0, 5))}`);
 
     const revelantCommits = getRelevantCommits(
       prevTag,
@@ -261,7 +270,7 @@ function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: Tag[],
-  getTagFromTagDockerTagName: (dockerTagName: string) => string,
+  getTagFromDockerTagName: (dockerTagName: string) => string,
 ): string[] {
   // We want to get the minimum tag for each version, since this implies those commits
   // made a change to the docker image so are relevant to the diff.
@@ -269,7 +278,8 @@ function getRelevantCommits(
   for (const dockerTag of dockerTags) {
     if (!dockerTag.version || !dockerTag.name) continue;
 
-    const tag = getTagFromTagDockerTagName(dockerTag.name);
+    const tag = getTagFromDockerTagName(dockerTag.name);
+    core.info(`Tag from DockerTag name ${tag}`);
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);

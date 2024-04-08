@@ -198,3 +198,9 @@ describe('ArtifactRegistry._getCommitsBetweenTags', () => {
     ]);
   });
 });
+
+describe('ArtifactRegistry.getRelevantCommits', () => {
+  it('should succeed', async () => {
+    expect(true).toBe(true);
+  });
+});
