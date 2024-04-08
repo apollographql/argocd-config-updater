@@ -102,9 +102,9 @@ export class ArtifactRegistryDockerRegistryClient {
       .map((tag) => {
         core.info('Tag in map');
         core.info(JSON.stringify(tag));
-        const { tagVersion } = this.client.pathTemplates.tagPathTemplate.match(
+        const tagVersion = this.client.pathTemplates.tagPathTemplate.match(
           tag.name as string,
-        );
+        ).tag;
 
         core.info('Tag Version');
         core.info(tagVersion as string);
