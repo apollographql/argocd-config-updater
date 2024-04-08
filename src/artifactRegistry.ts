@@ -306,7 +306,7 @@ export function getRelevantCommits(
   // We want to get the minimum tag for each version, since this implies those commits
   // made a change to the docker image so are relevant to the diff.
   // const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
-  const validTags = new Array<{
+  const relevantCommitsWithTagInfo = new Array<{
     version: string;
     tag: string;
     commit: string;
@@ -346,7 +346,7 @@ export function getRelevantCommits(
         tag,
         commit: gitCommitMatches[1],
       };
-      validTags.push(currTagInfo);
+      relevantCommitsWithTagInfo.push(currTagInfo);
     }
   }
 
@@ -369,9 +369,10 @@ export function getRelevantCommits(
   // const result = relevantCommits
   //   .sort((a, b) => a.tag.localeCompare(b.tag))
   //   .map((c) => c.commit);
-  const result = dedupNeighboringTags(validTags)
+  const result = dedupNeighboringTags(relevantCommitsWithTagInfo)
     .sort((a, b) => a.tag.localeCompare(b.tag))
     .map((c) => c.commit);
+  core.info(`Relevant Commits ${result.join(', ')}`);
   return result;
 }
 
