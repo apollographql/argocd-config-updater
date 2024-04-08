@@ -206,7 +206,15 @@ export class CachingDockerRegistryClient {
   }
 }
 
-export type Tag = {
+/**
+ * An example format of a docker tag:
+ * {
+ *   "name":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g123456789",
+ *   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
+ * }
+ *
+ */
+export type DockerTag = {
   name: string;
   version: string;
 };
@@ -214,8 +222,8 @@ export type Tag = {
 export function getTagsInRange(
   prevVersion: string,
   nextVersion: string,
-  tags: Tag[],
-): Tag[] {
+  tags: DockerTag[],
+): DockerTag[] {
   if (!(isMainVersion(prevVersion) && isMainVersion(nextVersion))) {
     return [];
   }
@@ -246,11 +254,11 @@ function isMainVersion(version: string): boolean {
  *
  * This will error if the tag version is not well-formed.
  */
-function getTagCommitHash(tag: Tag): string {
+function getTagCommitHash(tag: DockerTag): string {
   return (tag.version.split('-').at(-1) as string).substring(1);
 }
 
-function dedupNeighboringTags(tags: Tag[]): Tag[] {
+function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
   if (tags.length === 0) {
     return [];
   }
@@ -276,7 +284,7 @@ function dedupNeighboringTags(tags: Tag[]): Tag[] {
  * @param {string} nextTag
  *  The next docker tag: main---0013567-2024.04-g<githash>
  *
- * @param {Tag[]} dockerTags
+ * @param {DockerTag[]} dockerTags
  *  The docker tags as we need to parse and filter into relevant commits. Provided by a previous call to the artifact registry.
  *
  *
@@ -289,7 +297,7 @@ function dedupNeighboringTags(tags: Tag[]): Tag[] {
 function getRelevantCommits(
   prevTag: string,
   nextTag: string,
-  dockerTags: Tag[],
+  dockerTags: DockerTag[],
   /**
    * Should map from `projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/servicename/tags/2022.02-278-g123456789` -> `2022.02-278-g123456789`
    * Should be a wrapper around the ArtifactRegistryClient, but written this way for testability, so the behavior can be injected.

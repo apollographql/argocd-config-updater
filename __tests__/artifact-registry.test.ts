@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { Tag, getTagsInRange } from '../src/artifactRegistry';
+import { DockerTag, getTagsInRange } from '../src/artifactRegistry';
 
 /**
  * Example tags from our registry:
@@ -13,7 +13,7 @@ function makeMainTag(
   count: number,
   year: string,
   month: number,
-): Tag {
+): DockerTag {
   const gitHash = faker.git.commitSha();
   return makeTag(`main`, name, count, year, month, gitHash);
 }
@@ -24,7 +24,7 @@ function makePRTag(
   count: number,
   year: string,
   month: number,
-): Tag {
+): DockerTag {
   const gitHash = faker.git.commitSha();
   return makeTag(`pr-${prNumber}`, name, count, year, month, gitHash);
 }
@@ -36,7 +36,7 @@ function makeTag(
   year: string,
   month: number,
   hash: string,
-): Tag {
+): DockerTag {
   const paddedCount = count.toString().padStart(7, '0');
   const paddedMonth = month.toString().padStart(2, '0');
 
