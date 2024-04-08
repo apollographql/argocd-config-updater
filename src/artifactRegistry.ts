@@ -85,7 +85,7 @@ export class ArtifactRegistryDockerRegistryClient {
         }),
       })
     )[0];
-    core.info(`Docker Tags ${Array.from(dockerTags).join(', ')}`);
+    core.info(`Docker Tags ${JSON.stringify(dockerTags)}`);
 
     // We are going to get all of the relevant tags with unique hashes.
 
@@ -103,7 +103,7 @@ export class ArtifactRegistryDockerRegistryClient {
         return { name: tag.name as string, version: tagVersion as string };
       });
 
-    core.info(`Step1 Tags ${Array.from(tags).join(', ')}`);
+    core.info(`Step1 Tags ${JSON.stringify(tags)}`);
 
     const relevantCommits: string[] = getTagsInRange(
       prevTag,
