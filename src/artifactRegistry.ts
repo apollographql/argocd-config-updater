@@ -57,14 +57,16 @@ export class ArtifactRegistryDockerRegistryClient {
   }
 
   /**
+   * getGitCommitsBetweenTags
    *
+   * @param {string} prevTag
+   *   The previous docker tag: of the following format: main---0013567-2024.04-g<githash>
+   * @param {string} nextTag
+   *  The next docker tag: main---0013567-2024.04-g<githash>
    *
+   * @param {object} dockerImageRepository
    *
-   *
-   *
-   *
-   *
-   *
+   * @returns {Promise} - The promise which resolves to an array of relevant commit strings.
    */
   async getGitCommitsBetweenTags({
     prevTag,
@@ -270,6 +272,10 @@ function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: Tag[],
+  /**
+   * Should map from `projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/servicename/tags/2022.02-278-g123456789` -> `2022.02-278-g123456789`
+   * Should be a wrapper around the ArtifactRegistryClient, but written this way for testability, so the behavior can be injected.
+   */
   getTagFromDockerTagName: (dockerTagName: string) => string,
 ): string[] {
   // We want to get the minimum tag for each version, since this implies those commits
@@ -279,7 +285,6 @@ function getRelevantCommits(
     if (!dockerTag.version || !dockerTag.name) continue;
 
     const tag = getTagFromDockerTagName(dockerTag.name);
-    core.info(`Tag from DockerTag name ${tag}`);
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
