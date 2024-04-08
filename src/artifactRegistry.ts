@@ -92,39 +92,52 @@ export class ArtifactRegistryDockerRegistryClient {
     )[0];
     core.info(`Docker Tags ${JSON.stringify(dockerTags.slice(0, 5))}`);
 
-    // We are going to get all of the relevant tags with unique hashes.
-
     // We want to get the minimum tag for each version, since this implies those commits
     // made a change to the docker image so are relevant to the diff.
-    // Tags are of the format `main---0013572-2024.04-acbdef1234558193abc9e24a476133a771ca979c2`
-    const tags = dockerTags
-      .filter((tag) => tag.version && tag.name)
-      .map((tag) => {
-        core.info('Tag in map');
-        core.info(JSON.stringify(tag));
-        const tagVersion = this.client.pathTemplates.tagPathTemplate.match(
-          tag.name as string,
-        ).tag;
+    const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+    for (const dockerTag of dockerTags) {
+      if (!dockerTag.version || !dockerTag.name) continue;
 
-        core.info('Tag Version');
-        core.info(tagVersion as string);
+      const tag = this.client.pathTemplates.tagPathTemplate.match(
+        dockerTag.name,
+      ).tag as string;
 
-        // Tag version can be a number according to the types,
-        // but skimming through our artifact registry, it looks like it is always a string.
-        return { name: tag.name as string, version: tagVersion as string };
-      });
+      // We only care about the tags between prev and next that have a git commit
+      const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
+      if (
+        ((tag >= prevTag && tag <= nextTag) ||
+          (tag <= prevTag && tag >= nextTag)) &&
+        gitCommitMatches
+      ) {
+        const minTag = tagBoundsMap.get(dockerTag.version);
+        if (minTag && minTag.tag > tag) {
+          minTag.tag = tag;
+          minTag.commit = gitCommitMatches[1];
+        } else {
+          tagBoundsMap.set(dockerTag.version, {
+            tag,
+            commit: gitCommitMatches[1],
+          });
+        }
+      }
+    }
 
-    core.info(`Step1 Tags ${JSON.stringify(tags.slice(0, 5))}`);
+    const relevantCommits = new Array<{ tag: string; commit: string }>();
 
-    const relevantCommits: string[] = getTagsInRange(
-      prevTag,
-      nextTag,
-      tags,
-    ).map(getTagCommitHash);
+    for (const tagBound of tagBoundsMap.values()) {
+      // We can skip the tag we are just coming from as a min
+      if (tagBound.tag === prevTag) {
+        continue;
+      }
+      relevantCommits.push(tagBound);
+    }
 
     core.info(`Relevant Commits ${Array.from(relevantCommits).join(', ')}`);
 
-    return relevantCommits;
+    // Sort commits ascending
+    return relevantCommits
+      .sort((a, b) => a.tag.localeCompare(b.tag))
+      .map((c) => c.commit);
   }
 
   async getAllEquivalentTags({
