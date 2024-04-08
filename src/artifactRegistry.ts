@@ -132,12 +132,12 @@ export class ArtifactRegistryDockerRegistryClient {
       relevantCommits.push(tagBound);
     }
 
-    core.info(`Relevant Commits ${Array.from(relevantCommits).join(', ')}`);
-
     // Sort commits ascending
-    return relevantCommits
+    const result = relevantCommits
       .sort((a, b) => a.tag.localeCompare(b.tag))
       .map((c) => c.commit);
+    core.info(`Relevant Commits ${result.join(', ')}`);
+    return result;
   }
 
   async getAllEquivalentTags({
