@@ -29,7 +29,7 @@ function makePRTag(
 ): [string, DockerTag] {
   const paddedCount = count.toString().padStart(7, '0');
   const paddedMonth = month.toString().padStart(2, '0');
-  const shortHash = faker.git.shortSha();
+  const shortHash = faker.git.commitSha({ length: 7 });
   const hash = faker.git.commitSha();
 
   const prTag = `pr-123---${paddedCount}-${year}.${paddedMonth}-g${hash}`;
@@ -51,7 +51,7 @@ function makeMainTag(
 ): [string, DockerTag] {
   const paddedCount = count.toString().padStart(7, '0');
   const paddedMonth = month.toString().padStart(2, '0');
-  const shortHash = faker.git.shortSha();
+  const shortHash = faker.git.commitSha({ length: 7 });
   const hash = faker.git.commitSha();
 
   const mainTag = `main---${paddedCount}-${year}.${paddedMonth}-g${hash}`;
@@ -197,8 +197,8 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
     const [next, nextDockerTag] = makeMainTag(20, '2024', 4);
     const hash1 = faker.git.commitSha();
     const hash2 = faker.git.commitSha();
-    const shortHash1 = faker.git.shortSha();
-    const shortHash2 = faker.git.shortSha();
+    const shortHash1 = faker.git.commitSha({ length: 7 });
+    const shortHash2 = faker.git.commitSha({ length: 7 });
     const commit1First = makeDockerTag(
       EXAMPLE_TAG_NAME_PATH,
       6,
@@ -251,8 +251,6 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
       commit2Second,
       commit1Third,
     ];
-
-    console.log(getAllHashes(tags));
 
     // We expect consecutive duplicate commit hashes to be deduped
     // However if it returns later, this could imply a revert or rollback.

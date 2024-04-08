@@ -219,63 +219,6 @@ export type DockerTag = {
   version: string;
 };
 
-// export function getTagsInRange(
-//   prevVersion: string,
-//   nextVersion: string,
-//   tags: DockerTag[],
-// ): DockerTag[] {
-//   if (!(isMainVersion(prevVersion) && isMainVersion(nextVersion))) {
-//     return [];
-//   }
-//
-//   const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
-//
-//   const tagsAfterInitialFilters = sortedTags
-//     .filter((tag) => {
-//       return tag.version > prevVersion && tag.version < nextVersion;
-//     })
-//     .filter((tag) => isMainVersion(tag.version));
-//
-//   const res = dedupNeighboringTags(tagsAfterInitialFilters);
-//   return res;
-// }
-
-// function isMainVersion(version: string): boolean {
-//   return version.startsWith('main---');
-// }
-
-/**
- *
- * Tags look like this:
- * pr-15028---0013576-2024.04-gabcdefge979bd9243574e44a63a73b0f4e12ede56
- * main---0013572-2024.04-gabcdefg4d7f58193abc9e24a476133a771ca979c2
- *
- * So we just split on `-` and get the last value, minus the `g` prefix
- *
- * This will error if the tag version is not well-formed.
- */
-// function getTagCommitHash(tag: DockerTag): string {
-//   return (tag.version.split('-').at(-1) as string).substring(1);
-// }
-
-// function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
-//   if (tags.length === 0) {
-//     return [];
-//   }
-//
-//   const res = [tags[0]];
-//   for (let i = 1; i < tags.length; i++) {
-//     const currTag = tags[i];
-//     const prevTag = tags[i - 1];
-//     const currTagCommit = getTagCommitHash(currTag);
-//     const prevTagCommit = getTagCommitHash(prevTag);
-//     if (currTagCommit !== prevTagCommit) {
-//       res.push(currTag);
-//     }
-//   }
-//   return res;
-// }
-
 /**
  * getRelevantCommits
  *
@@ -303,44 +246,28 @@ export function getRelevantCommits(
   if (!prevTag.startsWith('main')) return [];
   if (!nextTag.startsWith('main')) return [];
 
-  // We want to get the minimum tag for each version, since this implies those commits
-  // made a change to the docker image so are relevant to the diff.
-  // const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+  /**
+   * Going to loop over our docker tags, filtering out ones outside the relevant range, and build an array of tag info.
+   *
+   * We will then do some commit deduping and return a list of relevant commits.
+   */
   const relevantCommitsWithTagInfo = new Array<{
     version: string;
     tag: string;
     commit: string;
   }>();
+
   for (const dockerTag of dockerTags) {
     if (!dockerTag.version || !dockerTag.name) continue;
 
     const tag = getTagFromDockerTag(dockerTag);
-    core.info(`Tag: ${tag}`);
-    core.info(`DockerTag.version: ${dockerTag.version}`);
 
     if (!tag.startsWith('main')) continue;
     if (!tagInRange(prevTag, nextTag, tag)) continue;
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
-    core.info(`hash: ${gitCommitMatches}`);
     if (gitCommitMatches) {
-      // const minTag = tagBoundsMap.get(dockerTag.version);
-      // if (minTag && tag < minTag.tag) {
-      //   console.log(`found new min tag ${tag}, replacing ${minTag}`);
-      //   tagBoundsMap.set(dockerTag.version, {
-      //     tag,
-      //     commit: gitCommitMatches[1],
-      //   });
-      // } else if (minTag && minTag.tag < tag) {
-      //   console.log(`Found a larger tag, keeping current min tag`);
-      // } else {
-      //   console.log(`found new min tag ${tag}, ${gitCommitMatches[1]}`);
-      //   tagBoundsMap.set(dockerTag.version, {
-      //     tag,
-      //     commit: gitCommitMatches[1],
-      //   });
-      // }
       const currTagInfo = {
         version: dockerTag.version,
         tag,
@@ -350,29 +277,10 @@ export function getRelevantCommits(
     }
   }
 
-  // console.log(`tagBoundsMap ${JSON.stringify(tagBoundsMap.entries())} `);
-
-  // const relevantCommits = new Array<{ tag: string; commit: string }>();
-  //
-  // for (const tagBound of tagBoundsMap.values()) {
-  //   // We can skip the tag we are just coming from as a min
-  //   if (tagBound.tag === prevTag) {
-  //     console.log(
-  //       `skipping tag as equal to prevTag ${tagBound.tag}, ${prevTag} `,
-  //     );
-  //     continue;
-  //   }
-  //   relevantCommits.push(tagBound);
-  // }
-
-  // Sort commits ascending
-  // const result = relevantCommits
-  //   .sort((a, b) => a.tag.localeCompare(b.tag))
-  //   .map((c) => c.commit);
   const result = dedupNeighboringTags(relevantCommitsWithTagInfo)
     .sort((a, b) => a.tag.localeCompare(b.tag))
     .map((c) => c.commit);
-  core.info(`Relevant Commits ${result.join(', ')}`);
+
   return result;
 }
 
