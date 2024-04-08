@@ -268,6 +268,24 @@ function dedupNeighboringTags(tags: Tag[]): Tag[] {
   return res;
 }
 
+/**
+ * getRelevantCommits
+ *
+ * @param {string} prevTag
+ *   The previous docker tag: of the following format: main---0013567-2024.04-g<githash>
+ * @param {string} nextTag
+ *  The next docker tag: main---0013567-2024.04-g<githash>
+ *
+ * @param {Tag[]} dockerTags
+ *  The docker tags as we need to parse and filter into relevant commits. Provided by a previous call to the artifact registry.
+ *
+ *
+ * @param {function} getTagFromDockerTagName
+ *   Should map from `projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/servicename/tags/2022.02-278-g123456789` -> `2022.02-278-g123456789`
+ *   Should be a wrapper around the ArtifactRegistryClient, but written this way for testability, so the behavior can be injected.
+ *
+ * @returns {string[]} - The relevant commits as strings
+ */
 function getRelevantCommits(
   prevTag: string,
   nextTag: string,
