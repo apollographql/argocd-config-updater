@@ -89,55 +89,23 @@ export class ArtifactRegistryDockerRegistryClient {
           package: dockerImageRepository,
         }),
       })
-    )[0];
+    )[0].filter((tag) => tag.version && tag.name);
     core.info(`Docker Tags ${JSON.stringify(dockerTags.slice(0, 5))}`);
 
-    // We want to get the minimum tag for each version, since this implies those commits
-    // made a change to the docker image so are relevant to the diff.
-    const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
-    for (const dockerTag of dockerTags) {
-      if (!dockerTag.version || !dockerTag.name) continue;
-
-      const tag = this.client.pathTemplates.tagPathTemplate.match(
-        dockerTag.name,
-      ).tag as string;
-
-      // We only care about the tags between prev and next that have a git commit
-      const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
-      if (
-        ((tag >= prevTag && tag <= nextTag) ||
-          (tag <= prevTag && tag >= nextTag)) &&
-        gitCommitMatches
-      ) {
-        const minTag = tagBoundsMap.get(dockerTag.version);
-        if (minTag && minTag.tag > tag) {
-          minTag.tag = tag;
-          minTag.commit = gitCommitMatches[1];
-        } else {
-          tagBoundsMap.set(dockerTag.version, {
-            tag,
-            commit: gitCommitMatches[1],
-          });
-        }
-      }
-    }
-
-    const relevantCommits = new Array<{ tag: string; commit: string }>();
-
-    for (const tagBound of tagBoundsMap.values()) {
-      // We can skip the tag we are just coming from as a min
-      if (tagBound.tag === prevTag) {
-        continue;
-      }
-      relevantCommits.push(tagBound);
-    }
-
-    // Sort commits ascending
-    const result = relevantCommits
-      .sort((a, b) => a.tag.localeCompare(b.tag))
-      .map((c) => c.commit);
-    core.info(`Relevant Commits ${result.join(', ')}`);
-    return result;
+    const revelantCommits = getRelevantCommits(
+      prevTag,
+      nextTag,
+      dockerTags.map((tag) => ({
+        name: tag.name as string,
+        version: tag.version as string,
+      })),
+      (dockerTagName: string) => {
+        return this.client.pathTemplates.tagPathTemplate.match(dockerTagName)
+          .tag as string;
+      },
+    );
+    core.info(`Relevant Commits ${revelantCommits.join(', ')}`);
+    return revelantCommits;
   }
 
   async getAllEquivalentTags({
@@ -287,4 +255,55 @@ function dedupNeighboringTags(tags: Tag[]): Tag[] {
     }
   }
   return res;
+}
+
+function getRelevantCommits(
+  prevTag: string,
+  nextTag: string,
+  dockerTags: Tag[],
+  getTagFromTagDockerTagName: (dockerTagName: string) => string,
+): string[] {
+  // We want to get the minimum tag for each version, since this implies those commits
+  // made a change to the docker image so are relevant to the diff.
+  const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+  for (const dockerTag of dockerTags) {
+    if (!dockerTag.version || !dockerTag.name) continue;
+
+    const tag = getTagFromTagDockerTagName(dockerTag.name);
+
+    // We only care about the tags between prev and next that have a git commit
+    const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
+    if (
+      ((tag >= prevTag && tag <= nextTag) ||
+        (tag <= prevTag && tag >= nextTag)) &&
+      gitCommitMatches
+    ) {
+      const minTag = tagBoundsMap.get(dockerTag.version);
+      if (minTag && minTag.tag > tag) {
+        minTag.tag = tag;
+        minTag.commit = gitCommitMatches[1];
+      } else {
+        tagBoundsMap.set(dockerTag.version, {
+          tag,
+          commit: gitCommitMatches[1],
+        });
+      }
+    }
+  }
+
+  const relevantCommits = new Array<{ tag: string; commit: string }>();
+
+  for (const tagBound of tagBoundsMap.values()) {
+    // We can skip the tag we are just coming from as a min
+    if (tagBound.tag === prevTag) {
+      continue;
+    }
+    relevantCommits.push(tagBound);
+  }
+
+  // Sort commits ascending
+  const result = relevantCommits
+    .sort((a, b) => a.tag.localeCompare(b.tag))
+    .map((c) => c.commit);
+  return result;
 }
