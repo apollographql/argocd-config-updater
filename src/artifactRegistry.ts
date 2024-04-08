@@ -77,6 +77,11 @@ export class ArtifactRegistryDockerRegistryClient {
     // Note: we don't need `listTagsAsync` (which is recommended) because we
     // only care about the first element in the result array, which is the list of tags.
     // https://github.com/googleapis/gax-nodejs/blob/main/client-libraries.md#auto-pagination
+    // These tags look like the following:
+    // {
+    //   "name":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g16607e3143",
+    //   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:ef8b944a2c6fc5e20b3df6a1500292cf65e28039f3daa8a6df55b84c5eaaecca"
+    // }
     const dockerTags = (
       await this.client.listTags({
         parent: this.client.pathTemplates.packagePathTemplate.render({
@@ -98,6 +103,10 @@ export class ArtifactRegistryDockerRegistryClient {
         const { tagVersion } = this.client.pathTemplates.tagPathTemplate.match(
           tag.name as string,
         );
+
+        core.info('Tag Version');
+        core.info(tagVersion as string);
+
         // Tag version can be a number according to the types,
         // but skimming through our artifact registry, it looks like it is always a string.
         return { name: tag.name as string, version: tagVersion as string };
