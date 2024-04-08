@@ -186,7 +186,7 @@ export class CachingDockerRegistryClient {
   async getGitCommitsBetweenTags(
     options: GitCommitsBetweenTagsOptions,
   ): Promise<string[]> {
-    // For now we aren't caching anything since this will on run on promotion prs
+    // For now we aren't caching anything since this will only run on promotion prs
     return this.wrapped.getGitCommitsBetweenTags(options);
   }
 
