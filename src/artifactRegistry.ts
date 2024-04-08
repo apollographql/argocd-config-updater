@@ -294,7 +294,7 @@ function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
  *
  * @returns {string[]} - The relevant commits as strings
  */
-function getRelevantCommits(
+export function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: DockerTag[],
@@ -311,9 +311,11 @@ function getRelevantCommits(
     if (!dockerTag.version || !dockerTag.name) continue;
 
     const tag = getTagFromDockerTagName(dockerTag.name);
+    core.info(`Tag: ${tag}`);
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
+    core.info(`hash: ${gitCommitMatches}`);
     if (
       ((tag >= prevTag && tag <= nextTag) ||
         (tag <= prevTag && tag >= nextTag)) &&
