@@ -110,8 +110,8 @@ export class ArtifactRegistryDockerRegistryClient {
         name: tag.name as string,
         version: tag.version as string,
       })),
-      (dockerTagName: string) => {
-        return this.client.pathTemplates.tagPathTemplate.match(dockerTagName)
+      (dockerTag: DockerTag) => {
+        return this.client.pathTemplates.tagPathTemplate.match(dockerTag.name)
           .tag as string;
       },
     );
@@ -219,30 +219,30 @@ export type DockerTag = {
   version: string;
 };
 
-export function getTagsInRange(
-  prevVersion: string,
-  nextVersion: string,
-  tags: DockerTag[],
-): DockerTag[] {
-  if (!(isMainVersion(prevVersion) && isMainVersion(nextVersion))) {
-    return [];
-  }
+// export function getTagsInRange(
+//   prevVersion: string,
+//   nextVersion: string,
+//   tags: DockerTag[],
+// ): DockerTag[] {
+//   if (!(isMainVersion(prevVersion) && isMainVersion(nextVersion))) {
+//     return [];
+//   }
+//
+//   const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
+//
+//   const tagsAfterInitialFilters = sortedTags
+//     .filter((tag) => {
+//       return tag.version > prevVersion && tag.version < nextVersion;
+//     })
+//     .filter((tag) => isMainVersion(tag.version));
+//
+//   const res = dedupNeighboringTags(tagsAfterInitialFilters);
+//   return res;
+// }
 
-  const sortedTags = [...tags].sort((a, b) => (a.version > b.version ? 1 : -1));
-
-  const tagsAfterInitialFilters = sortedTags
-    .filter((tag) => {
-      return tag.version > prevVersion && tag.version < nextVersion;
-    })
-    .filter((tag) => isMainVersion(tag.version));
-
-  const res = dedupNeighboringTags(tagsAfterInitialFilters);
-  return res;
-}
-
-function isMainVersion(version: string): boolean {
-  return version.startsWith('main---');
-}
+// function isMainVersion(version: string): boolean {
+//   return version.startsWith('main---');
+// }
 
 /**
  *
@@ -254,27 +254,27 @@ function isMainVersion(version: string): boolean {
  *
  * This will error if the tag version is not well-formed.
  */
-function getTagCommitHash(tag: DockerTag): string {
-  return (tag.version.split('-').at(-1) as string).substring(1);
-}
+// function getTagCommitHash(tag: DockerTag): string {
+//   return (tag.version.split('-').at(-1) as string).substring(1);
+// }
 
-function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
-  if (tags.length === 0) {
-    return [];
-  }
-
-  const res = [tags[0]];
-  for (let i = 1; i < tags.length; i++) {
-    const currTag = tags[i];
-    const prevTag = tags[i - 1];
-    const currTagCommit = getTagCommitHash(currTag);
-    const prevTagCommit = getTagCommitHash(prevTag);
-    if (currTagCommit !== prevTagCommit) {
-      res.push(currTag);
-    }
-  }
-  return res;
-}
+// function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
+//   if (tags.length === 0) {
+//     return [];
+//   }
+//
+//   const res = [tags[0]];
+//   for (let i = 1; i < tags.length; i++) {
+//     const currTag = tags[i];
+//     const prevTag = tags[i - 1];
+//     const currTagCommit = getTagCommitHash(currTag);
+//     const prevTagCommit = getTagCommitHash(prevTag);
+//     if (currTagCommit !== prevTagCommit) {
+//       res.push(currTag);
+//     }
+//   }
+//   return res;
+// }
 
 /**
  * getRelevantCommits
@@ -288,7 +288,7 @@ function dedupNeighboringTags(tags: DockerTag[]): DockerTag[] {
  *  The docker tags as we need to parse and filter into relevant commits. Provided by a previous call to the artifact registry.
  *
  *
- * @param {function} getTagFromDockerTagName
+ * @param {function} getTagFromDockerTag
  *   Should map from `projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/servicename/tags/2022.02-278-g123456789` -> `2022.02-278-g123456789`
  *   Should be a wrapper around the ArtifactRegistryClient, but written this way for testability, so the behavior can be injected.
  *
@@ -298,55 +298,101 @@ export function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: DockerTag[],
-  /**
-   * Should map from `projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/servicename/tags/2022.02-278-g123456789` -> `2022.02-278-g123456789`
-   * Should be a wrapper around the ArtifactRegistryClient, but written this way for testability, so the behavior can be injected.
-   */
-  getTagFromDockerTagName: (dockerTagName: string) => string,
+  getTagFromDockerTag: (dockerTag: DockerTag) => string,
 ): string[] {
+  if (!prevTag.startsWith('main')) return [];
+  if (!nextTag.startsWith('main')) return [];
+
   // We want to get the minimum tag for each version, since this implies those commits
   // made a change to the docker image so are relevant to the diff.
-  const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+  // const tagBoundsMap = new Map<string, { tag: string; commit: string }>();
+  const validTags = new Array<{
+    version: string;
+    tag: string;
+    commit: string;
+  }>();
   for (const dockerTag of dockerTags) {
     if (!dockerTag.version || !dockerTag.name) continue;
 
-    const tag = getTagFromDockerTagName(dockerTag.name);
+    const tag = getTagFromDockerTag(dockerTag);
     core.info(`Tag: ${tag}`);
+    core.info(`DockerTag.version: ${dockerTag.version}`);
+
+    if (!tag.startsWith('main')) continue;
+    if (!tagInRange(prevTag, nextTag, tag)) continue;
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
     core.info(`hash: ${gitCommitMatches}`);
-    if (
-      ((tag >= prevTag && tag <= nextTag) ||
-        (tag <= prevTag && tag >= nextTag)) &&
-      gitCommitMatches
-    ) {
-      const minTag = tagBoundsMap.get(dockerTag.version);
-      if (minTag && minTag.tag > tag) {
-        minTag.tag = tag;
-        minTag.commit = gitCommitMatches[1];
-      } else {
-        tagBoundsMap.set(dockerTag.version, {
-          tag,
-          commit: gitCommitMatches[1],
-        });
-      }
+    if (gitCommitMatches) {
+      // const minTag = tagBoundsMap.get(dockerTag.version);
+      // if (minTag && tag < minTag.tag) {
+      //   console.log(`found new min tag ${tag}, replacing ${minTag}`);
+      //   tagBoundsMap.set(dockerTag.version, {
+      //     tag,
+      //     commit: gitCommitMatches[1],
+      //   });
+      // } else if (minTag && minTag.tag < tag) {
+      //   console.log(`Found a larger tag, keeping current min tag`);
+      // } else {
+      //   console.log(`found new min tag ${tag}, ${gitCommitMatches[1]}`);
+      //   tagBoundsMap.set(dockerTag.version, {
+      //     tag,
+      //     commit: gitCommitMatches[1],
+      //   });
+      // }
+      const currTagInfo = {
+        version: dockerTag.version,
+        tag,
+        commit: gitCommitMatches[1],
+      };
+      validTags.push(currTagInfo);
     }
   }
 
-  const relevantCommits = new Array<{ tag: string; commit: string }>();
+  // console.log(`tagBoundsMap ${JSON.stringify(tagBoundsMap.entries())} `);
 
-  for (const tagBound of tagBoundsMap.values()) {
-    // We can skip the tag we are just coming from as a min
-    if (tagBound.tag === prevTag) {
-      continue;
-    }
-    relevantCommits.push(tagBound);
-  }
+  // const relevantCommits = new Array<{ tag: string; commit: string }>();
+  //
+  // for (const tagBound of tagBoundsMap.values()) {
+  //   // We can skip the tag we are just coming from as a min
+  //   if (tagBound.tag === prevTag) {
+  //     console.log(
+  //       `skipping tag as equal to prevTag ${tagBound.tag}, ${prevTag} `,
+  //     );
+  //     continue;
+  //   }
+  //   relevantCommits.push(tagBound);
+  // }
 
   // Sort commits ascending
-  const result = relevantCommits
+  // const result = relevantCommits
+  //   .sort((a, b) => a.tag.localeCompare(b.tag))
+  //   .map((c) => c.commit);
+  const result = dedupNeighboringTags(validTags)
     .sort((a, b) => a.tag.localeCompare(b.tag))
     .map((c) => c.commit);
   return result;
+}
+
+function tagInRange(prevTag: string, nextTag: string, tag: string): boolean {
+  return tag > prevTag && tag < nextTag;
+}
+
+function dedupNeighboringTags(
+  tags: { version: string; tag: string; commit: string }[],
+): { version: string; tag: string; commit: string }[] {
+  if (tags.length === 0) {
+    return [];
+  }
+
+  const res = [tags[0]];
+  for (let i = 1; i < tags.length; i++) {
+    const currTag = tags[i];
+    const prevTag = tags[i - 1];
+    if (currTag.commit !== prevTag.commit) {
+      res.push(currTag);
+    }
+  }
+  return res;
 }
