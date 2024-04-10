@@ -37,6 +37,7 @@ export async function updatePromotedValues(
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
+  logger.info('test log');
   const promotes = findPromotes(document, promotionTargetRE2);
 
   logger.info(`Promotes: ${JSON.stringify(promotes)}`);

@@ -158,7 +158,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
       );
     }
 
-    await dockerRegistryClient.getGitCommitsBetweenTags({
+    const commits = await dockerRegistryClient.getGitCommitsBetweenTags({
       prevTag: trackable.tag,
       nextTag: earliestMatchingTag,
       dockerImageRepository: trackable.dockerImageRepository,
