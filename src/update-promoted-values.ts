@@ -175,15 +175,24 @@ async function findPromotes(
 
       let dockerImageRepository: string | undefined;
       const globalBlock = promote.get('global');
+      console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
       if (globalBlock && yaml.isMap(globalBlock)) {
         const dockerImageBlock = globalBlock.get('dockerImage');
+        console.info(`dockerImageBlock: ${JSON.stringify(dockerImageBlock)}`);
         if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
           const repository = dockerImageBlock.get('repository');
+          console.info(`repository: ${JSON.stringify(repository)}`);
           if (repository && typeof repository === 'string') {
             dockerImageRepository = repository;
           }
         }
       }
+      console.info(
+        `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
+      );
+      console.info(
+        `dockerRegistryClient: ${JSON.stringify(dockerRegistryClient)}`,
+      );
       let commits;
       if (
         dockerRegistryClient &&
