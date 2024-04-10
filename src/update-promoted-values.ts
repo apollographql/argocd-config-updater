@@ -197,8 +197,8 @@ async function findPromotes(
         typeof targetNode.value === 'string'
       ) {
         commits = await dockerRegistryClient.getGitCommitsBetweenTags({
-          prevTag: sourceValue,
-          nextTag: targetNode.value,
+          prevTag: targetNode.value,
+          nextTag: sourceValue,
           dockerImageRepository,
         });
       }
