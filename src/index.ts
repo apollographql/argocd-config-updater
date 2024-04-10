@@ -177,6 +177,7 @@ async function processFile(
       contents,
       promotionTargetRegexp || null,
       logger,
+      dockerRegistryClient,
     );
 
     // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)

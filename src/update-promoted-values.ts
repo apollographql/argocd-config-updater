@@ -2,6 +2,7 @@ import { RE2 } from 're2-wasm';
 import * as yaml from 'yaml';
 import { ScalarTokenWriter, getTopLevelBlocks, parseYAML } from './yaml';
 import { PrefixingLogger } from './log';
+import { DockerRegistryClient } from './artifactRegistry';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -17,6 +18,7 @@ export async function updatePromotedValues(
   contents: string,
   promotionTargetRegexp: string | null,
   _logger: PrefixingLogger,
+  dockerRegistryClient: DockerRegistryClient | null,
 ): Promise<string> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
@@ -38,7 +40,11 @@ export async function updatePromotedValues(
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
   logger.info('test log');
-  const promotes = findPromotes(document, promotionTargetRE2);
+  const promotes = await findPromotes(
+    document,
+    promotionTargetRE2,
+    dockerRegistryClient,
+  );
 
   logger.info(`Promotes: ${JSON.stringify(promotes)}`);
 
@@ -49,10 +55,11 @@ export async function updatePromotedValues(
   return stringify();
 }
 
-function findPromotes(
+async function findPromotes(
   document: yaml.Document.Parsed,
   promotionTargetRE2: RE2 | null,
-): Promote[] {
+  dockerRegistryClient: DockerRegistryClient | null,
+): Promise<Promote[]> {
   const { blocks } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
   for (const [myName, me] of blocks) {
@@ -131,9 +138,6 @@ function findPromotes(
 
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
-      console.log(`sourceValue: ${JSON.stringify(sourceValue)}`);
-      console.log(`from: ${JSON.stringify(from)}`);
-      console.log(`collectionPath: ${JSON.stringify(collectionPath)}`);
       if (typeof sourceValue !== 'string') {
         throw Error(`Could not promote from ${[from, ...collectionPath]}`);
       }
@@ -142,6 +146,9 @@ function findPromotes(
       if (!yaml.isScalar(targetNode)) {
         throw Error(`Could not promote to ${[myName, ...collectionPath]}`);
       }
+      console.log(`sourceValue: ${JSON.stringify(sourceValue)}`);
+      console.log(`from: ${JSON.stringify(from)}`);
+      console.log(`collectionPath: ${JSON.stringify(collectionPath)}`);
       console.log(`targetNode: ${JSON.stringify(targetNode)}`);
       console.log(`myName: ${JSON.stringify(myName)}`);
       const scalarToken = targetNode.srcToken;
@@ -151,6 +158,50 @@ function findPromotes(
           `${[myName, ...collectionPath]} value must come from a scalar token`,
         );
       }
+
+      // Need to get repository from global
+      // We can assume it is in global and then fail gracefully if it isn't
+      // global:
+      //   datadogServiceName: engine-identity
+      //   gitConfig:
+      //     repoURL: https://github.com/mdg-private/monorepo.git
+      //     path: k8s/engine/identity
+      //   dockerImage:
+      //     repository: identity
+      //     setValue: [monorepo-base, image]
+      //
+      //     dockerRegistryClient should be passed in
+      //
+
+      let dockerImageRepository: string | undefined;
+      const globalBlock = promote.get('global');
+      if (globalBlock && yaml.isMap(globalBlock)) {
+        const dockerImageBlock = globalBlock.get('dockerImage');
+        if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
+          const repository = dockerImageBlock.get('repository');
+          if (repository && typeof repository === 'string') {
+            dockerImageRepository = repository;
+          }
+        }
+      }
+      let commits;
+      if (
+        dockerRegistryClient &&
+        dockerImageRepository &&
+        typeof targetNode.value === 'string'
+      ) {
+        commits = await dockerRegistryClient.getGitCommitsBetweenTags({
+          prevTag: sourceValue,
+          nextTag: targetNode.value,
+          dockerImageRepository,
+        });
+      }
+
+      console.info(`commits: ${JSON.stringify(commits)}`);
+
+      // fetch range of commits from github
+      // filter out anything not in commits
+
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
