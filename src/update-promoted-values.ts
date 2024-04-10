@@ -39,6 +39,8 @@ export async function updatePromotedValues(
   logger.info('Looking for promote');
   const promotes = findPromotes(document, promotionTargetRE2);
 
+  logger.info(`Promotes: ${JSON.stringify(promotes)}`);
+
   logger.info('Copying values');
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
