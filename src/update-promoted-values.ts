@@ -142,6 +142,8 @@ function findPromotes(
       if (!yaml.isScalar(targetNode)) {
         throw Error(`Could not promote to ${[myName, ...collectionPath]}`);
       }
+      console.log(`targetNode: ${JSON.stringify(targetNode)}`);
+      console.log(`myName: ${JSON.stringify(myName)}`);
       const scalarToken = targetNode.srcToken;
       if (!yaml.CST.isScalar(scalarToken)) {
         // this probably can't happen, but let's make the types happy
