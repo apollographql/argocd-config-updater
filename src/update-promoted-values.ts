@@ -174,7 +174,7 @@ async function findPromotes(
       //
 
       let dockerImageRepository: string | undefined;
-      const globalBlock = promote.get('global');
+      const globalBlock = document.get('global');
       console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
       if (globalBlock && yaml.isMap(globalBlock)) {
         const dockerImageBlock = globalBlock.get('dockerImage');
@@ -189,9 +189,6 @@ async function findPromotes(
       }
       console.info(
         `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
-      );
-      console.info(
-        `dockerRegistryClient: ${JSON.stringify(dockerRegistryClient)}`,
       );
       let commits;
       if (
