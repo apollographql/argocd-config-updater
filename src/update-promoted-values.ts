@@ -56,6 +56,18 @@ function findPromotes(
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
     }
+    //
+    // Expected format of a block:
+    //
+    // my-service-prod:
+    //   track: <branch (main) | pr (pr-1234)>
+    //   gitConfig:
+    //     ref: <commit>
+    //   dockerImage:
+    //     tag: main---0013586-2024.04-<commit>
+    //   promote:
+    //     from: my-service-staging
+    //
     if (!me.has('promote')) {
       continue;
     }
@@ -116,6 +128,9 @@ function findPromotes(
 
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
+      console.log(`sourceValue: ${JSON.stringify(sourceValue)}`);
+      console.log(`from: ${JSON.stringify(from)}`);
+      console.log(`collectionPath: ${JSON.stringify(collectionPath)}`);
       if (typeof sourceValue !== 'string') {
         throw Error(`Could not promote from ${[from, ...collectionPath]}`);
       }
