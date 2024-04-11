@@ -88,6 +88,42 @@ async function findPromotes(
 ): Promise<Promote[]> {
   const { blocks } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
+
+  //
+  // Expected format of a block:
+  //
+  // my-service-prod:
+  //   track: <branch (main) | pr (pr-1234)>
+  //   gitConfig:
+  //     ref: <commit>
+  //   dockerImage:
+  //     tag: main---0013586-2024.04-<commit>
+  //   promote:
+  //     from: my-service-staging
+  //
+  //
+  // Expected format of global:
+  //
+  // global:
+  //   datadogServiceName: my-service
+  //   gitConfig:
+  //     repoURL: https://github.com/owner/repo.git
+  //     path: k8s/services/service
+  //   dockerImage:
+  //     repository: service
+  //
+  const repoURL: string | undefined = document.getIn([
+    'global',
+    'gitConfig',
+    'repoURL',
+  ]) as string | undefined;
+
+  const dockerImageRepository: string | undefined = document.getIn([
+    'global',
+    'dockerImage',
+    'repository',
+  ]) as string | undefined;
+
   for (const [myName, me] of blocks) {
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
@@ -172,13 +208,16 @@ async function findPromotes(
       let relevantCommits: RelevantCommit[] = [];
       if (
         typeof targetNode.value === 'string' &&
+        dockerImageRepository &&
+        repoURL &&
         gitHubClient &&
         dockerRegistryClient
       ) {
         relevantCommits = await getRelevantCommits(
           targetNode.value,
           sourceValue,
-          me,
+          dockerImageRepository,
+          repoURL,
           gitHubClient,
           dockerRegistryClient,
         );
@@ -208,59 +247,11 @@ function isCollectionIndex(value: unknown): value is CollectionIndex {
 async function getRelevantCommits(
   prevTag: string,
   nextTag: string,
-  block: yaml.YAMLMap.Parsed,
+  dockerImageRepository: string,
+  repoURL: string,
   gitHubClient: GitHubClient,
   dockerRegistryClient: DockerRegistryClient,
 ): Promise<RelevantCommit[]> {
-  //
-  // Expected format of a block:
-  //
-  // my-service-prod:
-  //   track: <branch (main) | pr (pr-1234)>
-  //   gitConfig:
-  //     ref: <commit>
-  //   dockerImage:
-  //     tag: main---0013586-2024.04-<commit>
-  //   promote:
-  //     from: my-service-staging
-  //
-  //
-  // Expected format of global:
-  //
-  // global:
-  //   datadogServiceName: my-service
-  //   gitConfig:
-  //     repoURL: https://github.com/owner/repo.git
-  //     path: k8s/services/service
-  //   dockerImage:
-  //     repository: service
-  //
-  const repoURL: string | undefined = block.getIn([
-    'global',
-    'gitConfig',
-    'repoURL',
-  ]) as string | undefined;
-
-  console.info(`repoURL: ${JSON.stringify(repoURL)}`);
-
-  if (typeof repoURL !== 'string') return [];
-
-  const dockerImageRepository: string | undefined = block.getIn([
-    'global',
-    'dockerImage',
-    'repository',
-  ]) as string | undefined;
-
-  console.info(
-    `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
-  );
-
-  if (typeof dockerImageRepository !== 'string') return [];
-
-  console.info(
-    `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
-  );
-
   const commits = await dockerRegistryClient.getGitCommitsBetweenTags({
     prevTag,
     nextTag,
