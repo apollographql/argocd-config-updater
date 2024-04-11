@@ -193,12 +193,20 @@ async function findPromotes(
       //     dockerRegistryClient should be passed in
       //
 
-      let commits;
+      let commits: string[] = [];
       if (gitHubClient && dockerRegistryClient) {
         let dockerImageRepository: string | undefined;
+        let repoURL: string | undefined;
         const globalBlock = document.get('global');
         console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
         if (globalBlock && yaml.isMap(globalBlock)) {
+          const gitConfig = globalBlock.get('gitConfig');
+          if (gitConfig && yaml.isMap(gitConfig)) {
+            const yamlRepoUrl = gitConfig.get('repoURL');
+            if (yamlRepoUrl && typeof yamlRepoUrl === 'string') {
+              repoURL = yamlRepoUrl;
+            }
+          }
           const dockerImageBlock = globalBlock.get('dockerImage');
           console.info(`dockerImageBlock: ${JSON.stringify(dockerImageBlock)}`);
           if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
@@ -212,12 +220,30 @@ async function findPromotes(
         console.info(
           `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
         );
-        if (dockerImageRepository && typeof targetNode.value === 'string') {
+        if (
+          repoURL &&
+          dockerImageRepository &&
+          typeof targetNode.value === 'string'
+        ) {
           commits = await dockerRegistryClient.getGitCommitsBetweenTags({
             prevTag: targetNode.value,
             nextTag: sourceValue,
             dockerImageRepository,
           });
+          if (commits.length > 0) {
+            const first = commits[0];
+            const last = commits[commits.length - 1];
+            const githubCommits = await gitHubClient.compareCommits({
+              repoURL,
+              baseCommitSHA: first,
+              headCommitSHA: last,
+            });
+            console.info(`githubCommits: ${JSON.stringify(githubCommits)}`);
+            const relevantCommits = githubCommits && githubCommits.commits.filter((commit) => {
+              return commits.includes(commit.commitSHA);
+            }) || [];
+            console.info(`relevantCommits: ${JSON.stringify(relevantCommits)}`);
+          }
         }
       }
 

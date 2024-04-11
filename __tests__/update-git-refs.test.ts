@@ -14,6 +14,9 @@ const mockGitHubClient: GitHubClient = {
   async getTreeSHAForPath() {
     return `${Math.random()}`;
   },
+  async compareCommits() {
+    return null;
+  },
 };
 
 const logger = PrefixingLogger.silent();
@@ -53,6 +56,9 @@ describe('action', () => {
       async getTreeSHAForPath({ commitSHA }) {
         return commitSHA === 'old' ? 'aaaa' : treeSHAForNew;
       },
+      async compareCommits() {
+        return null;
+      },
     };
 
     const contents = await fixture('tree-sha.yaml');
@@ -80,6 +86,9 @@ describe('action', () => {
       async getTreeSHAForPath() {
         return 'aaaa';
       },
+      async compareCommits() {
+        return null;
+      },
     };
 
     const contents = await fixture('tree-sha.yaml');
@@ -96,6 +105,9 @@ describe('action', () => {
       },
       async getTreeSHAForPath({ commitSHA }) {
         return commitSHA === 'd97b3a3240' ? 'bad' : 'aaaa';
+      },
+      async compareCommits() {
+        return null;
       },
     };
 
@@ -116,6 +128,9 @@ describe('action', () => {
       },
       async getTreeSHAForPath({ commitSHA }) {
         return commitSHA === 'old' ? 'oldaaaa' : 'aaaa';
+      },
+      async compareCommits() {
+        return null;
       },
     };
 

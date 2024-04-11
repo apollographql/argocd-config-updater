@@ -44,6 +44,9 @@ describe('CachingGitHubClient caches', () => {
       async getTreeSHAForPath() {
         return '';
       },
+      async compareCommits() {
+        return null;
+      },
     });
 
     async function exp(
@@ -74,6 +77,9 @@ describe('CachingGitHubClient caches', () => {
       },
       async getTreeSHAForPath() {
         return (++call).toString();
+      },
+      async compareCommits() {
+        return null;
       },
     });
 
