@@ -15,7 +15,7 @@ interface Promote {
   relevantCommits: [string, RelevantCommit[]];
 }
 
-interface RelevantCommit {
+export interface RelevantCommit {
   /**
    * The commit hash
    */

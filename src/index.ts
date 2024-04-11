@@ -18,7 +18,7 @@ import {
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
-import { updatePromotedValues } from './update-promoted-values';
+import { RelevantCommit, updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
 import { inspect } from 'util';
 
@@ -173,7 +173,8 @@ async function processFile(
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-    [contents] = await updatePromotedValues(
+    let relevantCommits: Map<string, RelevantCommit[]>;
+    [contents, relevantCommits] = await updatePromotedValues(
       contents,
       promotionTargetRegexp || null,
       logger,
@@ -191,6 +192,7 @@ async function processFile(
     core.setOutput('team', team);
     core.setOutput('is-migration', isMigration);
     core.setOutput('target-env', env);
+    core.setOutput('relevant-commits', JSON.stringify(relevantCommits));
   }
 
   await writeFile(filename, contents);
