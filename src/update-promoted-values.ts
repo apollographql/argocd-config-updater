@@ -24,7 +24,14 @@ export interface RelevantCommit {
    * The commit message
    */
   message: string;
+  /**
+   * The author of the commit, if available. Should be name, or email, or null.
+   */
   author: string | null;
+  /**
+   * A link to view the commit on Github.
+   */
+  commitUrl: string;
 }
 
 const DEFAULT_YAML_PATHS = [

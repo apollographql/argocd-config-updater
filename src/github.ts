@@ -20,7 +20,12 @@ export interface CompareCommitsOptions {
 }
 
 export interface CompareCommitsResult {
-  commits: { commitSHA: string; message: string; author: string | null }[];
+  commits: {
+    commitSHA: string;
+    message: string;
+    author: string | null;
+    commitUrl: string;
+  }[];
 }
 
 export interface GitHubClient {
@@ -74,6 +79,7 @@ export class OctokitGitHubClient {
         commitSHA: commit.sha,
         message: commit.commit.message,
         author: commit.author?.name ?? commit.commit.author?.email ?? null,
+        commitUrl: commit.html_url,
       })),
     };
   }
