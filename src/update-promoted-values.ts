@@ -241,6 +241,8 @@ async function getRelevantCommits(
     'repoURL',
   ]) as string | undefined;
 
+  console.info(`repoURL: ${JSON.stringify(repoURL)}`);
+
   if (typeof repoURL !== 'string') return [];
 
   const dockerImageRepository: string | undefined = block.getIn([
@@ -248,6 +250,10 @@ async function getRelevantCommits(
     'dockerImage',
     'repository',
   ]) as string | undefined;
+
+  console.info(
+    `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
+  );
 
   if (typeof dockerImageRepository !== 'string') return [];
 
