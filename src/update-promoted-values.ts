@@ -38,7 +38,7 @@ export async function updatePromotedValues(
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
   gitHubClient: GitHubClient | null = null,
-): Promise<[string, RelevantCommit[]]> {
+): Promise<[string, Map<string, RelevantCommit[]>]> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
   // We use re2-wasm instead of built-in RegExp so we don't have to worry about
@@ -52,7 +52,7 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return [contents, []];
+    return [contents, new Map()];
   }
 
   // We decide what to do and then we do it, just in case there are any
@@ -72,7 +72,12 @@ export async function updatePromotedValues(
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
   }
-  return [stringify(), []];
+
+  const relevantCommits: Map<string, RelevantCommit[]> = new Map();
+  for (const [serviceName, commits] of promotes.map((p) => p.relevantCommits)) {
+    relevantCommits.set(serviceName, commits);
+  }
+  return [stringify(), relevantCommits];
 }
 
 async function findPromotes(
