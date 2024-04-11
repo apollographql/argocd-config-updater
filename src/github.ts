@@ -59,34 +59,30 @@ export class OctokitGitHubClient {
     baseCommitSHA,
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
-    // const allTreesForCommit = await this.allTreesForCommitCache.fetch(
-    //   JSON.stringify({ repoURL, commitSHA }),
-    //   { context: { repoURL, commitSHA } },
-    // );
-    // if (!allTreesForCommit) {
-    //   // This shouldn't happen: errors should lead to an error being thrown from
-    //   // the previous line, but the fetchMethod always returns an actual item.
-    //   throw Error(`Unexpected missing entry in allTreesForCommitCache`);
-    // }
-    // const shaFromCache = allTreesForCommit.pathToTreeSHA.get(path);
-    // if (shaFromCache) {
-    //   return shaFromCache;
-    // }
-    // if (!allTreesForCommit.truncated) {
-    //   // The recursive listing we got from GitHub is complete, so if it doesn't
-    //   // have the tree in question, then the path just doesn't exist (as a tree)
-    //   // at the given commit.
-    //   return null;
-    //
-    return null;
+    const { owner, repo } = parseRepoURL(repoURL);
+    const basehead = `${baseCommitSHA}...${headCommitSHA}`;
+    this.logAPICall('repos.compareCommits', `${owner}/${repo} ${basehead}`);
+    const result = (
+      await this.octokit.rest.repos.compareCommitsWithBasehead({
+        owner,
+        repo,
+        basehead,
+      })
+    ).data.commits;
+    return {
+      commits: result.map((commit) => ({
+        commitSHA: commit.sha,
+        message: commit.commit.message,
+      })),
+    };
   }
 
   private logAPICall(name: string, description: string): void {
-    core.info(`[GH API] ${name} ${description}`);
+    core.info(`[GH API]${name} ${description}`);
     this.apiCalls.set(name, (this.apiCalls.get(name) ?? 0) + 1);
   }
 
-  // The cache key is JSON-ification of `{repoURL, commitSHA}`.
+  // The cache key is JSON-ification of `{ repoURL, commitSHA }`.
   private allTreesForCommitCache = new LRUCache<
     string,
     AllTreesForCommit,
@@ -98,7 +94,7 @@ export class OctokitGitHubClient {
     fetchMethod: async (_key, _staleValue, { context }) => {
       const { repoURL, commitSHA } = context;
       const { owner, repo } = parseRepoURL(repoURL);
-      this.logAPICall('git.getCommit', `${owner}/${repo} ${commitSHA}`);
+      this.logAPICall('git.getCommit', `${owner} / ${repo} ${commitSHA}`);
       const rootTreeSHA = (
         await this.octokit.rest.git.getCommit({
           owner,
@@ -106,7 +102,7 @@ export class OctokitGitHubClient {
           commit_sha: commitSHA,
         })
       ).data.tree.sha;
-      this.logAPICall('git.getTree', `${owner}/${repo} ${rootTreeSHA}`);
+      this.logAPICall('git.getTree', `${owner} / ${repo} ${rootTreeSHA}`);
       const { tree, truncated } = (
         await this.octokit.rest.git.getTree({
           owner,
@@ -148,8 +144,8 @@ export class OctokitGitHubClient {
     }
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
-    const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
-    this.logAPICall('repos.getCommit', `${owner}/${repo} ${refParameter}`);
+    const refParameter = prNumber ? `pull / ${prNumber} / head` : ref;
+    this.logAPICall('repos.getCommit', `${owner} / ${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
@@ -160,7 +156,7 @@ export class OctokitGitHubClient {
         },
       })
     ).data as unknown;
-    // The TS types don't understand that `mediaType: {format: 'sha'}` turns
+    // The TS types don't understand that `mediaType: { format: 'sha' }` turns
     // `.data` into a string, so we have to cast to `unknown` and check
     // ourselves.
     if (typeof sha !== 'string') {
@@ -206,7 +202,7 @@ export class OctokitGitHubClient {
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall('repos.getContent', `${owner}/${repo} ${commitSHA}`);
+    this.logAPICall('repos.getContent', `${owner} / ${repo} ${commitSHA}`);
     let data;
     try {
       data = (
