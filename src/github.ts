@@ -302,6 +302,12 @@ export class CachingGitHubClient {
     return cached.boxed;
   }
 
+  async compareCommits(
+    options: CompareCommitsOptions,
+  ): Promise<CompareCommitsResult | null> {
+    return this.wrapped.compareCommits(options);
+  }
+
   dump(): CachingGitHubClientDump {
     // We don't dump resolveRefToSHACache because it is not immutable (it tracks
     // the current commits on main, etc).

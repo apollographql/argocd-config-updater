@@ -239,9 +239,12 @@ async function findPromotes(
               headCommitSHA: last,
             });
             console.info(`githubCommits: ${JSON.stringify(githubCommits)}`);
-            const relevantCommits = githubCommits && githubCommits.commits.filter((commit) => {
-              return commits.includes(commit.commitSHA);
-            }) || [];
+            const relevantCommits =
+              (githubCommits &&
+                githubCommits.commits.filter((commit) => {
+                  return commits.includes(commit.commitSHA);
+                })) ||
+              [];
             console.info(`relevantCommits: ${JSON.stringify(relevantCommits)}`);
           }
         }
