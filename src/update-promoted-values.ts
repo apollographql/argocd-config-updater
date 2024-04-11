@@ -92,18 +92,6 @@ async function findPromotes(
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
     }
-    //
-    // Expected format of a block:
-    //
-    // my-service-prod:
-    //   track: <branch (main) | pr (pr-1234)>
-    //   gitConfig:
-    //     ref: <commit>
-    //   dockerImage:
-    //     tag: main---0013586-2024.04-<commit>
-    //   promote:
-    //     from: my-service-staging
-    //
     if (!me.has('promote')) {
       continue;
     }
@@ -172,11 +160,7 @@ async function findPromotes(
       if (!yaml.isScalar(targetNode)) {
         throw Error(`Could not promote to ${[myName, ...collectionPath]}`);
       }
-      console.log(`sourceValue: ${JSON.stringify(sourceValue)}`);
-      console.log(`from: ${JSON.stringify(from)}`);
-      console.log(`collectionPath: ${JSON.stringify(collectionPath)}`);
-      console.log(`targetNode: ${JSON.stringify(targetNode)}`);
-      console.log(`myName: ${JSON.stringify(myName)}`);
+
       const scalarToken = targetNode.srcToken;
       if (!yaml.CST.isScalar(scalarToken)) {
         // this probably can't happen, but let's make the types happy
@@ -185,82 +169,20 @@ async function findPromotes(
         );
       }
 
-      // Need to get repository from global
-      // We can assume it is in global and then fail gracefully if it isn't
-      // global:
-      //   datadogServiceName: engine-identity
-      //   gitConfig:
-      //     repoURL: https://github.com/mdg-private/monorepo.git
-      //     path: k8s/engine/identity
-      //   dockerImage:
-      //     repository: identity
-      //     setValue: [monorepo-base, image]
-      //
-      //     dockerRegistryClient should be passed in
-      //
-
-      let commits: string[] = [];
       let relevantCommits: RelevantCommit[] = [];
-      if (gitHubClient && dockerRegistryClient) {
-        let dockerImageRepository: string | undefined;
-        let repoURL: string | undefined;
-        const globalBlock = document.get('global');
-        console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
-        if (globalBlock && yaml.isMap(globalBlock)) {
-          const gitConfig = globalBlock.get('gitConfig');
-          if (gitConfig && yaml.isMap(gitConfig)) {
-            const yamlRepoUrl = gitConfig.get('repoURL');
-            if (yamlRepoUrl && typeof yamlRepoUrl === 'string') {
-              repoURL = yamlRepoUrl;
-            }
-          }
-          const dockerImageBlock = globalBlock.get('dockerImage');
-          console.info(`dockerImageBlock: ${JSON.stringify(dockerImageBlock)}`);
-          if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
-            const repository = dockerImageBlock.get('repository');
-            console.info(`repository: ${JSON.stringify(repository)}`);
-            if (repository && typeof repository === 'string') {
-              dockerImageRepository = repository;
-            }
-          }
-        }
-        console.info(
-          `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
+      if (
+        typeof targetNode.value === 'string' &&
+        gitHubClient &&
+        dockerRegistryClient
+      ) {
+        relevantCommits = await getRelevantCommits(
+          targetNode.value,
+          sourceValue,
+          me,
+          gitHubClient,
+          dockerRegistryClient,
         );
-        if (
-          repoURL &&
-          dockerImageRepository &&
-          typeof targetNode.value === 'string'
-        ) {
-          commits = await dockerRegistryClient.getGitCommitsBetweenTags({
-            prevTag: targetNode.value,
-            nextTag: sourceValue,
-            dockerImageRepository,
-          });
-          if (commits.length > 0) {
-            const first = commits[0];
-            const last = commits[commits.length - 1];
-            const githubCommits = await gitHubClient.compareCommits({
-              repoURL,
-              baseCommitSHA: first,
-              headCommitSHA: last,
-            });
-            console.info(`githubCommits: ${JSON.stringify(githubCommits)}`);
-            relevantCommits =
-              (githubCommits &&
-                githubCommits.commits.filter((commit) => {
-                  return commits.includes(commit.commitSHA);
-                })) ||
-              [];
-            console.info(`relevantCommits: ${JSON.stringify(relevantCommits)}`);
-            console.info(
-              `number of commits: ${commits.length} ${githubCommits?.commits.length} ${relevantCommits.length}`,
-            );
-          }
-        }
       }
-
-      console.info(`commits: ${JSON.stringify(commits)}`);
 
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
@@ -281,4 +203,80 @@ function isCollectionPath(value: unknown): value is CollectionPath {
 
 function isCollectionIndex(value: unknown): value is CollectionIndex {
   return typeof value === 'string' || typeof value === 'number';
+}
+
+async function getRelevantCommits(
+  prevTag: string,
+  nextTag: string,
+  block: yaml.YAMLMap.Parsed,
+  gitHubClient: GitHubClient,
+  dockerRegistryClient: DockerRegistryClient,
+): Promise<RelevantCommit[]> {
+  //
+  // Expected format of a block:
+  //
+  // my-service-prod:
+  //   track: <branch (main) | pr (pr-1234)>
+  //   gitConfig:
+  //     ref: <commit>
+  //   dockerImage:
+  //     tag: main---0013586-2024.04-<commit>
+  //   promote:
+  //     from: my-service-staging
+  //
+  //
+  // Expected format of global:
+  //
+  // global:
+  //   datadogServiceName: my-service
+  //   gitConfig:
+  //     repoURL: https://github.com/owner/repo.git
+  //     path: k8s/services/service
+  //   dockerImage:
+  //     repository: service
+  //
+  const repoURL: string | undefined = block.getIn([
+    'global',
+    'gitConfig',
+    'repoURL',
+  ]) as string | undefined;
+
+  if (typeof repoURL !== 'string') return [];
+
+  const dockerImageRepository: string | undefined = block.getIn([
+    'global',
+    'dockerImage',
+    'repository',
+  ]) as string | undefined;
+
+  if (typeof dockerImageRepository !== 'string') return [];
+
+  console.info(
+    `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
+  );
+
+  const commits = await dockerRegistryClient.getGitCommitsBetweenTags({
+    prevTag,
+    nextTag,
+    dockerImageRepository,
+  });
+
+  if (commits.length <= 0) return [];
+
+  const first = commits[0];
+  const last = commits[commits.length - 1];
+
+  const githubCommits = await gitHubClient.compareCommits({
+    repoURL,
+    baseCommitSHA: first,
+    headCommitSHA: last,
+  });
+
+  if (githubCommits === null) return [];
+
+  const relevantCommits = githubCommits.commits.filter((commit) => {
+    return commits.includes(commit.commitSHA);
+  });
+
+  return relevantCommits;
 }
