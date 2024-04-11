@@ -62,6 +62,7 @@ export async function updatePromotedValues(
     document,
     promotionTargetRE2,
     dockerRegistryClient,
+    gitHubClient,
   );
 
   logger.info(`Promotes: ${JSON.stringify(promotes)}`);
@@ -77,6 +78,7 @@ async function findPromotes(
   document: yaml.Document.Parsed,
   promotionTargetRE2: RE2 | null,
   dockerRegistryClient: DockerRegistryClient | null,
+  gitHubClient: GitHubClient | null = null,
 ): Promise<Promote[]> {
   const { blocks } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
@@ -191,45 +193,44 @@ async function findPromotes(
       //     dockerRegistryClient should be passed in
       //
 
-      let dockerImageRepository: string | undefined;
-      const globalBlock = document.get('global');
-      console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
-      if (globalBlock && yaml.isMap(globalBlock)) {
-        const dockerImageBlock = globalBlock.get('dockerImage');
-        console.info(`dockerImageBlock: ${JSON.stringify(dockerImageBlock)}`);
-        if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
-          const repository = dockerImageBlock.get('repository');
-          console.info(`repository: ${JSON.stringify(repository)}`);
-          if (repository && typeof repository === 'string') {
-            dockerImageRepository = repository;
+      let commits;
+      if (gitHubClient && dockerRegistryClient) {
+        let dockerImageRepository: string | undefined;
+        const globalBlock = document.get('global');
+        console.info(`globalBlock: ${JSON.stringify(globalBlock)}`);
+        if (globalBlock && yaml.isMap(globalBlock)) {
+          const dockerImageBlock = globalBlock.get('dockerImage');
+          console.info(`dockerImageBlock: ${JSON.stringify(dockerImageBlock)}`);
+          if (dockerImageBlock && yaml.isMap(dockerImageBlock)) {
+            const repository = dockerImageBlock.get('repository');
+            console.info(`repository: ${JSON.stringify(repository)}`);
+            if (repository && typeof repository === 'string') {
+              dockerImageRepository = repository;
+            }
           }
         }
-      }
-      console.info(
-        `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
-      );
-      let commits;
-      if (
-        dockerRegistryClient &&
-        dockerImageRepository &&
-        typeof targetNode.value === 'string'
-      ) {
-        commits = await dockerRegistryClient.getGitCommitsBetweenTags({
-          prevTag: targetNode.value,
-          nextTag: sourceValue,
-          dockerImageRepository,
-        });
+        console.info(
+          `dockerImageRepository: ${JSON.stringify(dockerImageRepository)}`,
+        );
+        if (dockerImageRepository && typeof targetNode.value === 'string') {
+          commits = await dockerRegistryClient.getGitCommitsBetweenTags({
+            prevTag: targetNode.value,
+            nextTag: sourceValue,
+            dockerImageRepository,
+          });
+        }
       }
 
       console.info(`commits: ${JSON.stringify(commits)}`);
 
       // fetch range of commits from github
       // filter out anything not in commits
+      // const commitRange = gitHubClient.getCommitRange({
 
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
-        relevantCommits: commits ? new Map([[myName, commits]]) : new Map(),
+        relevantCommits: commits ? new Map([[myName, []]]) : new Map(),
       });
     }
   }

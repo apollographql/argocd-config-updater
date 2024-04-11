@@ -13,9 +13,22 @@ export interface GetTreeSHAForPathOptions {
   path: string;
 }
 
+export interface CompareCommitsOptions {
+  repoURL: string;
+  baseCommitSHA: string;
+  headCommitSHA: string;
+}
+
+export interface CompareCommitsResult {
+  commits: { commitSHA: string; message: string }[];
+}
+
 export interface GitHubClient {
   resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string>;
   getTreeSHAForPath(options: GetTreeSHAForPathOptions): Promise<string | null>;
+  compareCommits(
+    options: CompareCommitsOptions,
+  ): Promise<CompareCommitsResult | null>;
 }
 
 interface OwnerAndRepo {
@@ -40,6 +53,33 @@ interface AllTreesForCommit {
 export class OctokitGitHubClient {
   apiCalls = new Map<string, number>();
   constructor(private octokit: ReturnType<typeof getOctokit>) {}
+
+  async compareCommits({
+    repoURL,
+    baseCommitSHA,
+    headCommitSHA,
+  }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
+    // const allTreesForCommit = await this.allTreesForCommitCache.fetch(
+    //   JSON.stringify({ repoURL, commitSHA }),
+    //   { context: { repoURL, commitSHA } },
+    // );
+    // if (!allTreesForCommit) {
+    //   // This shouldn't happen: errors should lead to an error being thrown from
+    //   // the previous line, but the fetchMethod always returns an actual item.
+    //   throw Error(`Unexpected missing entry in allTreesForCommitCache`);
+    // }
+    // const shaFromCache = allTreesForCommit.pathToTreeSHA.get(path);
+    // if (shaFromCache) {
+    //   return shaFromCache;
+    // }
+    // if (!allTreesForCommit.truncated) {
+    //   // The recursive listing we got from GitHub is complete, so if it doesn't
+    //   // have the tree in question, then the path just doesn't exist (as a tree)
+    //   // at the given commit.
+    //   return null;
+    //
+    return null;
+  }
 
   private logAPICall(name: string, description: string): void {
     core.info(`[GH API] ${name} ${description}`);
