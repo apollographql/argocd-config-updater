@@ -12,18 +12,19 @@ interface Promote {
    * Relevant commit hashes to this promotion, keyed by the service block name
    * Sorted from oldest to newest.
    */
-  relevantCommits: Map<string, RelevantCommit[]>;
+  relevantCommits: [string, RelevantCommit[]];
 }
 
 interface RelevantCommit {
   /**
    * The commit hash
    */
-  commit: string;
+  commitSHA: string;
   /**
    * The commit message
    */
   message: string;
+  author: string | null;
 }
 
 const DEFAULT_YAML_PATHS = [
@@ -194,6 +195,7 @@ async function findPromotes(
       //
 
       let commits: string[] = [];
+      let relevantCommits: RelevantCommit[] = [];
       if (gitHubClient && dockerRegistryClient) {
         let dockerImageRepository: string | undefined;
         let repoURL: string | undefined;
@@ -239,7 +241,7 @@ async function findPromotes(
               headCommitSHA: last,
             });
             console.info(`githubCommits: ${JSON.stringify(githubCommits)}`);
-            const relevantCommits =
+            relevantCommits =
               (githubCommits &&
                 githubCommits.commits.filter((commit) => {
                   return commits.includes(commit.commitSHA);
@@ -255,14 +257,10 @@ async function findPromotes(
 
       console.info(`commits: ${JSON.stringify(commits)}`);
 
-      // fetch range of commits from github
-      // filter out anything not in commits
-      // const commitRange = gitHubClient.getCommitRange({
-
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
-        relevantCommits: commits ? new Map([[myName, []]]) : new Map(),
+        relevantCommits: [myName, relevantCommits],
       });
     }
   }
