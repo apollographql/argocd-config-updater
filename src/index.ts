@@ -173,11 +173,12 @@ async function processFile(
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-    contents = await updatePromotedValues(
+    [contents] = await updatePromotedValues(
       contents,
       promotionTargetRegexp || null,
       logger,
       dockerRegistryClient,
+      gitHubClient,
     );
 
     // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)

@@ -3,10 +3,27 @@ import * as yaml from 'yaml';
 import { ScalarTokenWriter, getTopLevelBlocks, parseYAML } from './yaml';
 import { PrefixingLogger } from './log';
 import { DockerRegistryClient } from './artifactRegistry';
+import { GitHubClient } from './github';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
   value: string;
+  /**
+   * Relevant commit hashes to this promotion
+   * Sorted from oldest to newest.
+   */
+  relevantCommits: string[];
+}
+
+interface RelevantCommit {
+  /**
+   * The commit hash
+   */
+  commit: string;
+  /**
+   * The commit message
+   */
+  message: string;
 }
 
 const DEFAULT_YAML_PATHS = [
@@ -18,8 +35,9 @@ export async function updatePromotedValues(
   contents: string,
   promotionTargetRegexp: string | null,
   _logger: PrefixingLogger,
-  dockerRegistryClient: DockerRegistryClient | null,
-): Promise<string> {
+  dockerRegistryClient: DockerRegistryClient | null = null,
+  gitHubClient: GitHubClient | null = null,
+): Promise<[string, RelevantCommit[]]> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
   // We use re2-wasm instead of built-in RegExp so we don't have to worry about
@@ -33,7 +51,7 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return contents;
+    return [contents, []];
   }
 
   // We decide what to do and then we do it, just in case there are any
@@ -52,7 +70,7 @@ export async function updatePromotedValues(
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
   }
-  return stringify();
+  return [stringify(), []];
 }
 
 async function findPromotes(
@@ -211,6 +229,7 @@ async function findPromotes(
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
+        relevantCommits: commits ?? [],
       });
     }
   }
