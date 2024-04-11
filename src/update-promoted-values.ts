@@ -9,10 +9,10 @@ interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
   value: string;
   /**
-   * Relevant commit hashes to this promotion
+   * Relevant commit hashes to this promotion, keyed by the service block name
    * Sorted from oldest to newest.
    */
-  relevantCommits: string[];
+  relevantCommits: Map<string, RelevantCommit[]>;
 }
 
 interface RelevantCommit {
@@ -229,7 +229,7 @@ async function findPromotes(
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
-        relevantCommits: commits ?? [],
+        relevantCommits: commits ? new Map([[myName, commits]]) : new Map(),
       });
     }
   }
