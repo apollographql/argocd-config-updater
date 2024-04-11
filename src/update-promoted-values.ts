@@ -246,6 +246,9 @@ async function findPromotes(
                 })) ||
               [];
             console.info(`relevantCommits: ${JSON.stringify(relevantCommits)}`);
+            console.info(
+              `number of commits: ${commits.length} ${githubCommits?.commits.length} ${relevantCommits.length}`,
+            );
           }
         }
       }
