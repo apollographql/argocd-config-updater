@@ -64,16 +64,6 @@ export class OctokitGitHubClient {
     baseCommitSHA,
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
-    const baseIsCommitSHA = baseCommitSHA.match(/\b([a-f0-9]{40})\b/);
-    const headIsCommitSHA = headCommitSHA.match(/\b([a-f0-9]{40})\b/);
-    console.log(JSON.stringify(baseIsCommitSHA));
-    console.log(JSON.stringify(headIsCommitSHA));
-    this.logAPICall(
-      'repos.compareCommits',
-      `${JSON.stringify(baseIsCommitSHA)}/${JSON.stringify(headIsCommitSHA)}`,
-    );
-    if (baseIsCommitSHA === null || headIsCommitSHA === null) return null;
-
     const { owner, repo } = parseRepoURL(repoURL);
 
     // Include '^' to be inclusive of the head commit.
@@ -168,8 +158,8 @@ export class OctokitGitHubClient {
     }
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
-    const refParameter = prNumber ? `pull / ${prNumber} / head` : ref;
-    this.logAPICall('repos.getCommit', `${owner} / ${repo} ${refParameter}`);
+    const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
+    this.logAPICall('repos.getCommit', `${owner}/${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
