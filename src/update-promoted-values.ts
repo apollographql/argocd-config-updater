@@ -215,6 +215,9 @@ async function findPromotes(
       }
 
       let relevantCommits: RelevantCommit[] = [];
+
+      console.log(`targetNode.value: ${JSON.stringify(targetNode.value)}`);
+      console.log(`repoURL: ${JSON.stringify(repoURL)}`);
       if (
         typeof targetNode.value === 'string' &&
         dockerImageRepository &&
@@ -222,6 +225,7 @@ async function findPromotes(
         gitHubClient &&
         dockerRegistryClient
       ) {
+        console.log(`before call to get relevant commits`);
         relevantCommits = await getRelevantCommits(
           targetNode.value,
           sourceValue,
