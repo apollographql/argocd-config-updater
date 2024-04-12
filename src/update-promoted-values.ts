@@ -90,7 +90,9 @@ export async function updatePromotedValues(
     );
   }
 
-  logger.info(`Relevant commits: ${JSON.stringify(relevantCommits)}`);
+  logger.info(
+    `Relevant commits: ${JSON.stringify([...relevantCommits.values()])}`,
+  );
 
   return [stringify(), relevantCommits];
 }
