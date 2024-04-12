@@ -61,6 +61,7 @@
     "yaml": "^2.3.4"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
     "@types/async": "3.2.24",
     "@types/jest": "29.5.12",
     "@types/lodash": "4.17.0",

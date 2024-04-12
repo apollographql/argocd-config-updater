@@ -2,10 +2,36 @@ import { RE2 } from 're2-wasm';
 import * as yaml from 'yaml';
 import { ScalarTokenWriter, getTopLevelBlocks, parseYAML } from './yaml';
 import { PrefixingLogger } from './log';
+import { DockerRegistryClient } from './artifactRegistry';
+import { GitHubClient } from './github';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
   value: string;
+  /**
+   * Relevant commit hashes to this promotion, keyed by the service block name
+   * Sorted from oldest to newest.
+   */
+  relevantCommits: [string, RelevantCommit[]];
+}
+
+export interface RelevantCommit {
+  /**
+   * The commit hash
+   */
+  commitSHA: string;
+  /**
+   * The commit message
+   */
+  message: string;
+  /**
+   * The author of the commit, if available. Should be name, or email, or null.
+   */
+  author: string | null;
+  /**
+   * A link to view the commit on Github.
+   */
+  commitUrl: string;
 }
 
 const DEFAULT_YAML_PATHS = [
@@ -17,7 +43,9 @@ export async function updatePromotedValues(
   contents: string,
   promotionTargetRegexp: string | null,
   _logger: PrefixingLogger,
-): Promise<string> {
+  dockerRegistryClient: DockerRegistryClient | null = null,
+  gitHubClient: GitHubClient | null = null,
+): Promise<[string, Map<string, RelevantCommit[]>]> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
   // We use re2-wasm instead of built-in RegExp so we don't have to worry about
@@ -31,27 +59,77 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return contents;
+    return [contents, new Map()];
   }
 
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
-  const promotes = findPromotes(document, promotionTargetRE2);
+  const promotes = await findPromotes(
+    document,
+    promotionTargetRE2,
+    dockerRegistryClient,
+    gitHubClient,
+  );
+
+  logger.info(`Promotes: ${JSON.stringify(promotes)}`);
 
   logger.info('Copying values');
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
   }
-  return stringify();
+
+  const relevantCommits: Map<string, RelevantCommit[]> = new Map();
+  for (const [serviceName, commits] of promotes.map((p) => p.relevantCommits)) {
+    relevantCommits.set(serviceName, commits);
+  }
+  return [stringify(), relevantCommits];
 }
 
-function findPromotes(
+async function findPromotes(
   document: yaml.Document.Parsed,
   promotionTargetRE2: RE2 | null,
-): Promote[] {
+  dockerRegistryClient: DockerRegistryClient | null,
+  gitHubClient: GitHubClient | null = null,
+): Promise<Promote[]> {
   const { blocks } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
+
+  //
+  // Expected format of a block:
+  //
+  // my-service-prod:
+  //   track: <branch (main) | pr (pr-1234)>
+  //   gitConfig:
+  //     ref: <commit>
+  //   dockerImage:
+  //     tag: main---0013586-2024.04-<commit>
+  //   promote:
+  //     from: my-service-staging
+  //
+  //
+  // Expected format of global:
+  //
+  // global:
+  //   datadogServiceName: my-service
+  //   gitConfig:
+  //     repoURL: https://github.com/owner/repo.git
+  //     path: k8s/services/service
+  //   dockerImage:
+  //     repository: service
+  //
+  const repoURL: string | undefined = document.getIn([
+    'global',
+    'gitConfig',
+    'repoURL',
+  ]) as string | undefined;
+
+  const dockerImageRepository: string | undefined = document.getIn([
+    'global',
+    'dockerImage',
+    'repository',
+  ]) as string | undefined;
+
   for (const [myName, me] of blocks) {
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
@@ -124,6 +202,7 @@ function findPromotes(
       if (!yaml.isScalar(targetNode)) {
         throw Error(`Could not promote to ${[myName, ...collectionPath]}`);
       }
+
       const scalarToken = targetNode.srcToken;
       if (!yaml.CST.isScalar(scalarToken)) {
         // this probably can't happen, but let's make the types happy
@@ -131,9 +210,29 @@ function findPromotes(
           `${[myName, ...collectionPath]} value must come from a scalar token`,
         );
       }
+
+      let relevantCommits: RelevantCommit[] = [];
+      if (
+        typeof targetNode.value === 'string' &&
+        dockerImageRepository &&
+        repoURL &&
+        gitHubClient &&
+        dockerRegistryClient
+      ) {
+        relevantCommits = await getRelevantCommits(
+          targetNode.value,
+          sourceValue,
+          dockerImageRepository,
+          repoURL,
+          gitHubClient,
+          dockerRegistryClient,
+        );
+      }
+
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
+        relevantCommits: [myName, relevantCommits],
       });
     }
   }
@@ -149,4 +248,38 @@ function isCollectionPath(value: unknown): value is CollectionPath {
 
 function isCollectionIndex(value: unknown): value is CollectionIndex {
   return typeof value === 'string' || typeof value === 'number';
+}
+
+async function getRelevantCommits(
+  prevTag: string,
+  nextTag: string,
+  dockerImageRepository: string,
+  repoURL: string,
+  gitHubClient: GitHubClient,
+  dockerRegistryClient: DockerRegistryClient,
+): Promise<RelevantCommit[]> {
+  const commits = await dockerRegistryClient.getGitCommitsBetweenTags({
+    prevTag,
+    nextTag,
+    dockerImageRepository,
+  });
+
+  if (commits.length <= 0) return [];
+
+  const first = commits[0];
+  const last = commits[commits.length - 1];
+
+  const githubCommits = await gitHubClient.compareCommits({
+    repoURL,
+    baseCommitSHA: first,
+    headCommitSHA: last,
+  });
+
+  if (githubCommits === null) return [];
+
+  const relevantCommits = githubCommits.commits.filter((commit) => {
+    return commits.includes(commit.commitSHA);
+  });
+
+  return relevantCommits;
 }
