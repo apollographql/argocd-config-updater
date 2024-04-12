@@ -64,25 +64,35 @@ export class OctokitGitHubClient {
     baseCommitSHA,
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
+    const baseIsCommitSHA = baseCommitSHA.match(/([0-9a-fA-F]+)$/);
+    const headIsCommitSHA = headCommitSHA.match(/([0-9a-fA-F]+)$/);
+    if (!baseIsCommitSHA || !headIsCommitSHA) return null;
+
     const { owner, repo } = parseRepoURL(repoURL);
+
     // Include '^' to be inclusive of the head commit.
     const basehead = `${baseCommitSHA}...${headCommitSHA}^`;
     this.logAPICall('repos.compareCommits', `${owner}/${repo} ${basehead}`);
-    const result = (
-      await this.octokit.rest.repos.compareCommitsWithBasehead({
-        owner,
-        repo,
-        basehead,
-      })
-    ).data.commits;
-    return {
-      commits: result.map((commit) => ({
-        commitSHA: commit.sha,
-        message: commit.commit.message,
-        author: commit.author?.name ?? commit.commit.author?.email ?? null,
-        commitUrl: commit.html_url,
-      })),
-    };
+    try {
+      const result = (
+        await this.octokit.rest.repos.compareCommitsWithBasehead({
+          owner,
+          repo,
+          basehead,
+        })
+      ).data.commits;
+      return {
+        commits: result.map((commit) => ({
+          commitSHA: commit.sha,
+          message: commit.commit.message,
+          author: commit.author?.name ?? commit.commit.author?.email ?? null,
+          commitUrl: commit.html_url,
+        })),
+      };
+    } catch (error: unknown) {
+      core.info(`[GH API] Error in compareCommits, ignoring`);
+      return null;
+    }
   }
 
   private logAPICall(name: string, description: string): void {
