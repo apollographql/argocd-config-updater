@@ -65,7 +65,8 @@ export class OctokitGitHubClient {
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
     const { owner, repo } = parseRepoURL(repoURL);
-    const basehead = `${baseCommitSHA}...${headCommitSHA}`;
+    // Include '^' to be inclusive of the head commit.
+    const basehead = `${baseCommitSHA}...${headCommitSHA}^`;
     this.logAPICall('repos.compareCommits', `${owner}/${repo} ${basehead}`);
     const result = (
       await this.octokit.rest.repos.compareCommitsWithBasehead({
