@@ -84,7 +84,9 @@ export async function updatePromotedValues(
     relevantCommits.set(serviceName, commits);
   }
 
-  logger.info(`Relevant commits: ${JSON.stringify(relevantCommits)}`);
+  logger.info(
+    `Relevant commits: ${JSON.stringify(Object.fromEntries(relevantCommits))}`,
+  );
 
   return [stringify(), relevantCommits];
 }
