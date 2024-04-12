@@ -64,8 +64,8 @@ export class OctokitGitHubClient {
     baseCommitSHA,
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
-    const baseIsCommitSHA = baseCommitSHA.match(/([0-9a-fA-F]+)$/);
-    const headIsCommitSHA = headCommitSHA.match(/([0-9a-fA-F]+)$/);
+    const baseIsCommitSHA = baseCommitSHA.match(/\b([a-f0-9]{40})\b/);
+    const headIsCommitSHA = headCommitSHA.match(/\b([a-f0-9]{40})\b/);
     if (!baseIsCommitSHA || !headIsCommitSHA) return null;
 
     const { owner, repo } = parseRepoURL(repoURL);
