@@ -192,7 +192,10 @@ async function processFile(
     core.setOutput('team', team);
     core.setOutput('is-migration', isMigration);
     core.setOutput('target-env', env);
-    core.setOutput('relevant-commits', JSON.stringify(relevantCommits));
+    core.setOutput(
+      'relevant-commits',
+      JSON.stringify(Object.fromEntries(relevantCommits)),
+    );
   }
 
   await writeFile(filename, contents);
