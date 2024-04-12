@@ -115,7 +115,7 @@ export class ArtifactRegistryDockerRegistryClient {
           .tag as string;
       },
     );
-    core.info(`Relevant Commits ${revelantCommits.join(', ')}`);
+
     return revelantCommits;
   }
 
