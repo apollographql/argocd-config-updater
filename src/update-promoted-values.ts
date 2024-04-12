@@ -224,6 +224,7 @@ async function findPromotes(
 
       let relevantCommits: RelevantCommit[] = [];
 
+      console.log(`collectionPath: ${JSON.stringify(collectionPath)}`);
       console.log(`targetNode.value: ${JSON.stringify(targetNode.value)}`);
       console.log(`repoURL: ${JSON.stringify(repoURL)}`);
       if (
