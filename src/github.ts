@@ -65,24 +65,30 @@ export class OctokitGitHubClient {
     headCommitSHA,
   }: CompareCommitsOptions): Promise<CompareCommitsResult | null> {
     const { owner, repo } = parseRepoURL(repoURL);
+
     // Include '^' to be inclusive of the head commit.
     const basehead = `${baseCommitSHA}...${headCommitSHA}^`;
     this.logAPICall('repos.compareCommits', `${owner}/${repo} ${basehead}`);
-    const result = (
-      await this.octokit.rest.repos.compareCommitsWithBasehead({
-        owner,
-        repo,
-        basehead,
-      })
-    ).data.commits;
-    return {
-      commits: result.map((commit) => ({
-        commitSHA: commit.sha,
-        message: commit.commit.message,
-        author: commit.author?.name ?? commit.commit.author?.email ?? null,
-        commitUrl: commit.html_url,
-      })),
-    };
+    try {
+      const result = (
+        await this.octokit.rest.repos.compareCommitsWithBasehead({
+          owner,
+          repo,
+          basehead,
+        })
+      ).data.commits;
+      return {
+        commits: result.map((commit) => ({
+          commitSHA: commit.sha,
+          message: commit.commit.message,
+          author: commit.author?.name ?? commit.commit.author?.email ?? null,
+          commitUrl: commit.html_url,
+        })),
+      };
+    } catch (error: unknown) {
+      core.info(`[GH API] Error in compareCommits, ignoring`);
+      return null;
+    }
   }
 
   private logAPICall(name: string, description: string): void {
@@ -152,8 +158,8 @@ export class OctokitGitHubClient {
     }
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
-    const refParameter = prNumber ? `pull / ${prNumber} / head` : ref;
-    this.logAPICall('repos.getCommit', `${owner} / ${repo} ${refParameter}`);
+    const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
+    this.logAPICall('repos.getCommit', `${owner}/${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
