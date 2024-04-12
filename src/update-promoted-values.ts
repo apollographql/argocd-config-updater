@@ -79,11 +79,12 @@ export async function updatePromotedValues(
     scalarTokenWriter.write(value);
   }
 
-  let relevantCommits: Map<string, RelevantCommit[]> = new Map();
+  const relevantCommits = new Map<string, RelevantCommit[]>();
   for (const [serviceName, commits] of promotes.map((p) => p.relevantCommits)) {
     logger.info(`serviceName: ${serviceName}`);
     logger.info(`commits: ${JSON.stringify(commits)}`);
-    relevantCommits = relevantCommits.set(serviceName, commits);
+    const res = relevantCommits.set(serviceName, commits);
+    logger.info(`res: ${JSON.stringify(res)}`);
     logger.info(
       `Relevant commits in progress, after update: ${JSON.stringify(relevantCommits)}`,
     );
