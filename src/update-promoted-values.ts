@@ -267,16 +267,23 @@ async function getRelevantCommits(
     dockerImageRepository,
   });
 
+  console.log(`getGitComitsBetweenTags: ${JSON.stringify(commits)}`);
+
   if (commits.length <= 0) return [];
 
   const first = commits[0];
   const last = commits[commits.length - 1];
+
+  console.log(`first: ${JSON.stringify(first)}`);
+  console.log(`last: ${JSON.stringify(last)}`);
 
   const githubCommits = await gitHubClient.compareCommits({
     repoURL,
     baseCommitSHA: first,
     headCommitSHA: last,
   });
+
+  console.log(`githubCommits: ${JSON.stringify(githubCommits)}`);
 
   if (githubCommits === null) return [];
 
