@@ -174,13 +174,18 @@ async function processFile(
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
     let relevantCommits: Map<string, RelevantCommit[]>;
+
+    // Assumption: The filepath is of the format `teams/{team-name}/service` or `teams/{team-name}/migrations` (for db migrations)
+    const serviceName =
+      core.getInput('files').split('/')[2]?.toLowerCase() ?? 'unknown';
+
     [contents, relevantCommits] = await updatePromotedValues(
       contents,
       promotionTargetRegexp || null,
       logger,
       dockerRegistryClient,
       gitHubClient,
-      shortFilename,
+      serviceName,
     );
 
     // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)
