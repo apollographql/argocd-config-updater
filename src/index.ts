@@ -180,6 +180,7 @@ async function processFile(
       logger,
       dockerRegistryClient,
       gitHubClient,
+      shortFilename,
     );
 
     // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)

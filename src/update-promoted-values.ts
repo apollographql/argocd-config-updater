@@ -45,6 +45,7 @@ export async function updatePromotedValues(
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
   gitHubClient: GitHubClient | null = null,
+  shortFilename = 'unknown',
 ): Promise<[string, Map<string, RelevantCommit[]>]> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
@@ -82,7 +83,7 @@ export async function updatePromotedValues(
   const relevantCommits: Map<string, RelevantCommit[]> = new Map();
   for (const [serviceName, commits] of promotes.map((p) => p.relevantCommits)) {
     if (commits.length === 0) continue;
-    relevantCommits.set(serviceName, commits);
+    relevantCommits.set(`${shortFilename}/${serviceName}`, commits);
   }
 
   logger.info(
