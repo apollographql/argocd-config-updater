@@ -81,6 +81,7 @@ export async function updatePromotedValues(
 
   const relevantCommits: Map<string, RelevantCommit[]> = new Map();
   for (const [serviceName, commits] of promotes.map((p) => p.relevantCommits)) {
+    if (commits.length === 0) continue;
     relevantCommits.set(serviceName, commits);
   }
 
