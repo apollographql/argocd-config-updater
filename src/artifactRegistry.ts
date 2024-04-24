@@ -243,8 +243,8 @@ export function getRelevantCommits(
   dockerTags: DockerTag[],
   getTagFromDockerTag: (dockerTag: DockerTag) => string,
 ): string[] {
-  if (!prevTag.startsWith('main')) return [];
-  if (!nextTag.startsWith('main')) return [];
+  if (!isMainTag(prevTag)) return [];
+  if (!isMainTag(nextTag)) return [];
 
   /**
    * Going to loop over our docker tags, filtering out ones outside the relevant range, and build an array of tag info.
@@ -262,7 +262,7 @@ export function getRelevantCommits(
 
     const tag = getTagFromDockerTag(dockerTag);
 
-    if (!tag.startsWith('main')) continue;
+    if (!isMainTag(tag)) continue;
     if (!tagInRange(prevTag, nextTag, tag)) continue;
 
     // We only care about the tags between prev and next that have a git commit
@@ -304,4 +304,8 @@ function dedupNeighboringTags(
     }
   }
   return res;
+}
+
+function isMainTag(tag: string): boolean {
+  return tag.startsWith('main---');
 }
