@@ -1,5 +1,8 @@
 import * as core from '@actions/core';
-import { ArtifactRegistryClient } from '@google-cloud/artifact-registry';
+import {
+  ArtifactRegistryClient,
+  protos,
+} from '@google-cloud/artifact-registry';
 import { LRUCache } from 'lru-cache';
 
 export interface GetAllEquivalentTagsOptions {
@@ -101,20 +104,24 @@ export class ArtifactRegistryDockerRegistryClient {
           package: dockerImageRepository,
         }),
       })
-    )[0].filter((tag) => tag.version && tag.name);
-
-    const relevantCommits = getRelevantCommits(
-      prevTag,
-      nextTag,
-      dockerTags.map((tag) => ({
-        name: tag.name as string,
-        version: tag.version as string,
-      })),
-      (dockerTag: DockerTag) => {
-        return this.client.pathTemplates.tagPathTemplate.match(dockerTag.name)
-          .tag as string;
-      },
+    )[0].map((iTag) =>
+      toDockerTag(new protos.google.devtools.artifactregistry.v1.Tag(iTag)),
     );
+
+    const toDockerTag = (
+      tag: protos.google.devtools.artifactregistry.v1.Tag,
+    ): DockerTag => {
+      return {
+        // Trim off the path here, going from absolute path to the base name
+        // "projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g123456789"
+        // Becomes: "2022.02-278-g123456789"
+        tag: this.client.pathTemplates.tagPathTemplate.match(tag.name)
+          .tag as string,
+        version: tag.version,
+      };
+    };
+
+    const relevantCommits = getRelevantCommits(prevTag, nextTag, dockerTags);
 
     return relevantCommits;
   }
@@ -213,9 +220,18 @@ export class CachingDockerRegistryClient {
  *   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
  * }
  *
+ * All of the information up to the final bits of information will be the same for all of these, though for version, we really only care about differences so we dont bother parsing anything out
+ *
+ * so we actually want to store these as:
+ *
+ * {
+ *   "tag":"2022.02-278-g123456789",
+ *   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
+ * }
+ *
  */
 export type DockerTag = {
-  name: string;
+  tag: string;
   version: string;
 };
 
@@ -241,11 +257,13 @@ export function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: DockerTag[],
-  getTagFromDockerTag: (dockerTag: DockerTag) => string,
 ): string[] {
+  console.log(`prevTag: ${prevTag}`);
+  console.log(`nextTag: ${nextTag}`);
   if (!isMainTag(prevTag)) return [];
   if (!isMainTag(nextTag)) return [];
 
+  console.log('Hello');
   /**
    * Going to loop over our docker tags, filtering out ones outside the relevant range, and build an array of tag info.
    *
@@ -258,12 +276,20 @@ export function getRelevantCommits(
   }>();
 
   for (const dockerTag of dockerTags) {
-    if (!dockerTag.version || !dockerTag.name) continue;
+    // TODO: Check this with a test
+    // if (!dockerTag.version || !dockerTag.name) continue;
+    const tag = dockerTag.tag;
 
-    const tag = getTagFromDockerTag(dockerTag);
+    if (!isMainTag(tag)) {
+      console.log(`filtering because tag is not main ${tag}`);
+      continue;
+    }
+    if (!tagInRange(prevTag, nextTag, tag)) {
+      console.log(`filtering because tag is not in range ${tag}`);
+      continue;
+    }
 
-    if (!isMainTag(tag)) continue;
-    if (!tagInRange(prevTag, nextTag, tag)) continue;
+    console.log('Hello');
 
     // We only care about the tags between prev and next that have a git commit
     const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
@@ -277,15 +303,16 @@ export function getRelevantCommits(
     }
   }
 
-  const result = dedupNeighboringTags(relevantCommitsWithTagInfo)
-    .sort((a, b) => a.tag.localeCompare(b.tag))
-    .map((c) => c.commit);
+  relevantCommitsWithTagInfo.sort((a, b) => a.tag.localeCompare(b.tag));
+  const result = dedupNeighboringTags(relevantCommitsWithTagInfo).map(
+    (c) => c.commit,
+  );
 
   return result;
 }
 
 function tagInRange(prevTag: string, nextTag: string, tag: string): boolean {
-  return tag > prevTag && tag < nextTag;
+  return tag > prevTag && tag <= nextTag;
 }
 
 function dedupNeighboringTags(
@@ -299,7 +326,7 @@ function dedupNeighboringTags(
   for (let i = 1; i < tags.length; i++) {
     const currTag = tags[i];
     const prevTag = tags[i - 1];
-    if (currTag.commit !== prevTag.commit) {
+    if (currTag.version !== prevTag.version) {
       res.push(currTag);
     }
   }
