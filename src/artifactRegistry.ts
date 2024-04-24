@@ -103,7 +103,7 @@ export class ArtifactRegistryDockerRegistryClient {
       })
     )[0].filter((tag) => tag.version && tag.name);
 
-    const revelantCommits = getRelevantCommits(
+    const relevantCommits = getRelevantCommits(
       prevTag,
       nextTag,
       dockerTags.map((tag) => ({
@@ -116,7 +116,7 @@ export class ArtifactRegistryDockerRegistryClient {
       },
     );
 
-    return revelantCommits;
+    return relevantCommits;
   }
 
   async getAllEquivalentTags({
