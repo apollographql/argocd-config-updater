@@ -243,19 +243,47 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
     expect(getRelevantCommits(prev, next, tags)).toStrictEqual([]);
   });
 
-  it('should dedup consecutive commit hashes', async () => {
-    const [prev, prevDockerTag] = makeMainTag(5, '2024', 4);
-    const [next, nextDockerTag] = makeMainTag(20, '2024', 4);
-    const hash1 = faker.git.commitSha();
-    const hash2 = faker.git.commitSha();
-    const shortHash1 = faker.git.commitSha({ length: 7 });
-    const shortHash2 = faker.git.commitSha({ length: 7 });
-    const commit1First = makeDockerTag(6, '2024', 4, hash1, shortHash1);
-    const commit1Second = makeDockerTag(7, '2024', 4, hash1, shortHash1);
-    const otherCommit = stubDockerTag(8, '2024', 4);
-    const commit2First = makeDockerTag(9, '2024', 4, hash2, shortHash2);
-    const commit2Second = makeDockerTag(10, '2024', 4, hash2, shortHash2);
-    const commit1Third = makeDockerTag(11, '2024', 4, hash1, shortHash1);
+  it('should dedup consecutive versions', async () => {
+    const prev = `main---0000005-2024.04-g${commitSha()}`;
+    const next = `main---0000020-2024.04-g${commitSha()}`;
+    const prevDockerTag: DockerTag = {
+      tag: prev,
+      version: 'a',
+    };
+    const nextDockerTag: DockerTag = {
+      tag: next,
+      version: 'e',
+    };
+
+    const commit1First = {
+      tag: `main---0000006-2024.04-g${commitSha()}`,
+      version: 'b',
+    };
+
+    const commit1Second = {
+      tag: `main---0000007-2024.04-g${commitSha()}`,
+      version: 'b',
+    };
+
+    const otherCommit = {
+      tag: `main---0000008-2024.04-g${commitSha()}`,
+      version: 'c',
+    };
+
+    const commit2First = {
+      tag: `main---0000009-2024.04-g${commitSha()}`,
+      version: 'd',
+    };
+
+    const commit2Second = {
+      tag: `main---0000010-2024.04-g${commitSha()}`,
+      version: 'd',
+    };
+
+    const commit1Third = {
+      tag: `main---0000011-2024.04-g${commitSha()}`,
+      version: 'b',
+    };
 
     const tags = [
       prevDockerTag,
