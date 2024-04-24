@@ -132,15 +132,34 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
   });
 
   it('should filter commits after next (exclusive)', async () => {
-    const [prev] = makeMainTag(5, '2024', 4);
-    const [next, nextDockerTag] = makeMainTag(10, '2024', 4);
+    const prev = `main---0000005-2024.04-g${commitSha()}`;
+    const nextCommitSHA = commitSha();
+    const next = `main---0000010-2024.04-g${nextCommitSHA}`;
+    const prevDockerTag: DockerTag = {
+      tag: prev,
+      version: 'a',
+    };
+    const nextDockerTag: DockerTag = {
+      tag: next,
+      version: 'e',
+    };
     const tags = [
+      prevDockerTag,
       nextDockerTag,
-      stubDockerTag(11, '2024', 4),
-      stubDockerTag(12, '2024', 4),
-      stubDockerTag(100, '2024', 4),
+      {
+        tag: `main---0000011-2024.04-g${commitSha()}`,
+        version: 'b',
+      },
+      {
+        tag: `main---0000012-2024.04-g${commitSha()}`,
+        version: 'c',
+      },
+      {
+        tag: `main---0000100-2024.04-g${commitSha()}`,
+        version: 'd',
+      },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([nextDockerTag]);
+    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([nextCommitSHA]);
   });
 
   it('should include commits between prev and next (in sorted order) -- next is inclusive', async () => {
