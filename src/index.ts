@@ -18,7 +18,7 @@ import {
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
-import { RelevantCommit, updatePromotedValues } from './update-promoted-values';
+import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
 import { inspect } from 'util';
 
@@ -173,28 +173,12 @@ async function processFile(
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-    let relevantCommits: Map<string, RelevantCommit[]>;
-    [contents, relevantCommits] = await updatePromotedValues(
+    [contents] = await updatePromotedValues(
       contents,
       promotionTargetRegexp || null,
       logger,
       dockerRegistryClient,
       gitHubClient,
-    );
-
-    // Assumption: The filepath is of the format `teams/{team-name}` or `teams/{team-name}/migrations` (for db migrations)
-    const team =
-      core.getInput('files').split('/')[1]?.toLowerCase() ?? 'unknown';
-    const isMigration = core.getInput('files').includes('migrations');
-    // Assumption: Environment name is the provided target regexp
-    const env = core.getInput('promotion-target-regexp');
-
-    core.setOutput('team', team);
-    core.setOutput('is-migration', isMigration);
-    core.setOutput('target-env', env);
-    core.setOutput(
-      'relevant-commits',
-      JSON.stringify(Object.fromEntries(relevantCommits)),
     );
   }
 
