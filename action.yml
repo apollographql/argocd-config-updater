@@ -39,18 +39,6 @@ outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
 
-  target-env:
-    description: 'The target promotion environment'
-
-  team:
-    description: 'The team responsible for the candidate promotion'
-
-  is-migration:
-    description: 'If the promotion is for running DB migrations'
-
-  relevant-commits:
-    description: 'A map of relevant commits for service names as JSON'
-
 runs:
   using: node20
   main: dist/index.js
