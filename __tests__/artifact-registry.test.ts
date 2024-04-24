@@ -46,9 +46,9 @@ function makeMainTag(
 }
 
 function getHash(dockerTag: DockerTag): string {
-  const gitCommitMatches = dockerTag.version.match(/sha256:([0-9a-fA-F]+)$/);
+  const gitCommitMatches = dockerTag.tag.match(/-g([0-9a-fA-F]+)$/);
   if (!gitCommitMatches) {
-    throw new Error(`Could not find git commit in ${dockerTag.version}`);
+    throw new Error(`Could not find git commit in ${dockerTag.tag}`);
   }
   return gitCommitMatches[1];
 }
@@ -163,13 +163,28 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
   });
 
   it('should include commits between prev and next (in sorted order) -- next is inclusive', async () => {
-    const [prev, prevDockerTag] = makeMainTag(5, '2024', 4);
-    const [next, nextDockerTag] = makeMainTag(10, '2024', 4);
+    const prev = `main---0000005-2024.04-g${commitSha()}`;
+    const nextCommitSHA = commitSha();
+    const next = `main---0000010-2024.04-g${nextCommitSHA}`;
+    const prevDockerTag: DockerTag = {
+      tag: prev,
+      version: 'a',
+    };
+    const nextDockerTag: DockerTag = {
+      tag: next,
+      version: 'e',
+    };
     const tags = [
       prevDockerTag,
       nextDockerTag,
-      stubDockerTag(7, '2024', 4),
-      stubDockerTag(6, '2024', 4),
+      {
+        tag: `main---0000007-2024.04-g${commitSha()}`,
+        version: 'b',
+      },
+      {
+        tag: `main---0000006-2024.04-g${commitSha()}`,
+        version: 'c',
+      },
     ];
 
     const expected = getAllHashes([tags[3], tags[2], nextDockerTag]);
