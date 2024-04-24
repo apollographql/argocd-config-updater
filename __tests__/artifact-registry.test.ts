@@ -192,25 +192,53 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
   });
 
   it('should return an empty list if left bound is not for `main---`', async () => {
-    const [prev, prevDockerTag] = makePRTag(5, '2024', 4);
-    const [next, nextDockerTag] = makeMainTag(10, '2024', 4);
+    const prev = `pr-123---0000005-2024.04-g${commitSha()}`;
+    const next = `main---0000010-2024.04-g${commitSha()}`;
+    const prevDockerTag: DockerTag = {
+      tag: prev,
+      version: 'a',
+    };
+    const nextDockerTag: DockerTag = {
+      tag: next,
+      version: 'e',
+    };
     const tags = [
       prevDockerTag,
       nextDockerTag,
-      stubDockerTag(7, '2024', 4),
-      stubDockerTag(6, '2024', 4),
+      {
+        tag: `main---0000007-2024.04-g${commitSha()}`,
+        version: 'b',
+      },
+      {
+        tag: `main---0000006-2024.04-g${commitSha()}`,
+        version: 'c',
+      },
     ];
     expect(getRelevantCommits(prev, next, tags)).toStrictEqual([]);
   });
 
   it('should return an empty list if right bound is not for `main---`', async () => {
-    const [prev, prevDockerTag] = makeMainTag(5, '2024', 4);
-    const [next, nextDockerTag] = makePRTag(10, '2024', 4);
+    const prev = `main---0000005-2024.04-g${commitSha()}`;
+    const next = `pr-123---0000010-2024.04-g${commitSha()}`;
+    const prevDockerTag: DockerTag = {
+      tag: prev,
+      version: 'a',
+    };
+    const nextDockerTag: DockerTag = {
+      tag: next,
+      version: 'e',
+    };
     const tags = [
       prevDockerTag,
       nextDockerTag,
-      stubDockerTag(7, '2024', 4),
-      stubDockerTag(6, '2024', 4),
+      {
+        tag: `main---0000007-2024.04-g${commitSha()}`,
+        version: 'b',
+      },
+      {
+        tag: `main---0000006-2024.04-g${commitSha()}`,
+        version: 'c',
+      },
     ];
     expect(getRelevantCommits(prev, next, tags)).toStrictEqual([]);
   });
