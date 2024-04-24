@@ -9,42 +9,6 @@ import { DockerTag, getRelevantCommits } from '../src/artifactRegistry';
  *
  */
 
-function stubDockerTag(count: number, year: string, month: number): DockerTag {
-  const shortHash = faker.git.commitSha();
-  const hash = faker.git.commitSha();
-  return makeDockerTag(count, year, month, hash, shortHash);
-}
-
-function makePRTag(
-  count: number,
-  year: string,
-  month: number,
-): [string, DockerTag] {
-  const paddedCount = count.toString().padStart(7, '0');
-  const paddedMonth = month.toString().padStart(2, '0');
-  const shortHash = faker.git.commitSha({ length: 7 });
-  const hash = faker.git.commitSha();
-
-  const prTag = `pr-123---${paddedCount}-${year}.${paddedMonth}-g${hash}`;
-  const dockerTag = makeDockerTag(count, year, month, hash, shortHash);
-  return [prTag, dockerTag];
-}
-
-function makeMainTag(
-  count: number,
-  year: string,
-  month: number,
-): [string, DockerTag] {
-  const paddedCount = count.toString().padStart(7, '0');
-  const paddedMonth = month.toString().padStart(2, '0');
-  const shortHash = faker.git.commitSha({ length: 7 });
-  const hash = faker.git.commitSha();
-
-  const mainTag = `main---${paddedCount}-${year}.${paddedMonth}-g${hash}`;
-  const dockerTag = makeDockerTag(count, year, month, hash, shortHash);
-  return [mainTag, dockerTag];
-}
-
 function getHash(dockerTag: DockerTag): string {
   const gitCommitMatches = dockerTag.tag.match(/-g([0-9a-fA-F]+)$/);
   if (!gitCommitMatches) {
@@ -60,35 +24,6 @@ function getAllHashes(tags: DockerTag[]): string[] {
 function commitSha(): string {
   return faker.git.commitSha();
 }
-
-function makeDockerTag(
-  count: number,
-  year: string,
-  month: number,
-  hash: string,
-  shortHash: string,
-): DockerTag {
-  const paddedCount = count.toString().padStart(7, '0');
-  const paddedMonth = month.toString().padStart(2, '0');
-
-  return {
-    tag: `main---${paddedCount}-${year}.${paddedMonth}-g${shortHash}`,
-    version: `some/path/versions/sha256:${hash}`,
-  };
-}
-
-/**
- * transforming the tag into the `main---count-year.month-ggitCommitHash` format
- */
-// function getTagFromDockerTagName(dockerTag: DockerTag): string {
-//   const gitCommitMatches = dockerTag.version.match(/sha256:([0-9a-fA-F]+)$/);
-//   if (!gitCommitMatches) {
-//     throw new Error(`Could not find git commit in ${dockerTag.version}`);
-//   }
-//   const nameTagData = dockerTag.tag.split('/').pop() as string;
-//   const withoutHash = nameTagData.split('-').slice(0, 2).join('-');
-//   return `main---${withoutHash}-g${gitCommitMatches[1]}`;
-// }
 
 describe('ArtifactRegistry.getRelevantCommits', () => {
   it('should return nothing when given an empty list', async () => {
