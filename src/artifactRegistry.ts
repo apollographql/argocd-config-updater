@@ -24,7 +24,7 @@ export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getGitCommitsBetweenTags(
     options: GitCommitsBetweenTagsOptions,
-  ): Promise<string[]>;
+  ): Promise<string[] | null>;
 }
 
 export class ArtifactRegistryDockerRegistryClient {
@@ -62,14 +62,16 @@ export class ArtifactRegistryDockerRegistryClient {
   /**
    * getGitCommitsBetweenTags
    *
-   * @param {string} prevTag
-   *   The previous docker tag: of the following format: main---0013567-2024.04-g<githash>
-   * @param {string} nextTag
-   *  The next docker tag: main---0013567-2024.04-g<githash>
+   * @param {string} prevTag The previous docker tag: of the following format:
+   *   main---0013567-2024.04-g<githash>
+   * @param {string} nextTag The next docker tag:
+   *  main---0013567-2024.04-g<githash>
    *
    * @param {object} dockerImageRepository
    *
-   * @returns {Promise} - The promise which resolves to an array of relevant commit strings.
+   * @returns {Promise} - The promise which resolves to an array of relevant
+   * commit SHAs, or null if there's a promotion but we aren't able to map
+   * that to commits (eg, it's not between two `main---` tags).
    */
   async getGitCommitsBetweenTags({
     prevTag,
@@ -79,7 +81,7 @@ export class ArtifactRegistryDockerRegistryClient {
     prevTag: string;
     nextTag: string;
     dockerImageRepository: string;
-  }): Promise<string[]> {
+  }): Promise<string[] | null> {
     core.info(
       `running diff docker tags ${prevTag} ${nextTag} ${dockerImageRepository}`,
     );
@@ -104,13 +106,8 @@ export class ArtifactRegistryDockerRegistryClient {
           package: dockerImageRepository,
         }),
       })
-    )[0].map((iTag) =>
-      toDockerTag(new protos.google.devtools.artifactregistry.v1.Tag(iTag)),
-    );
-
-    const toDockerTag = (
-      tag: protos.google.devtools.artifactregistry.v1.Tag,
-    ): DockerTag => {
+    )[0].map((iTag) => {
+      const tag = new protos.google.devtools.artifactregistry.v1.Tag(iTag);
       return {
         // Trim off the path here, going from absolute path to the base name
         // "projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g123456789"
@@ -119,11 +116,9 @@ export class ArtifactRegistryDockerRegistryClient {
           .tag as string,
         version: tag.version,
       };
-    };
+    });
 
-    const relevantCommits = getRelevantCommits(prevTag, nextTag, dockerTags);
-
-    return relevantCommits;
+    return getRelevantCommits(prevTag, nextTag, dockerTags);
   }
 
   async getAllEquivalentTags({
@@ -178,7 +173,14 @@ export class ArtifactRegistryDockerRegistryClient {
 }
 
 export class CachingDockerRegistryClient {
-  constructor(private wrapped: DockerRegistryClient) {}
+  constructor(
+    private wrapped: DockerRegistryClient,
+    dump?: CachingDockerRegistryClientDump | null,
+  ) {
+    if (dump) {
+      this.getGitCommitsBetweenTagsCache.load(dump.gitCommitsBetweenTags);
+    }
+  }
   private getAllEquivalentTagsCache = new LRUCache<
     string,
     string[],
@@ -189,13 +191,6 @@ export class CachingDockerRegistryClient {
       return this.wrapped.getAllEquivalentTags(context);
     },
   });
-
-  async getGitCommitsBetweenTags(
-    options: GitCommitsBetweenTagsOptions,
-  ): Promise<string[]> {
-    // For now we aren't caching anything since this will only run on promotion prs
-    return this.wrapped.getGitCommitsBetweenTags(options);
-  }
 
   async getAllEquivalentTags(
     options: GetAllEquivalentTagsOptions,
@@ -211,6 +206,69 @@ export class CachingDockerRegistryClient {
     }
     return tags;
   }
+
+  private getGitCommitsBetweenTagsCache = new LRUCache<
+    string,
+    // LRUCache can't store null, so we box it.
+    { boxed: string[] | null },
+    GitCommitsBetweenTagsOptions
+  >({
+    max: 1024,
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return { boxed: await this.wrapped.getGitCommitsBetweenTags(context) };
+    },
+  });
+
+  async getGitCommitsBetweenTags(
+    options: GitCommitsBetweenTagsOptions,
+  ): Promise<string[] | null> {
+    const cached = await this.getGitCommitsBetweenTagsCache.fetch(
+      JSON.stringify(options),
+      { context: options },
+    );
+    if (!cached) {
+      throw Error(
+        'getGitCommitsBetweenTagsCache.fetch should never resolve without a boxed value',
+      );
+    }
+    return cached.boxed;
+  }
+
+  dump(): CachingDockerRegistryClientDump {
+    // We cache the git commit list across executions, because assuming there's no
+    // thrown error, both tags are main--- numbers that currently exist, so if
+    // there aren't any force pushes to main then the set of relevant commits in
+    // that range of history shouldn't change. (But don't dump
+    // getAllEquivalentTagsCache since that changes over time!)
+    return { gitCommitsBetweenTags: this.getGitCommitsBetweenTagsCache.dump() };
+  }
+}
+
+export interface CachingDockerRegistryClientDump {
+  gitCommitsBetweenTags: [
+    string,
+    LRUCache.Entry<{
+      boxed: string[] | null;
+    }>,
+  ][];
+}
+
+export function isCachingDockerRegistryClientDump(
+  dump: unknown,
+): dump is CachingDockerRegistryClientDump {
+  if (!dump || typeof dump !== 'object') {
+    return false;
+  }
+  if (!('gitCommitsBetweenTags' in dump)) {
+    return false;
+  }
+  const { gitCommitsBetweenTags } = dump;
+  if (!Array.isArray(gitCommitsBetweenTags)) {
+    return false;
+  }
+
+  // XXX we could check the values further if we want to be more anal
+  return true;
 }
 
 /**
@@ -247,73 +305,54 @@ export type DockerTag = {
  * @param {DockerTag[]} dockerTags
  *  The docker tags as we need to parse and filter into relevant commits. Provided by a previous call to the artifact registry.
  *
- * @returns {string[]} - The relevant commits as strings
+ * @returns {string[] | null} - The relevant commits as strings, or null if we can't calculate the list
  */
 export function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: DockerTag[],
-): string[] {
-  if (!isMainTag(prevTag)) return [];
-  if (!isMainTag(nextTag)) return [];
+): string[] | null {
+  // We only want to speak authoratively about what is being promoted if both the
+  // old and new tags are part of the linear `main---1234` order, and we know
+  // their versions directly.
+  if (!isMainTag(prevTag)) return null;
+  if (!isMainTag(nextTag)) return null;
+  if (!dockerTags.some(({ tag }) => tag === nextTag)) {
+    return null;
+  }
+  const prevTagVersion = dockerTags.find(({ tag }) => tag === prevTag)?.version;
+  if (prevTagVersion === undefined) {
+    return null;
+  }
 
-  /**
-   * Going to loop over our docker tags, filtering out ones outside the relevant range, and build an array of tag info.
-   *
-   * We will then do some commit deduping and return a list of relevant commits.
-   */
-  const relevantCommitsWithTagInfo = new Array<{
-    version: string;
-    tag: string;
-    commit: string;
-  }>();
+  dockerTags = [...dockerTags]; // Don't mutate the argument
+  dockerTags.sort((a, b) => a.tag.localeCompare(b.tag));
 
-  for (const dockerTag of dockerTags) {
-    const tag = dockerTag.tag;
-
+  // Put a "dummy" entry at the beginning of this list with the version
+  // associated with the old tag. This means the logic below won't have to
+  // special-case not including this version or special-case deduped being
+  // empty; we slice it off before we return it.
+  const deduped: { commit: string; version: string }[] = [
+    { commit: '', version: prevTagVersion },
+  ];
+  for (const { tag, version } of dockerTags) {
     if (!isMainTag(tag)) continue;
-    if (!tagInRange(prevTag, nextTag, tag)) continue;
+    if (tag <= prevTag) continue;
+    if (tag > nextTag) break;
 
     // We only care about the tags between prev and next that have a git commit
-    const gitCommitMatches = tag.match(/-g([0-9a-fA-F]+)$/);
-    if (gitCommitMatches) {
-      const currTagInfo = {
-        version: dockerTag.version,
-        tag,
-        commit: gitCommitMatches[1],
-      };
-      relevantCommitsWithTagInfo.push(currTagInfo);
+    const commit = tag.match(/-g([0-9a-fA-F]+)$/)?.[1];
+    if (commit === undefined) {
+      continue;
     }
-  }
 
-  relevantCommitsWithTagInfo.sort((a, b) => a.tag.localeCompare(b.tag));
-  const result = dedupNeighboringTags(relevantCommitsWithTagInfo).map(
-    (c) => c.commit,
-  );
-
-  return result;
-}
-
-function tagInRange(prevTag: string, nextTag: string, tag: string): boolean {
-  return tag > prevTag && tag <= nextTag;
-}
-
-function dedupNeighboringTags(
-  tags: { version: string; tag: string; commit: string }[],
-): { version: string; tag: string; commit: string }[] {
-  if (tags.length === 0) {
-    return [];
-  }
-
-  const res = [tags[0]];
-  for (let i = 1; i < tags.length; i++) {
-    const currTag = tags[i];
-    const prevTag = tags[i - 1];
-    if (currTag.version !== prevTag.version) {
-      res.push(currTag);
+    if (deduped[deduped.length - 1].version === version) {
+      continue;
     }
+    deduped.push({ commit, version });
   }
-  return res;
+  // Slice off the version that is prevTagVersion.
+  return deduped.map(({ commit }) => commit).slice(1);
 }
 
 function isMainTag(tag: string): boolean {
