@@ -15,22 +15,30 @@ const logger = PrefixingLogger.silent();
 describe('action', () => {
   it('updates git refs', async () => {
     const contents = await fixture('sample.yaml');
-    const [newContents] = await updatePromotedValues(contents, 'prod', logger);
+    const { newContents } = await updatePromotedValues(
+      contents,
+      'prod',
+      logger,
+    );
     expect(newContents).toMatchSnapshot();
 
     // It should be idempotent in this case.
-    const [actual] = await updatePromotedValues(newContents, 'prod', logger);
+    const { newContents: actual } = await updatePromotedValues(
+      newContents,
+      'prod',
+      logger,
+    );
     expect(actual).toBe(newContents);
   });
 
   it('respects defaults and explicit specifications for yamlPaths', async () => {
-    const [actual] = await updatePromotedValues(
+    const { newContents } = await updatePromotedValues(
       await fixture('yaml-paths-defaults.yaml'),
       null,
       logger,
     );
 
-    expect(actual).toMatchSnapshot();
+    expect(newContents).toMatchSnapshot();
   });
 
   it('throws if no default yamlPaths entry works', async () => {

@@ -26,44 +26,64 @@ function commitSha(): string {
 }
 
 describe('ArtifactRegistry.getRelevantCommits', () => {
-  it('should return nothing when given an empty list', async () => {
-    const [prev] = `main---0013572-2024.04-g${commitSha()}`;
-    const [next] = `main---0013573-2024.04-g${commitSha()}`;
-    expect(getRelevantCommits(prev, next, [])).toStrictEqual([]);
+  it('should return null when "next" is not in tags', async () => {
+    const prev = `main---0013572-2024.04-g${commitSha()}`;
+    const next = `main---0013573-2024.04-g${commitSha()}`;
+    expect(
+      getRelevantCommits(prev, next, [{ tag: prev, version: 'x' }]),
+    ).toBeNull();
+  });
+
+  it('should return null when "prev" is not in tags', async () => {
+    const prev = `main---0013572-2024.04-g${commitSha()}`;
+    const next = `main---0013573-2024.04-g${commitSha()}`;
+    expect(
+      getRelevantCommits(prev, next, [{ tag: next, version: 'x' }]),
+    ).toBeNull();
+  });
+
+  it('should return empty list when "prev" and "next" have same version', async () => {
+    const prev = `main---0013572-2024.04-g${commitSha()}`;
+    const next = `main---0013573-2024.04-g${commitSha()}`;
+    expect(
+      getRelevantCommits(prev, next, [
+        { tag: prev, version: 'x' },
+        { tag: next, version: 'x' },
+      ]),
+    ).toStrictEqual([]);
   });
 
   it('should filter commits before prev (inclusive)', async () => {
-    const prev = `main---0000005-2024.04-g${commitSha()}`;
-    const next = `main---0000010-2024.04-g${commitSha()}`;
-    const prevDockerTag: DockerTag = {
-      tag: prev,
-      version: 'a',
-    };
-    const afterDockerTagCommit = commitSha();
-    const afterDockerTag: DockerTag = {
-      tag: `main---0000006-2024.04-g${afterDockerTagCommit}`,
-      version: 'e',
-    };
-
     const tags = [
-      prevDockerTag,
       {
-        tag: `main---0000004-2024.04-g${commitSha()}`,
-        version: 'b',
+        tag: `main---0000000-2024.04-g231d`,
+        version: 'd',
       },
       {
-        tag: `main---0000003-2024.04-g${commitSha()}`,
+        tag: `main---0000003-2024.04-gdebc`,
         version: 'c',
       },
       {
-        tag: `main---0000000-2024.04-g${commitSha()}`,
-        version: 'd',
+        tag: `main---0000004-2024.04-g4321`,
+        version: 'b',
       },
-      afterDockerTag,
+      {
+        tag: 'main---0000005-2024.04-g1234',
+        version: 'a',
+      },
+      {
+        tag: `main---0000006-2024.04-gdef1`,
+        version: 'e',
+      },
+      { tag: 'main---0000010-2024.04-gabcd', version: 'e' },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([
-      afterDockerTagCommit,
-    ]);
+    expect(
+      getRelevantCommits(
+        'main---0000005-2024.04-g1234',
+        'main---0000010-2024.04-gabcd',
+        tags,
+      ),
+    ).toStrictEqual(['def1']);
   });
 
   it('should filter commits after next (exclusive)', async () => {
@@ -149,7 +169,7 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         version: 'c',
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([]);
+    expect(getRelevantCommits(prev, next, tags)).toBeNull();
   });
 
   it('should return an empty list if right bound is not for `main---`', async () => {
@@ -175,7 +195,7 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         version: 'c',
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([]);
+    expect(getRelevantCommits(prev, next, tags)).toBeNull();
   });
 
   it('should dedup consecutive versions', async () => {

@@ -18,8 +18,15 @@ inputs:
     description: 'Update tracked gitConfig.ref fields'
     default: 'false'
 
+  update-docker-tags:
+    description: 'Update tracked dockerImage.tag fields'
+    default: 'false'
+
+  artifact-registry-repository:
+    description: 'If update-docker-tags or generate-promoted-commits-markdown is set, must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
+
   update-docker-tags-for-artifact-registry-repository:
-    description: 'Updated tracked dockerImage.tag fields; must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
+    description: 'DEPRECATED: equivalent to setting artifact-registry-repository and update-docker-tags'
 
   update-promoted-values:
     description: 'Process promote instructions'
@@ -31,13 +38,17 @@ inputs:
   parallelism:
     description: 'How many files to process in parallel'
     default: '1'
+  
+  generate-promoted-commits-markdown:
+    description: 'Generates the promoted-commits-markdown output'
+    default: 'false'
 
 outputs:
-  sanitized-promotion-target-regexp:
-    description: 'DEPRECATED: The promotion-target-regexp input with special characters changed to underscores; appropriate for constructing a branch name'
-
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
+  
+  promoted-commits-markdown:
+    description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set.'
 
 runs:
   using: node20

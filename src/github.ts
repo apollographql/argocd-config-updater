@@ -257,7 +257,7 @@ export class OctokitGitHubClient {
 export class CachingGitHubClient {
   constructor(
     private wrapped: GitHubClient,
-    dump?: CachingGitHubClientDump,
+    dump?: CachingGitHubClientDump | null,
   ) {
     if (dump) {
       this.getTreeSHAForPathCache.load(dump.treeSHAs);
