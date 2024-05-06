@@ -20,12 +20,10 @@ import {
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
 import { updateGitRefs } from './update-git-refs';
-import {
-  PromotedCommitsByEnvironment,
-  updatePromotedValues,
-} from './update-promoted-values';
+import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
 import { inspect } from 'util';
+import { PromotionsByTargetEnvironment } from './promotionInfo';
 
 /**
  * The main function for the action.
@@ -58,7 +56,13 @@ export async function main(): Promise<void> {
 
     let gitHubClient: GitHubClient | null = null;
     let finalizeGitHubClient: (() => Promise<void>) | null = null;
-    if (core.getBooleanInput('update-git-refs')) {
+    const generatePromotedCommitsMarkdown = core.getBooleanInput(
+      'generate-promoted-commits-markdown',
+    );
+    if (
+      core.getBooleanInput('update-git-refs') ||
+      generatePromotedCommitsMarkdown
+    ) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(
         githubToken,
@@ -137,9 +141,6 @@ export async function main(): Promise<void> {
       };
     }
 
-    const generatePromotedCommitsMarkdown = core.getBooleanInput(
-      'generate-promoted-commits-markdown',
-    );
     const doUpdateDockerTags =
       core.getBooleanInput('update-docker-tags') ||
       !!core.getInput('update-docker-tags-for-artifact-registry-repository');
@@ -156,23 +157,23 @@ export async function main(): Promise<void> {
 
     const parallelism = +core.getInput('parallelism');
     const errors: { filename: string; error: unknown }[] = [];
-    const promotedCommitsByFileThenEnvironment = new Map<
+    const promotionsByFileThenEnvironment = new Map<
       string,
-      PromotedCommitsByEnvironment
+      PromotionsByTargetEnvironment
     >();
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotedCommitsByEnvironment } = await processFile({
+        const { promotionsByTargetEnvironment } = await processFile({
           filename,
           gitHubClient,
           dockerRegistryClient,
           generatePromotedCommitsMarkdown,
           doUpdateDockerTags,
         });
-        if (promotedCommitsByEnvironment) {
-          promotedCommitsByFileThenEnvironment.set(
+        if (promotionsByTargetEnvironment) {
+          promotionsByFileThenEnvironment.set(
             shortFilename(filename),
-            promotedCommitsByEnvironment,
+            promotionsByTargetEnvironment,
           );
         }
       } catch (error) {
@@ -200,7 +201,7 @@ export async function main(): Promise<void> {
     ) {
       core.setOutput(
         'promoted-commits-markdown',
-        formatPromotedCommits(promotedCommitsByFileThenEnvironment),
+        formatPromotedCommits(promotionsByFileThenEnvironment),
       );
     }
   } catch (error) {
@@ -222,7 +223,7 @@ async function processFile(options: {
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
 }): Promise<{
-  promotedCommitsByEnvironment: PromotedCommitsByEnvironment | null;
+  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
 }> {
   const {
     filename,
@@ -232,8 +233,8 @@ async function processFile(options: {
     doUpdateDockerTags,
   } = options;
   const ret: {
-    promotedCommitsByEnvironment: PromotedCommitsByEnvironment | null;
-  } = { promotedCommitsByEnvironment: null };
+    promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
+  } = { promotionsByTargetEnvironment: null };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
   let contents = await readFile(filename, 'utf-8');
@@ -250,15 +251,16 @@ async function processFile(options: {
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-    const { newContents, promotedCommitsByEnvironment } =
+    const { newContents, promotionsByTargetEnvironment } =
       await updatePromotedValues(
         contents,
         promotionTargetRegexp || null,
         logger,
         generatePromotedCommitsMarkdown ? dockerRegistryClient : null,
+        generatePromotedCommitsMarkdown ? gitHubClient : null,
       );
     contents = newContents;
-    ret.promotedCommitsByEnvironment = promotedCommitsByEnvironment;
+    ret.promotionsByTargetEnvironment = promotionsByTargetEnvironment;
   }
 
   await writeFile(filename, contents);
@@ -328,29 +330,57 @@ async function maybeReadAPICache(
 }
 
 function formatPromotedCommits(
-  promotedCommitsByFileThenEnvironment: Map<
-    string,
-    PromotedCommitsByEnvironment
-  >,
+  promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
 ): string {
-  return [...promotedCommitsByFileThenEnvironment.entries()]
+  return [...promotionsByFileThenEnvironment.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([filename, promotedCommitsByEnvironment]) => {
+    .map(([filename, promotionsByTargetEnvironment]) => {
       const fileHeader = `* ${filename}\n`;
-      const byEnvironment = [...promotedCommitsByEnvironment.entries()]
+      const byEnvironment = [...promotionsByTargetEnvironment.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([environment, promotedCommits]) => {
-          const environmentHeader = `  - ${environment}\n`;
-          const rest = (
-            promotedCommits === null
-              ? [
-                  'This promotion is not between two known `main---` tags so the list of promoted commits cannot be determined.',
-                ]
-              : promotedCommits.length === 0
-                ? ['No commits affect this Docker image.']
-                : promotedCommits.map(({ commitURL }) => commitURL)
-          ).map((line) => `    + ${line}\n`);
-          return environmentHeader + rest.join('');
+        .map(([environment, environmentPromotions]) => {
+          const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage } =
+            environmentPromotions;
+          const lines = [`  - ${environment}\n`];
+          if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
+            lines.push(
+              `    + Changes to Docker image \`${dockerImage.repository}\`\n`,
+              ...(dockerImage.promotionInfo.type === 'no-commits'
+                ? ['No changes affect the built Docker image.']
+                : dockerImage.promotionInfo.type === 'unknown'
+                  ? [
+                      `Cannot determine set of changes to the Docker image: ${dockerImage.promotionInfo.message}`,
+                    ]
+                  : dockerImage.promotionInfo.commitSHAs.map(
+                      (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+                    )
+              ).map((line) => `      * ${line}\n`),
+            );
+          }
+          if (gitConfigPromotionInfo.type !== 'no-change') {
+            lines.push(
+              `    + Changes to Helm chart\n`,
+              ...(gitConfigPromotionInfo.type === 'no-commits'
+                ? // This one shows up when the ref changes even though there are no
+                  // new commits. This is something we do to try to make the ref
+                  // match the Docker tag, so it actually does happen frequently
+                  // (though usually only when the Docker tag is making a
+                  // substantive change) so this message might end up being a bit
+                  // spammy; we can remove it if it's not helpful.
+                  [
+                    'The git ref for the Helm chart has changed, but there are no new commits in the range.',
+                  ]
+                : gitConfigPromotionInfo.type === 'unknown'
+                  ? [
+                      `Cannot determine set of changes to the Helm chart: ${gitConfigPromotionInfo.message}`,
+                    ]
+                  : gitConfigPromotionInfo.commitSHAs.map(
+                      (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+                    )
+              ).map((line) => `      * ${line}\n`),
+            );
+          }
+          return lines.join('');
         });
       return fileHeader + byEnvironment.join('\n');
     })

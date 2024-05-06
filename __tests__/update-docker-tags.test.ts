@@ -1,6 +1,9 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { GetAllEquivalentTagsOptions } from '../src/artifactRegistry';
+import {
+  DockerRegistryClient,
+  GetAllEquivalentTagsOptions,
+} from '../src/artifactRegistry';
 import { updateDockerTags } from '../src/update-docker-tags';
 import { PrefixingLogger } from '../src/log';
 
@@ -14,7 +17,7 @@ async function fixture(filename: string): Promise<string> {
 describe('action', () => {
   it('updates docker tags', async () => {
     const contents = await fixture('sample.yaml');
-    const dockerRegistryClient = {
+    const dockerRegistryClient: DockerRegistryClient = {
       async getAllEquivalentTags({ tag }: GetAllEquivalentTagsOptions) {
         return (
           {
@@ -40,7 +43,7 @@ describe('action', () => {
         );
       },
       async getGitCommitsBetweenTags() {
-        return [];
+        return { type: 'no-commits' };
       },
     };
     const logger = PrefixingLogger.silent();

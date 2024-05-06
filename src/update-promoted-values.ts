@@ -8,28 +8,17 @@ import {
 } from './yaml';
 import { PrefixingLogger } from './log';
 import { DockerRegistryClient } from './artifactRegistry';
+import {
+  EnvironmentPromotions,
+  PromotionInfo,
+  PromotionsByTargetEnvironment,
+} from './promotionInfo';
+import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
   value: string;
 }
-
-export interface PromotedCommit {
-  /**
-   * The commit hash
-   */
-  commitSHA: string;
-  /**
-   * A link to view the commit on Github.
-   */
-  commitURL: string;
-}
-
-// Map from environment (eg `staging`) to list of promoted commits. Empty list
-// means "the tag may be changing but the image hasn't actually changed in that
-// range". Null means "we can't tell you what's promoted because it's not a
-// normal main-to-main upgrade or something".
-export type PromotedCommitsByEnvironment = Map<string, PromotedCommit[] | null>;
 
 const DEFAULT_YAML_PATHS = [
   ['gitConfig', 'ref'],
@@ -41,9 +30,10 @@ export async function updatePromotedValues(
   promotionTargetRegexp: string | null,
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
+  gitHubClient: GitHubClient | null = null,
 ): Promise<{
   newContents: string;
-  promotedCommitsByEnvironment: PromotedCommitsByEnvironment | null; // Null if empty
+  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
 }> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
@@ -58,16 +48,17 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return { newContents: contents, promotedCommitsByEnvironment: null };
+    return { newContents: contents, promotionsByTargetEnvironment: null };
   }
 
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
-  const { promotes, promotedCommitsByEnvironment } = await findPromotes(
+  const { promotes, promotionsByTargetEnvironment } = await findPromotes(
     document,
     promotionTargetRE2,
     dockerRegistryClient,
+    gitHubClient,
   );
 
   logger.info(`Promotes: ${JSON.stringify(promotes)}`);
@@ -77,27 +68,29 @@ export async function updatePromotedValues(
     scalarTokenWriter.write(value);
   }
 
-  return { newContents: stringify(), promotedCommitsByEnvironment };
+  return { newContents: stringify(), promotionsByTargetEnvironment };
 }
 
 async function findPromotes(
   document: yaml.Document.Parsed,
   promotionTargetRE2: RE2 | null,
   dockerRegistryClient: DockerRegistryClient | null,
+  gitHubClient: GitHubClient | null,
 ): Promise<{
   promotes: Promote[];
-  promotedCommitsByEnvironment: PromotedCommitsByEnvironment | null;
+  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
 }> {
   const { blocks, globalBlock } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
 
-  const promotedCommitsByEnvironment = new Map<
+  const promotionsByTargetEnvironment = new Map<
     string,
-    PromotedCommit[] | null
+    EnvironmentPromotions
   >();
 
   // This initialization is somewhat copy-pasted from updateDockerTags and updateGitRefs.
   let globalRepoURL: string | null = null;
+  let globalPath: string | null = null;
   let globalDockerImageRepository: string | null = null;
 
   if (globalBlock?.has('gitConfig')) {
@@ -106,6 +99,7 @@ async function findPromotes(
       throw Error('Document has `global.gitConfig` that is not a map');
     }
     globalRepoURL = getStringValue(gitConfigBlock, 'repoURL');
+    globalPath = getStringValue(gitConfigBlock, 'path');
   }
   if (globalBlock?.has('dockerImage')) {
     const dockerImageBlock = globalBlock.get('dockerImage');
@@ -147,6 +141,10 @@ async function findPromotes(
     const repoURL =
       (gitConfigBlock && getStringValue(gitConfigBlock, 'repoURL')) ??
       globalRepoURL;
+    const path =
+      (gitConfigBlock && getStringValue(gitConfigBlock, 'path')) ?? globalPath;
+    const trimmedRepoURL = repoURL?.replace(/(?:\.git)?\/*$/, '');
+
     const dockerImageBlock = me.get('dockerImage');
     if (dockerImageBlock && !yaml.isMap(dockerImageBlock)) {
       throw Error(`Document has \`${myName}.dockerImage\` that is not a map`);
@@ -195,6 +193,9 @@ async function findPromotes(
       }
     }
 
+    let gitConfigPromotionInfo: PromotionInfo = { type: 'no-change' };
+    let dockerImagePromotionInfo: PromotionInfo = { type: 'no-change' };
+
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
       if (typeof sourceValue !== 'string') {
@@ -215,27 +216,38 @@ async function findPromotes(
       }
 
       if (
-        collectionPath.join('.') === 'dockerImage.tag' &&
-        repoURL &&
-        dockerImageRepository &&
         typeof targetNode.value === 'string' &&
-        targetNode.value !== sourceValue &&
-        dockerRegistryClient
+        targetNode.value !== sourceValue
       ) {
-        // We're changing a value and we may be able to look up the commits we're promoting.
-        const commits = await dockerRegistryClient.getGitCommitsBetweenTags({
-          prevTag: targetNode.value,
-          nextTag: sourceValue,
-          dockerImageRepository,
-        });
-        const trimmedRepoURL = repoURL.replace(/(?:\.git)?\/*$/, '');
-        promotedCommitsByEnvironment.set(
-          myName,
-          commits?.map((commitSHA) => ({
-            commitSHA,
-            commitURL: `${trimmedRepoURL}/commit/${commitSHA}`,
-          })) ?? null,
-        );
+        if (
+          collectionPath.join('.') === 'dockerImage.tag' &&
+          dockerImageRepository &&
+          dockerRegistryClient
+        ) {
+          // We're changing a value and we may be able to look up the commits
+          // we're promoting in the Docker image.
+          dockerImagePromotionInfo =
+            await dockerRegistryClient.getGitCommitsBetweenTags({
+              prevTag: targetNode.value,
+              nextTag: sourceValue,
+              dockerImageRepository,
+            });
+        }
+
+        if (
+          collectionPath.join('.') === 'gitConfig.ref' &&
+          repoURL &&
+          path &&
+          gitHubClient
+        ) {
+          gitConfigPromotionInfo = await getGitConfigRefPromotionInfo({
+            oldRef: targetNode.value,
+            newRef: sourceValue,
+            repoURL,
+            path,
+            gitHubClient,
+          });
+        }
       }
 
       promotes.push({
@@ -243,11 +255,28 @@ async function findPromotes(
         value: sourceValue,
       });
     }
+
+    if (
+      trimmedRepoURL &&
+      (dockerImagePromotionInfo.type !== 'no-change' ||
+        gitConfigPromotionInfo.type !== 'no-change')
+    ) {
+      promotionsByTargetEnvironment.set(myName, {
+        trimmedRepoURL,
+        gitConfigPromotionInfo,
+        dockerImage: dockerImageRepository
+          ? {
+              repository: dockerImageRepository,
+              promotionInfo: dockerImagePromotionInfo,
+            }
+          : null,
+      });
+    }
   }
   return {
     promotes,
-    promotedCommitsByEnvironment: promotedCommitsByEnvironment.size
-      ? promotedCommitsByEnvironment
+    promotionsByTargetEnvironment: promotionsByTargetEnvironment.size
+      ? promotionsByTargetEnvironment
       : null,
   };
 }

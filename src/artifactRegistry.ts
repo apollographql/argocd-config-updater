@@ -4,6 +4,7 @@ import {
   protos,
 } from '@google-cloud/artifact-registry';
 import { LRUCache } from 'lru-cache';
+import { PromotionInfo, promotionInfoUnknown } from './promotionInfo';
 
 export interface GetAllEquivalentTagsOptions {
   /** The name of the specific Docker image in question (ie, a Docker
@@ -24,7 +25,7 @@ export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getGitCommitsBetweenTags(
     options: GitCommitsBetweenTagsOptions,
-  ): Promise<string[] | null>;
+  ): Promise<PromotionInfo>;
 }
 
 export class ArtifactRegistryDockerRegistryClient {
@@ -81,7 +82,7 @@ export class ArtifactRegistryDockerRegistryClient {
     prevTag: string;
     nextTag: string;
     dockerImageRepository: string;
-  }): Promise<string[] | null> {
+  }): Promise<PromotionInfo> {
     core.info(
       `running diff docker tags ${prevTag} ${nextTag} ${dockerImageRepository}`,
     );
@@ -178,7 +179,7 @@ export class CachingDockerRegistryClient {
     dump?: CachingDockerRegistryClientDump | null,
   ) {
     if (dump) {
-      this.getGitCommitsBetweenTagsCache.load(dump.gitCommitsBetweenTags);
+      this.getGitCommitsBetweenTagsCache.load(dump.promotionsBetweenTags);
     }
   }
   private getAllEquivalentTagsCache = new LRUCache<
@@ -209,29 +210,28 @@ export class CachingDockerRegistryClient {
 
   private getGitCommitsBetweenTagsCache = new LRUCache<
     string,
-    // LRUCache can't store null, so we box it.
-    { boxed: string[] | null },
+    PromotionInfo,
     GitCommitsBetweenTagsOptions
   >({
     max: 1024,
     fetchMethod: async (_key, _staleValue, { context }) => {
-      return { boxed: await this.wrapped.getGitCommitsBetweenTags(context) };
+      return await this.wrapped.getGitCommitsBetweenTags(context);
     },
   });
 
   async getGitCommitsBetweenTags(
     options: GitCommitsBetweenTagsOptions,
-  ): Promise<string[] | null> {
+  ): Promise<PromotionInfo> {
     const cached = await this.getGitCommitsBetweenTagsCache.fetch(
       JSON.stringify(options),
       { context: options },
     );
     if (!cached) {
       throw Error(
-        'getGitCommitsBetweenTagsCache.fetch should never resolve without a boxed value',
+        'getGitCommitsBetweenTagsCache.fetch should never resolve without a return value',
       );
     }
-    return cached.boxed;
+    return cached;
   }
 
   dump(): CachingDockerRegistryClientDump {
@@ -240,17 +240,12 @@ export class CachingDockerRegistryClient {
     // there aren't any force pushes to main then the set of relevant commits in
     // that range of history shouldn't change. (But don't dump
     // getAllEquivalentTagsCache since that changes over time!)
-    return { gitCommitsBetweenTags: this.getGitCommitsBetweenTagsCache.dump() };
+    return { promotionsBetweenTags: this.getGitCommitsBetweenTagsCache.dump() };
   }
 }
 
 export interface CachingDockerRegistryClientDump {
-  gitCommitsBetweenTags: [
-    string,
-    LRUCache.Entry<{
-      boxed: string[] | null;
-    }>,
-  ][];
+  promotionsBetweenTags: [string, LRUCache.Entry<PromotionInfo>][];
 }
 
 export function isCachingDockerRegistryClientDump(
@@ -259,11 +254,11 @@ export function isCachingDockerRegistryClientDump(
   if (!dump || typeof dump !== 'object') {
     return false;
   }
-  if (!('gitCommitsBetweenTags' in dump)) {
+  if (!('promotionsBetweenTags' in dump)) {
     return false;
   }
-  const { gitCommitsBetweenTags } = dump;
-  if (!Array.isArray(gitCommitsBetweenTags)) {
+  const { promotionsBetweenTags } = dump;
+  if (!Array.isArray(promotionsBetweenTags)) {
     return false;
   }
 
@@ -311,18 +306,26 @@ export function getRelevantCommits(
   prevTag: string,
   nextTag: string,
   dockerTags: DockerTag[],
-): string[] | null {
+): PromotionInfo {
   // We only want to speak authoratively about what is being promoted if both the
   // old and new tags are part of the linear `main---1234` order, and we know
   // their versions directly.
-  if (!isMainTag(prevTag)) return null;
-  if (!isMainTag(nextTag)) return null;
+  if (!isMainTag(prevTag)) {
+    return promotionInfoUnknown(
+      `Old Docker tag \`${prevTag}\` does not start with \`main---\`.`,
+    );
+  }
+  if (!isMainTag(nextTag)) {
+    return promotionInfoUnknown(
+      `New Docker tag \`${nextTag}\` does not start with \`main---\`.`,
+    );
+  }
   if (!dockerTags.some(({ tag }) => tag === nextTag)) {
-    return null;
+    return promotionInfoUnknown(`New Docker tag \`${nextTag}\` unknown.`);
   }
   const prevTagVersion = dockerTags.find(({ tag }) => tag === prevTag)?.version;
   if (prevTagVersion === undefined) {
-    return null;
+    return promotionInfoUnknown(`Old Docker tag \`${prevTag}\` unknown.`);
   }
 
   dockerTags = [...dockerTags]; // Don't mutate the argument
@@ -352,7 +355,14 @@ export function getRelevantCommits(
     deduped.push({ commit, version });
   }
   // Slice off the version that is prevTagVersion.
-  return deduped.map(({ commit }) => commit).slice(1);
+  const commitSHAs = deduped.map(({ commit }) => commit).slice(1);
+
+  return commitSHAs.length
+    ? {
+        type: 'commits',
+        commitSHAs,
+      }
+    : { type: 'no-commits' };
 }
 
 function isMainTag(tag: string): boolean {

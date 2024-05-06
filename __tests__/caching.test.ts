@@ -10,7 +10,7 @@ describe('CachingDockerRegistryClient caches', () => {
         return [(++call).toString()];
       },
       async getGitCommitsBetweenTags() {
-        return [];
+        return { type: 'no-commits' };
       },
     });
 
@@ -44,8 +44,8 @@ describe('CachingGitHubClient caches', () => {
       async getTreeSHAForPath() {
         return '';
       },
-      async compareCommits() {
-        return null;
+      async getCommitSHAsForPath() {
+        return [];
       },
     });
 
@@ -78,8 +78,8 @@ describe('CachingGitHubClient caches', () => {
       async getTreeSHAForPath() {
         return (++call).toString();
       },
-      async compareCommits() {
-        return null;
+      async getCommitSHAsForPath() {
+        return [];
       },
     });
 

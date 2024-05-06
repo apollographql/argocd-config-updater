@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { DockerTag, getRelevantCommits } from '../src/artifactRegistry';
+import { promotionInfoCommits } from '../src/promotionInfo';
 
 /**
  * Example tags from our registry:
@@ -31,7 +32,10 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
     const next = `main---0013573-2024.04-g${commitSha()}`;
     expect(
       getRelevantCommits(prev, next, [{ tag: prev, version: 'x' }]),
-    ).toBeNull();
+    ).toMatchObject({
+      type: 'unknown',
+      message: expect.stringMatching(/New Docker tag.*unknown/),
+    });
   });
 
   it('should return null when "prev" is not in tags', async () => {
@@ -39,7 +43,10 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
     const next = `main---0013573-2024.04-g${commitSha()}`;
     expect(
       getRelevantCommits(prev, next, [{ tag: next, version: 'x' }]),
-    ).toBeNull();
+    ).toMatchObject({
+      type: 'unknown',
+      message: expect.stringMatching(/Old Docker tag.*unknown/),
+    });
   });
 
   it('should return empty list when "prev" and "next" have same version', async () => {
@@ -50,7 +57,7 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         { tag: prev, version: 'x' },
         { tag: next, version: 'x' },
       ]),
-    ).toStrictEqual([]);
+    ).toStrictEqual({ type: 'no-commits' });
   });
 
   it('should filter commits before prev (inclusive)', async () => {
@@ -83,7 +90,7 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         'main---0000010-2024.04-gabcd',
         tags,
       ),
-    ).toStrictEqual(['def1']);
+    ).toStrictEqual(promotionInfoCommits(['def1']));
   });
 
   it('should filter commits after next (exclusive)', async () => {
@@ -114,7 +121,9 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         version: 'd',
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual([nextCommitSHA]);
+    expect(getRelevantCommits(prev, next, tags)).toStrictEqual(
+      promotionInfoCommits([nextCommitSHA]),
+    );
   });
 
   it('should include commits between prev and next (in sorted order) -- next is inclusive', async () => {
@@ -142,8 +151,9 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
       },
     ];
 
-    const expected = getAllHashes([tags[3], tags[2], nextDockerTag]);
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual(expected);
+    expect(getRelevantCommits(prev, next, tags)).toStrictEqual(
+      promotionInfoCommits(getAllHashes([tags[3], tags[2], nextDockerTag])),
+    );
   });
 
   it('should return an empty list if left bound is not for `main---`', async () => {
@@ -169,7 +179,12 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         version: 'c',
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toBeNull();
+    expect(getRelevantCommits(prev, next, tags)).toMatchObject({
+      type: 'unknown',
+      message: expect.stringMatching(
+        /Old Docker tag.*does not start with `main---`/,
+      ),
+    });
   });
 
   it('should return an empty list if right bound is not for `main---`', async () => {
@@ -195,7 +210,12 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
         version: 'c',
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toBeNull();
+    expect(getRelevantCommits(prev, next, tags)).toMatchObject({
+      type: 'unknown',
+      message: expect.stringMatching(
+        /New Docker tag.*does not start with `main---`/,
+      ),
+    });
   });
 
   it('should dedup consecutive versions', async () => {
@@ -254,13 +274,9 @@ describe('ArtifactRegistry.getRelevantCommits', () => {
     // We expect consecutive duplicate commit hashes to be deduped
     // However if it returns later, this could imply a revert or rollback.
     // At the moment, we just keep that in, but later we should explicitly flag as a rollback.
-    const expected = getAllHashes([
-      tags[2],
-      tags[4],
-      tags[5],
-      tags[7],
-      tags[1],
-    ]);
+    const expected = promotionInfoCommits(
+      getAllHashes([tags[2], tags[4], tags[5], tags[7], tags[1]]),
+    );
     expect(getRelevantCommits(prev, next, tags)).toStrictEqual(expected);
   });
 });
