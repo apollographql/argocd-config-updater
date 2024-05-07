@@ -12,7 +12,7 @@ inputs:
     required: true
 
   github-token:
-    description: 'GitHub token to read refs and trees; only needed if update-git-refs is set'
+    description: 'GitHub token to read refs and trees; only needed if update-git-refs or generate-promoted-commits-markdown is set'
 
   update-git-refs:
     description: 'Update tracked gitConfig.ref fields'
