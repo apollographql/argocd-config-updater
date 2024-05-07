@@ -342,9 +342,16 @@ function formatPromotedCommits(
           const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage } =
             environmentPromotions;
           const lines = [`  - ${environment}\n`];
+          let alreadyMentionedGitNoCommits = false;
           if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
+            let maybeGitConfigNoCommits = '';
+            if (gitConfigPromotionInfo.type === 'no-commits') {
+              alreadyMentionedGitNoCommits = true;
+              maybeGitConfigNoCommits =
+                ' (and the git ref for the Helm chart made a no-op change to match)';
+            }
             lines.push(
-              `    + Changes to Docker image \`${dockerImage.repository}\`\n`,
+              `    + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
               ...(dockerImage.promotionInfo.type === 'no-commits'
                 ? ['No changes affect the built Docker image.']
                 : dockerImage.promotionInfo.type === 'unknown'
@@ -357,7 +364,10 @@ function formatPromotedCommits(
               ).map((line) => `      * ${line}\n`),
             );
           }
-          if (gitConfigPromotionInfo.type !== 'no-change') {
+          if (
+            gitConfigPromotionInfo.type !== 'no-change' &&
+            !alreadyMentionedGitNoCommits
+          ) {
             lines.push(
               `    + Changes to Helm chart\n`,
               ...(gitConfigPromotionInfo.type === 'no-commits'
@@ -367,6 +377,7 @@ function formatPromotedCommits(
                   // (though usually only when the Docker tag is making a
                   // substantive change) so this message might end up being a bit
                   // spammy; we can remove it if it's not helpful.
+
                   [
                     'The git ref for the Helm chart has changed, but there are no new commits in the range.',
                   ]
