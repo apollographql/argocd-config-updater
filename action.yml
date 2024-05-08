@@ -42,6 +42,9 @@ inputs:
   generate-promoted-commits-markdown:
     description: 'Generates the promoted-commits-markdown output'
     default: 'false'
+  
+  link-template-file:
+    description: 'If provided, a path to a YAML file mapping from template names to link templates. A template is a `text` and an `url`, each of which is a list of objects, each of which is of the form `{literal: "literal text"}` or `{variable: "variable-name"}.'
 
 outputs:
   suggested-promotion-branch-name:
