@@ -59,10 +59,8 @@ export async function main(): Promise<void> {
     const generatePromotedCommitsMarkdown = core.getBooleanInput(
       'generate-promoted-commits-markdown',
     );
-    if (
-      core.getBooleanInput('update-git-refs') ||
-      generatePromotedCommitsMarkdown
-    ) {
+    const doUpdateGitRefs = core.getBooleanInput('update-git-refs');
+    if (doUpdateGitRefs || generatePromotedCommitsMarkdown) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(
         githubToken,
@@ -169,6 +167,7 @@ export async function main(): Promise<void> {
           dockerRegistryClient,
           generatePromotedCommitsMarkdown,
           doUpdateDockerTags,
+          doUpdateGitRefs,
         });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
@@ -222,6 +221,7 @@ async function processFile(options: {
   dockerRegistryClient: DockerRegistryClient | null;
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
+  doUpdateGitRefs: boolean;
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
 }> {
@@ -231,6 +231,7 @@ async function processFile(options: {
     dockerRegistryClient,
     generatePromotedCommitsMarkdown,
     doUpdateDockerTags,
+    doUpdateGitRefs,
   } = options;
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -245,7 +246,7 @@ async function processFile(options: {
 
   // The git refs depend on the docker tag potentially so we want to update it after the
   // docker tags are updated.
-  if (gitHubClient) {
+  if (gitHubClient && doUpdateGitRefs) {
     contents = await updateGitRefs(contents, gitHubClient, logger);
   }
 
