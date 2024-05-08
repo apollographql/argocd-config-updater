@@ -61,8 +61,6 @@ export async function updatePromotedValues(
     gitHubClient,
   );
 
-  logger.info(`Promotes: ${JSON.stringify(promotes)}`);
-
   logger.info('Copying values');
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
