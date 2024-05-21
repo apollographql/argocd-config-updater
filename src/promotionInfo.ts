@@ -1,3 +1,5 @@
+import { Link } from './templates';
+
 export interface PromotionInfoCommits {
   type: 'commits';
   commitSHAs: string[]; // non-empty
@@ -44,6 +46,7 @@ export interface EnvironmentPromotions {
     repository: string;
     promotionInfo: PromotionInfo;
   } | null; // null if there's no Docker image being tracked
+  links: Link[];
 }
 
 // Map from environment (eg `staging`) to EnvironmentPromotions.

@@ -1,0 +1,8 @@
+link-one:
+  text:
+    - literal: 'Link to '
+    - variable: foo
+  url:
+    - literal: 'https://some-site.example/logs/query?foo='
+    - variable: 'foo'
+    - literal: '&bar=yay'

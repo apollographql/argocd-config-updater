@@ -24,6 +24,7 @@ import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
 import { inspect } from 'util';
 import { PromotionsByTargetEnvironment } from './promotionInfo';
+import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
 
 /**
  * The main function for the action.
@@ -153,6 +154,11 @@ export async function main(): Promise<void> {
       );
     }
 
+    const linkTemplateFile = core.getInput('link-template-file');
+    const linkTemplateMap: LinkTemplateMap | null = linkTemplateFile
+      ? await readLinkTemplateMapFile(linkTemplateFile)
+      : null;
+
     const parallelism = +core.getInput('parallelism');
     const errors: { filename: string; error: unknown }[] = [];
     const promotionsByFileThenEnvironment = new Map<
@@ -168,6 +174,7 @@ export async function main(): Promise<void> {
           generatePromotedCommitsMarkdown,
           doUpdateDockerTags,
           doUpdateGitRefs,
+          linkTemplateMap,
         });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
@@ -222,6 +229,7 @@ async function processFile(options: {
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
   doUpdateGitRefs: boolean;
+  linkTemplateMap: LinkTemplateMap | null;
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
 }> {
@@ -232,6 +240,7 @@ async function processFile(options: {
     generatePromotedCommitsMarkdown,
     doUpdateDockerTags,
     doUpdateGitRefs,
+    linkTemplateMap,
   } = options;
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -259,6 +268,7 @@ async function processFile(options: {
         logger,
         generatePromotedCommitsMarkdown ? dockerRegistryClient : null,
         generatePromotedCommitsMarkdown ? gitHubClient : null,
+        linkTemplateMap,
       );
     contents = newContents;
     ret.promotionsByTargetEnvironment = promotionsByTargetEnvironment;
@@ -340,9 +350,12 @@ function formatPromotedCommits(
       const byEnvironment = [...promotionsByTargetEnvironment.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([environment, environmentPromotions]) => {
-          const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage } =
+          const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage, links } =
             environmentPromotions;
           const lines = [`  - ${environment}\n`];
+          for (const link of links) {
+            lines.push(`    + [${link.text}](${link.url})\n`);
+          }
           let alreadyMentionedGitNoCommits = false;
           if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
             let maybeGitConfigNoCommits = '';

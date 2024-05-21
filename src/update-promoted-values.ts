@@ -14,6 +14,8 @@ import {
   PromotionsByTargetEnvironment,
 } from './promotionInfo';
 import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
+import { LinkTemplateMap, renderLinkTemplate } from './templates';
+import { createHash } from 'node:crypto';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -31,6 +33,7 @@ export async function updatePromotedValues(
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
   gitHubClient: GitHubClient | null = null,
+  linkTemplateMap: LinkTemplateMap | null = null,
 ): Promise<{
   newContents: string;
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
@@ -59,6 +62,7 @@ export async function updatePromotedValues(
     promotionTargetRE2,
     dockerRegistryClient,
     gitHubClient,
+    linkTemplateMap,
   );
 
   logger.info('Copying values');
@@ -74,6 +78,7 @@ async function findPromotes(
   promotionTargetRE2: RE2 | null,
   dockerRegistryClient: DockerRegistryClient | null,
   gitHubClient: GitHubClient | null,
+  linkTemplateMap: LinkTemplateMap | null,
 ): Promise<{
   promotes: Promote[];
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -90,6 +95,7 @@ async function findPromotes(
   let globalRepoURL: string | null = null;
   let globalPath: string | null = null;
   let globalDockerImageRepository: string | null = null;
+  let globalDockerImageTag: string | null = null;
 
   if (globalBlock?.has('gitConfig')) {
     const gitConfigBlock = globalBlock.get('gitConfig');
@@ -108,6 +114,7 @@ async function findPromotes(
       dockerImageBlock,
       'repository',
     );
+    globalDockerImageTag = getStringValue(dockerImageBlock, 'tag');
   }
 
   for (const [myName, me] of blocks) {
@@ -194,6 +201,11 @@ async function findPromotes(
     let gitConfigPromotionInfo: PromotionInfo = { type: 'no-change' };
     let dockerImagePromotionInfo: PromotionInfo = { type: 'no-change' };
 
+    // Will be updated if promoted.
+    let dockerImageTag =
+      (dockerImageBlock && getStringValue(dockerImageBlock, 'tag')) ??
+      globalDockerImageTag;
+
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
       if (typeof sourceValue !== 'string') {
@@ -211,6 +223,10 @@ async function findPromotes(
         throw Error(
           `${[myName, ...collectionPath]} value must come from a scalar token`,
         );
+      }
+
+      if (collectionPath.join('.') === 'dockerImage.tag') {
+        dockerImageTag = sourceValue;
       }
 
       if (
@@ -254,11 +270,49 @@ async function findPromotes(
       });
     }
 
+    const linksSeq = promote.get('links');
+    const linkNames: string[] = [];
+    if (linksSeq) {
+      if (!yaml.isSeq(linksSeq)) {
+        throw Error(
+          `The value at ${myName}.promote.links must be an array (if provided)`,
+        );
+      }
+      const links = linksSeq.toJSON();
+      if (!Array.isArray(links)) {
+        throw Error('YAMLSeq.toJSON surprisingly did not return an array');
+      }
+      if (!links.every(isString)) {
+        throw Error(
+          `The value at ${myName}.promote.links (if provided) must be an array whose elements are strings`,
+        );
+      }
+      linkNames.push(...links);
+    }
+
     if (
       trimmedRepoURL &&
       (dockerImagePromotionInfo.type !== 'no-change' ||
         gitConfigPromotionInfo.type !== 'no-change')
     ) {
+      const templateVariables = new Map<string, string>();
+      if (linkTemplateMap && linkNames.length) {
+        if (dockerImageRepository && dockerImageTag) {
+          // This particular encoding is designed to be safe for use in a
+          // Kubernetes label, which only allows a subset of characters and has
+          // a max length of 63; it's also something that can be calculated in a
+          // Helm chart via built-in functions printf, sha256sum, and trunc.
+          templateVariables.set(
+            'docker-image-sha256-63',
+            createHash('sha256')
+              .update(`${dockerImageRepository}:${dockerImageTag}`)
+              .digest('hex')
+              .slice(0, 63),
+          );
+        } else {
+          templateVariables.set('docker-image-sha256-63', 'unknown');
+        }
+      }
       promotionsByTargetEnvironment.set(myName, {
         trimmedRepoURL,
         gitConfigPromotionInfo,
@@ -268,6 +322,18 @@ async function findPromotes(
               promotionInfo: dockerImagePromotionInfo,
             }
           : null,
+        links: linkNames.map((linkName) => {
+          if (!linkTemplateMap) {
+            throw Error(
+              `${myName}.promote.links requires the link-template-file input to be set`,
+            );
+          }
+          return renderLinkTemplate(
+            linkTemplateMap,
+            linkName,
+            templateVariables,
+          );
+        }),
       });
     }
   }
@@ -288,4 +354,8 @@ function isCollectionPath(value: unknown): value is CollectionPath {
 
 function isCollectionIndex(value: unknown): value is CollectionIndex {
   return typeof value === 'string' || typeof value === 'number';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
