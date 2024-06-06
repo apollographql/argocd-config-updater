@@ -433,16 +433,16 @@ export async function getGitConfigRefPromotionInfo(options: {
   if (oldCommitSHAs.length === 0) {
     return promotionInfoUnknown(`No commits found under ${path} at ${oldRef}.`);
   }
-  const oldCommitSHAAtPath = oldCommitSHAs[0];
+  const oldCommitSHAAtPath = oldCommitSHAs[oldCommitSHAs.length - 1];
   const oldIndexInNew = newCommitSHAs.indexOf(oldCommitSHAAtPath);
   if (oldIndexInNew === -1) {
     return promotionInfoUnknown(
       `Old commit ${oldCommitSHAAtPath} not found in recent history of ${newRef} at ${path}.`,
     );
   }
-  if (oldIndexInNew === 0) {
+  if (oldIndexInNew + 1 === newCommitSHAs.length) {
     return { type: 'no-commits' };
   }
   // Return the commits later than the old ones.
-  return promotionInfoCommits(newCommitSHAs.slice(0, oldIndexInNew));
+  return promotionInfoCommits(newCommitSHAs.slice(oldIndexInNew + 1));
 }
