@@ -235,7 +235,9 @@ export class OctokitGitHubClient {
         sha: ref,
         per_page: 100, // max allowed
       })
-    ).data.map(({ sha }) => sha);
+    ).data
+      .map(({ sha }) => sha)
+      .reverse(); // Chronological order
   }
 }
 
