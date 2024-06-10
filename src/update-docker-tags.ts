@@ -20,6 +20,7 @@ interface Trackable {
 export async function updateDockerTags(
   contents: string,
   dockerRegistryClient: DockerRegistryClient,
+  frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
 ): Promise<string> {
   const logger = _logger.withExtendedPrefix('[trackMutableTag] ');
@@ -32,7 +33,7 @@ export async function updateDockerTags(
   }
 
   logger.info('Looking for trackMutableTag');
-  const trackables = findTrackables(document);
+  const trackables = findTrackables(document, frozenEnvironments);
 
   logger.info('Checking tags against Artifact Registry');
   await checkTagsAgainstArtifactRegistryAndModifyScalars(
@@ -43,7 +44,10 @@ export async function updateDockerTags(
   return stringify();
 }
 
-function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
+function findTrackables(
+  doc: yaml.Document.Parsed,
+  frozenEnvironments: Set<string>,
+): Trackable[] {
   const trackables: Trackable[] = [];
 
   const { blocks, globalBlock } = getTopLevelBlocks(doc);
@@ -64,6 +68,10 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
   }
 
   for (const [key, value] of blocks) {
+    if (frozenEnvironments.has(key)) {
+      continue;
+    }
+
     if (!value.has('dockerImage')) {
       continue;
     }
