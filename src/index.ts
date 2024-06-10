@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as glob from '@actions/glob';
+import * as yaml from 'yaml';
 import { throttling } from '@octokit/plugin-throttling';
 import { eachLimit } from 'async';
 import { readFile, writeFile } from 'fs/promises';
@@ -159,6 +160,11 @@ export async function main(): Promise<void> {
       ? await readLinkTemplateMapFile(linkTemplateFile)
       : null;
 
+    const frozenEnvironmentsFile = core.getInput('frozen-environments-file');
+    const frozenEnvironments = frozenEnvironmentsFile
+      ? await readFrozenEnvironmentsFile(frozenEnvironmentsFile)
+      : new Set<string>();
+
     const parallelism = +core.getInput('parallelism');
     const errors: { filename: string; error: unknown }[] = [];
     const promotionsByFileThenEnvironment = new Map<
@@ -175,6 +181,7 @@ export async function main(): Promise<void> {
           doUpdateDockerTags,
           doUpdateGitRefs,
           linkTemplateMap,
+          frozenEnvironments,
         });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
@@ -230,6 +237,7 @@ async function processFile(options: {
   doUpdateDockerTags: boolean;
   doUpdateGitRefs: boolean;
   linkTemplateMap: LinkTemplateMap | null;
+  frozenEnvironments: Set<string>;
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
 }> {
@@ -241,6 +249,7 @@ async function processFile(options: {
     doUpdateDockerTags,
     doUpdateGitRefs,
     linkTemplateMap,
+    frozenEnvironments,
   } = options;
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -250,13 +259,23 @@ async function processFile(options: {
   let contents = await readFile(filename, 'utf-8');
 
   if (dockerRegistryClient && doUpdateDockerTags) {
-    contents = await updateDockerTags(contents, dockerRegistryClient, logger);
+    contents = await updateDockerTags(
+      contents,
+      dockerRegistryClient,
+      frozenEnvironments,
+      logger,
+    );
   }
 
   // The git refs depend on the docker tag potentially so we want to update it after the
   // docker tags are updated.
   if (gitHubClient && doUpdateGitRefs) {
-    contents = await updateGitRefs(contents, gitHubClient, logger);
+    contents = await updateGitRefs(
+      contents,
+      gitHubClient,
+      frozenEnvironments,
+      logger,
+    );
   }
 
   if (core.getBooleanInput('update-promoted-values')) {
@@ -265,6 +284,7 @@ async function processFile(options: {
       await updatePromotedValues(
         contents,
         promotionTargetRegexp || null,
+        frozenEnvironments,
         logger,
         generatePromotedCommitsMarkdown ? dockerRegistryClient : null,
         generatePromotedCommitsMarkdown ? gitHubClient : null,
@@ -410,6 +430,28 @@ function formatPromotedCommits(
       return fileHeader + byEnvironment.join('\n');
     })
     .join('');
+}
+
+export async function readFrozenEnvironmentsFile(
+  filename: string,
+): Promise<Set<string>> {
+  const contents = await readFile(filename, 'utf-8');
+  const parsed = yaml.parse(contents) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw Error(
+      `Frozen environments file ${filename} must be a list at the top level`,
+    );
+  }
+  const ret = new Set<string>();
+  for (const element of parsed) {
+    if (typeof element !== 'string') {
+      throw Error(
+        `All elements of top-level list in frozen environments file ${filename} must be strings`,
+      );
+    }
+    ret.add(element);
+  }
+  return ret;
 }
 
 main();

@@ -30,6 +30,7 @@ const DEFAULT_YAML_PATHS = [
 export async function updatePromotedValues(
   contents: string,
   promotionTargetRegexp: string | null,
+  frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
   gitHubClient: GitHubClient | null = null,
@@ -63,6 +64,7 @@ export async function updatePromotedValues(
     dockerRegistryClient,
     gitHubClient,
     linkTemplateMap,
+    frozenEnvironments,
   );
 
   logger.info('Copying values');
@@ -79,6 +81,7 @@ async function findPromotes(
   dockerRegistryClient: DockerRegistryClient | null,
   gitHubClient: GitHubClient | null,
   linkTemplateMap: LinkTemplateMap | null,
+  frozenEnvironments: Set<string>,
 ): Promise<{
   promotes: Promote[];
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -118,6 +121,9 @@ async function findPromotes(
   }
 
   for (const [myName, me] of blocks) {
+    if (frozenEnvironments.has(myName)) {
+      continue;
+    }
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
     }

@@ -25,6 +25,7 @@ interface Trackable {
 export async function updateGitRefs(
   contents: string,
   gitHubClient: GitHubClient,
+  frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
 ): Promise<string> {
   const logger = _logger.withExtendedPrefix('[trackMutableRef] ');
@@ -38,7 +39,7 @@ export async function updateGitRefs(
   }
 
   logger.info('Looking for trackMutableRef');
-  const trackables = findTrackables(document);
+  const trackables = findTrackables(document, frozenEnvironments);
 
   logger.info('Checking refs against GitHub');
   await checkRefsAgainstGitHubAndModifyScalars(
@@ -49,7 +50,10 @@ export async function updateGitRefs(
   return stringify();
 }
 
-function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
+function findTrackables(
+  doc: yaml.Document.Parsed,
+  frozenEnvironments: Set<string>,
+): Trackable[] {
   const trackables: Trackable[] = [];
 
   const { blocks, globalBlock } = getTopLevelBlocks(doc);
@@ -69,6 +73,10 @@ function findTrackables(doc: yaml.Document.Parsed): Trackable[] {
   }
 
   for (const [key, value] of blocks) {
+    if (frozenEnvironments.has(key)) {
+      continue;
+    }
+
     if (!value.has('gitConfig')) {
       continue;
     }

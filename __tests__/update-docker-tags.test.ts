@@ -50,13 +50,28 @@ describe('action', () => {
     const newContents = await updateDockerTags(
       contents,
       dockerRegistryClient,
+      new Set<string>(),
       logger,
     );
     expect(newContents).toMatchSnapshot();
 
     // It should be idempotent in this case.
-    expect(await updateDockerTags(contents, dockerRegistryClient, logger)).toBe(
-      newContents,
+    expect(
+      await updateDockerTags(
+        newContents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      ),
+    ).toBe(newContents);
+
+    // Update the original one but with one service frozen.
+    const frozenContents = await updateDockerTags(
+      contents,
+      dockerRegistryClient,
+      new Set<string>(['some-service-dev2']),
+      logger,
     );
+    expect(frozenContents).toMatchSnapshot();
   });
 });

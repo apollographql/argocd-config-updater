@@ -147,3 +147,48 @@ some-service-top-level:
     ref: "immutable-pr-1234-hooray"   # this should change but stay double-quoted!
 "
 `;
+
+exports[`action updates git refs 2`] = `
+"some-service-dev0:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: "immutable-pr-1234-hooray"   # this should change but stay double-quoted!
+    trackMutableRef: pr-1234
+
+some-service-dev1:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref:      'abcdef'   # this should change but stay single-quoted!
+    trackMutableRef: pr-1234
+
+some-service-staging:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    trackMutableRef: main
+
+    ref:        immutable-main-hooray  #this can stay unquoted because it won't look like a number
+
+some-service-prod:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: abcdef1234    # NO TOUCHING! No tracking.
+
+another:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: '12345678'   # this becomes a number and will definitely need to be quoted
+    trackMutableRef: make-it-numeric
+
+some-service-top-level:
+  track: pr-1234
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: "immutable-pr-1234-hooray"   # this should change but stay double-quoted!
+"
+`;
