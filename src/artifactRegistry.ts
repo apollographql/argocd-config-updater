@@ -86,12 +86,6 @@ export class ArtifactRegistryDockerRegistryClient {
     core.info(
       `running diff docker tags ${prevTag} ${nextTag} ${dockerImageRepository}`,
     );
-    // Input is relatively trusted; this is largely to prevent mistaken uses
-    // like specifying a full Docker-style repository with slashes.
-    if (dockerImageRepository.includes('/')) {
-      throw Error('repository cannot contain a slash');
-    }
-
     // Note: we don't need `listTagsAsync` (which is recommended) because we
     // only care about the first element in the result array, which is the list of tags.
     // https://github.com/googleapis/gax-nodejs/blob/main/client-libraries.md#auto-pagination
@@ -126,11 +120,6 @@ export class ArtifactRegistryDockerRegistryClient {
     dockerImageRepository,
     tag,
   }: GetAllEquivalentTagsOptions): Promise<string[]> {
-    // Input is relatively trusted; this is largely to prevent mistaken uses
-    // like specifying a full Docker-style repository with slashes.
-    if (dockerImageRepository.includes('/')) {
-      throw Error('repository cannot contain a slash');
-    }
     if (tag.includes('/')) {
       throw Error('tag cannot contain a slash');
     }
