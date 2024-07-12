@@ -98,7 +98,7 @@ export class ArtifactRegistryDockerRegistryClient {
       await this.client.listTags({
         parent: this.client.pathTemplates.packagePathTemplate.render({
           ...this.repositoryFields,
-          package: dockerImageRepository,
+          package: encodeURIComponent(dockerImageRepository),
         }),
       })
     )[0].map((iTag) => {
@@ -126,7 +126,7 @@ export class ArtifactRegistryDockerRegistryClient {
 
     const tagPath = this.client.pathTemplates.tagPathTemplate.render({
       ...this.repositoryFields,
-      package: dockerImageRepository,
+      package: encodeURIComponent(dockerImageRepository),
       tag,
     });
 
