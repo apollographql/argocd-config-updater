@@ -125,9 +125,10 @@ export async function main(): Promise<void> {
 
     let dockerRegistryClient: DockerRegistryClient | null = null;
     let finalizeDockerRegistryClient: (() => Promise<void>) | null = null;
-    const artifactRegistryRepository =
+    const artifactRegistryRepository = encodeURIComponent(
       core.getInput('artifact-registry-repository') ||
-      core.getInput('update-docker-tags-for-artifact-registry-repository');
+        core.getInput('update-docker-tags-for-artifact-registry-repository'),
+    );
     if (artifactRegistryRepository) {
       const artifactRegistryDockerRegistryClient =
         new ArtifactRegistryDockerRegistryClient(artifactRegistryRepository);
