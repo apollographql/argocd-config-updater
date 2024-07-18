@@ -225,7 +225,7 @@ async function checkRefsAgainstGitHubAndModifyScalars(
 
     if (trackedTreeSHA === null) {
       throw Error(
-        `Could not get tree SHA for ${trackedRefCommitSHA} in ${trackable.repoURL} for ref ${trackable.path}`,
+        `Could not get tree SHA for ${trackedRefCommitSHA} in ${trackable.repoURL} for path ${trackable.path}`,
       );
     }
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
