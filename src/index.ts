@@ -196,7 +196,7 @@ export async function main(): Promise<void> {
 
     const parallelism = +core.getInput('parallelism');
     const errors: {
-      error: unknown;
+      error: string;
       annotation: {
         file: string;
         startLine?: number;
@@ -230,7 +230,7 @@ export async function main(): Promise<void> {
       } catch (error) {
         if (error instanceof AnnotatedError) {
           errors.push({
-            error,
+            error: error.message,
             annotation: {
               ...error,
               file: filename,
@@ -238,7 +238,7 @@ export async function main(): Promise<void> {
           });
         } else {
           errors.push({
-            error,
+            error: inspect(error),
             annotation: {
               file: filename,
             },
@@ -251,7 +251,7 @@ export async function main(): Promise<void> {
         `Errors occurred while processing ${errors.length} file${errors.length > 1 ? 's' : ''}`,
       );
       for (const { error, annotation } of errors) {
-        core.error(`${inspect(error)}`, annotation);
+        core.error(error, annotation);
       }
     } else {
       await finalizeGitHubClient?.();
