@@ -152,8 +152,8 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
             let message = e.message;
             if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
               message =
-                'Docker image not found check the image name or tracking tags. ' +
-                'If this is a PR check that the docker image has been succesful built at least once for the PR';
+                'Docker image not found. Check the image name or tracking tags. ' +
+                'If this is a PR, check that the docker image has been successfully built at least once for the PR.';
             }
             throw new AnnotatedError(message, {
               range: trackable?.trackRange,
