@@ -138,15 +138,15 @@ export function parseYAML(contents: string): {
   // we do that by writing to the CST node found in a `srcToken` reference.
   // Finally, when we're done, we stringify the CSTs (which have been mutated)
   // rather than the ASTs (via the `stringify` function we return).
-  const topLevelTokens = [...new yaml.Parser().parse(contents)];
+  const lineCounter = new yaml.LineCounter();
+  const topLevelTokens = [
+    ...new yaml.Parser(lineCounter.addNewLine).parse(contents),
+  ];
   const documents = [
     ...new yaml.Composer({
       keepSourceTokens: true,
     }).compose(topLevelTokens),
   ];
-  // Doing an extra parse so we can char offsets to line/columns for errors.
-  const lineCounter = new yaml.LineCounter();
-  yaml.parseDocument(contents, { lineCounter });
 
   // These files are all Helm values.yaml files, and Helm doesn't support a
   // multiple-document stream (with ---) for its value files. Or well, it
