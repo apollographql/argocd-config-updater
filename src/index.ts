@@ -27,6 +27,35 @@ import { inspect } from 'util';
 import { PromotionsByTargetEnvironment } from './promotionInfo';
 import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
 
+export class AnnotatedError extends Error {
+  startLine: number | undefined;
+  startColumn: number | undefined;
+  endLine: number | undefined;
+  endColumn: number | undefined;
+
+  constructor(
+    message: string,
+    {
+      range,
+      lineCounter,
+    }: {
+      range: yaml.Range | null | undefined;
+      lineCounter: yaml.LineCounter;
+    },
+  ) {
+    super(message);
+    if (range) {
+      ({ line: this.startLine, col: this.startColumn } = lineCounter.linePos(
+        range[0],
+      ));
+      // End is exclusive, so subtract 1
+      ({ line: this.endLine, col: this.endColumn } = lineCounter.linePos(
+        range[2] - 1,
+      ));
+    }
+  }
+}
+
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -166,7 +195,16 @@ export async function main(): Promise<void> {
       : new Set<string>();
 
     const parallelism = +core.getInput('parallelism');
-    const errors: { filename: string; error: unknown }[] = [];
+    const errors: {
+      error: string;
+      annotation: {
+        file: string;
+        startLine?: number;
+        startColumn?: number;
+        endLine?: number;
+        endColumn?: number;
+      };
+    }[] = [];
     const promotionsByFileThenEnvironment = new Map<
       string,
       PromotionsByTargetEnvironment
@@ -190,15 +228,30 @@ export async function main(): Promise<void> {
           );
         }
       } catch (error) {
-        errors.push({ filename, error });
+        if (error instanceof AnnotatedError) {
+          errors.push({
+            error: error.message,
+            annotation: {
+              ...error,
+              file: filename,
+            },
+          });
+        } else {
+          errors.push({
+            error: inspect(error),
+            annotation: {
+              file: filename,
+            },
+          });
+        }
       }
     });
     if (errors.length) {
       core.setFailed(
         `Errors occurred while processing ${errors.length} file${errors.length > 1 ? 's' : ''}`,
       );
-      for (const { filename, error } of errors) {
-        core.error(`Error while processing ${filename}: ${inspect(error)}`);
+      for (const { error, annotation } of errors) {
+        core.error(error, annotation);
       }
     } else {
       await finalizeGitHubClient?.();

@@ -9,12 +9,14 @@ import {
   parseYAML,
 } from './yaml';
 import { PrefixingLogger } from './log';
+import { AnnotatedError } from './index';
 
 interface Trackable {
   trackMutableTag: string;
   dockerImageRepository: string;
   tag: string;
   tagScalarTokenWriter: ScalarTokenWriter;
+  trackRange: yaml.Range | null | undefined;
 }
 
 export async function updateDockerTags(
@@ -24,7 +26,7 @@ export async function updateDockerTags(
   _logger: PrefixingLogger,
 ): Promise<string> {
   const logger = _logger.withExtendedPrefix('[trackMutableTag] ');
-  const { document, stringify } = parseYAML(contents);
+  const { document, lineCounter, stringify } = parseYAML(contents);
 
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
@@ -33,11 +35,12 @@ export async function updateDockerTags(
   }
 
   logger.info('Looking for trackMutableTag');
-  const trackables = findTrackables(document, frozenEnvironments);
+  const trackables = findTrackables(document, frozenEnvironments, lineCounter);
 
   logger.info('Checking tags against Artifact Registry');
   await checkTagsAgainstArtifactRegistryAndModifyScalars(
     trackables,
+    lineCounter,
     dockerRegistryClient,
     logger,
   );
@@ -47,6 +50,7 @@ export async function updateDockerTags(
 function findTrackables(
   doc: yaml.Document.Parsed,
   frozenEnvironments: Set<string>,
+  lineCounter: yaml.LineCounter,
 ): Trackable[] {
   const trackables: Trackable[] = [];
 
@@ -57,7 +61,13 @@ function findTrackables(
   if (globalBlock?.has('dockerImage')) {
     const dockerImageBlock = globalBlock.get('dockerImage');
     if (!yaml.isMap(dockerImageBlock)) {
-      throw Error('Document has `global.dockerImageBlock` that is not a map');
+      throw new AnnotatedError(
+        'Document has `global.dockerImageBlock` that is not a map',
+        {
+          range: dockerImageBlock?.range,
+          lineCounter,
+        },
+      );
     }
     // Read repository from 'global' (keeping it null if it's not
     // there, though throwing if it's there as non-strings).
@@ -77,7 +87,13 @@ function findTrackables(
     }
     const dockerImageBlock = value.get('dockerImage');
     if (!yaml.isMap(dockerImageBlock)) {
-      throw Error(`Document has \`${key}.dockerImage\` that is not a map`);
+      throw new AnnotatedError(
+        `Document has \`${key}.dockerImage\` that is not a map`,
+        {
+          range: dockerImageBlock?.range,
+          lineCounter,
+        },
+      );
     }
 
     const dockerImageRepository =
@@ -86,18 +102,24 @@ function findTrackables(
     // Tracking can be specified at `dockerImage.trackMutableTag` or just at
     // `track`.
     const trackMutableTag =
-      getStringValue(dockerImageBlock, 'trackMutableTag') ??
-      getStringValue(value, 'track');
+      getStringAndScalarTokenFromMap(dockerImageBlock, 'trackMutableTag') ??
+      getStringAndScalarTokenFromMap(value, 'track');
     const tagScalarTokenAndValue = getStringAndScalarTokenFromMap(
       dockerImageBlock,
       'tag',
     );
 
-    if (trackMutableTag && dockerImageRepository && tagScalarTokenAndValue) {
+    if (
+      trackMutableTag &&
+      trackMutableTag?.value &&
+      dockerImageRepository &&
+      tagScalarTokenAndValue
+    ) {
       trackables.push({
-        trackMutableTag,
+        trackMutableTag: trackMutableTag.value,
         dockerImageRepository,
         tag: tagScalarTokenAndValue.value,
+        trackRange: trackMutableTag.range,
         tagScalarTokenWriter: new ScalarTokenWriter(
           tagScalarTokenAndValue.scalarToken,
           doc.schema,
@@ -111,6 +133,7 @@ function findTrackables(
 
 async function checkTagsAgainstArtifactRegistryAndModifyScalars(
   trackables: Trackable[],
+  lineCounter: yaml.LineCounter,
   dockerRegistryClient: DockerRegistryClient,
   logger: PrefixingLogger,
 ): Promise<void> {
@@ -118,10 +141,29 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
     const prefix = `${trackable.trackMutableTag}---`;
 
     const equivalentTags = (
-      await dockerRegistryClient.getAllEquivalentTags({
-        dockerImageRepository: trackable.dockerImageRepository,
-        tag: trackable.trackMutableTag,
-      })
+      await (async () => {
+        try {
+          return await dockerRegistryClient.getAllEquivalentTags({
+            dockerImageRepository: trackable.dockerImageRepository,
+            tag: trackable.trackMutableTag,
+          });
+        } catch (e) {
+          if (e instanceof Error) {
+            let message = e.message;
+            if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
+              message =
+                'Docker image not found. Check the image name or tracking tags. ' +
+                'If this is a PR, check that the docker image has been successfully built at least once for the PR.';
+            }
+            throw new AnnotatedError(message, {
+              range: trackable?.trackRange,
+              lineCounter,
+            });
+          } else {
+            throw e;
+          }
+        }
+      })()
     ).filter((t) => t.startsWith(prefix));
 
     // We assume that all the tags with the triple-dash in them are immutable:

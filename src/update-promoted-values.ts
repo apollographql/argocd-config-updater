@@ -16,6 +16,7 @@ import {
 import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
 import { LinkTemplateMap, renderLinkTemplate } from './templates';
 import { createHash } from 'node:crypto';
+import { AnnotatedError } from './index';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -47,7 +48,7 @@ export async function updatePromotedValues(
     ? new RE2(promotionTargetRegexp, 'u')
     : null;
 
-  const { document, stringify } = parseYAML(contents);
+  const { document, stringify, lineCounter } = parseYAML(contents);
 
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
@@ -60,6 +61,7 @@ export async function updatePromotedValues(
   logger.info('Looking for promote');
   const { promotes, promotionsByTargetEnvironment } = await findPromotes(
     document,
+    lineCounter,
     promotionTargetRE2,
     dockerRegistryClient,
     gitHubClient,
@@ -77,6 +79,7 @@ export async function updatePromotedValues(
 
 async function findPromotes(
   document: yaml.Document.Parsed,
+  lineCounter: yaml.LineCounter,
   promotionTargetRE2: RE2 | null,
   dockerRegistryClient: DockerRegistryClient | null,
   gitHubClient: GitHubClient | null,
@@ -103,7 +106,13 @@ async function findPromotes(
   if (globalBlock?.has('gitConfig')) {
     const gitConfigBlock = globalBlock.get('gitConfig');
     if (!yaml.isMap(gitConfigBlock)) {
-      throw Error('Document has `global.gitConfig` that is not a map');
+      throw new AnnotatedError(
+        'Document has `global.gitConfig` that is not a map',
+        {
+          range: gitConfigBlock?.range,
+          lineCounter,
+        },
+      );
     }
     globalRepoURL = getStringValue(gitConfigBlock, 'repoURL');
     globalPath = getStringValue(gitConfigBlock, 'path');
@@ -111,7 +120,13 @@ async function findPromotes(
   if (globalBlock?.has('dockerImage')) {
     const dockerImageBlock = globalBlock.get('dockerImage');
     if (!yaml.isMap(dockerImageBlock)) {
-      throw Error('Document has `global.dockerImageBlock` that is not a map');
+      throw new AnnotatedError(
+        'Document has `global.dockerImageBlock` that is not a map',
+        {
+          range: dockerImageBlock?.range,
+          lineCounter,
+        },
+      );
     }
     globalDockerImageRepository = getStringValue(
       dockerImageBlock,
@@ -132,22 +147,41 @@ async function findPromotes(
     }
     const promote = me.get('promote');
     if (!yaml.isMap(promote)) {
-      throw Error(`The value at ${myName}.promote must be a map`);
+      throw new AnnotatedError(`The value at ${myName}.promote must be a map`, {
+        range: promote?.range,
+        lineCounter,
+      });
     }
     const from = promote.get('from');
     if (typeof from !== 'string') {
-      throw Error(`The value at ${myName}.promote.from must be a string`);
+      throw new AnnotatedError(
+        `The value at ${myName}.promote.from must be a string`,
+        {
+          range: from?.range,
+          lineCounter,
+        },
+      );
     }
     const fromBlock = blocks.get(from);
     if (!fromBlock) {
-      throw Error(
+      throw new AnnotatedError(
         `The value at ${myName}.promote.from must reference a top-level key with map value`,
+        {
+          range: promote?.range,
+          lineCounter,
+        },
       );
     }
 
     const gitConfigBlock = me.get('gitConfig');
     if (gitConfigBlock && !yaml.isMap(gitConfigBlock)) {
-      throw Error(`Document has \`${myName}.gitConfig\` that is not a map`);
+      throw new AnnotatedError(
+        `Document has \`${myName}.gitConfig\` that is not a map`,
+        {
+          range: gitConfigBlock?.range,
+          lineCounter,
+        },
+      );
     }
     const repoURL =
       (gitConfigBlock && getStringValue(gitConfigBlock, 'repoURL')) ??
@@ -158,7 +192,13 @@ async function findPromotes(
 
     const dockerImageBlock = me.get('dockerImage');
     if (dockerImageBlock && !yaml.isMap(dockerImageBlock)) {
-      throw Error(`Document has \`${myName}.dockerImage\` that is not a map`);
+      throw new AnnotatedError(
+        `Document has \`${myName}.dockerImage\` that is not a map`,
+        {
+          range: dockerImageBlock?.range,
+          lineCounter,
+        },
+      );
     }
     const dockerImageRepository =
       (dockerImageBlock && getStringValue(dockerImageBlock, 'repository')) ??
@@ -168,17 +208,31 @@ async function findPromotes(
     if (promote.has('yamlPaths')) {
       const yamlPathsSeq = promote.get('yamlPaths');
       if (!yaml.isSeq(yamlPathsSeq)) {
-        throw Error(
+        throw new AnnotatedError(
           `The value at ${myName}.promote.yamlPaths must be an array`,
+          {
+            range: yamlPathsSeq?.range,
+            lineCounter,
+          },
         );
       }
       const explicitYamlPaths = yamlPathsSeq.toJSON();
       if (!Array.isArray(explicitYamlPaths)) {
-        throw Error('YAMLSeq.toJSON surprisingly did not return an array');
+        throw new AnnotatedError(
+          'YAMLSeq.toJSON surprisingly did not return an array',
+          {
+            range: yamlPathsSeq?.range,
+            lineCounter,
+          },
+        );
       }
       if (!explicitYamlPaths.every(isCollectionPath)) {
-        throw Error(
+        throw new AnnotatedError(
           `The value at ${myName}.promote.yamlPaths must be an array whose elements are arrays of strings or numbers`,
+          {
+            range: yamlPathsSeq?.range,
+            lineCounter,
+          },
         );
       }
       yamlPaths.push(...explicitYamlPaths);

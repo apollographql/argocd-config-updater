@@ -92,7 +92,11 @@ export function getStringValue(node: yaml.YAMLMap, key: string): string | null {
 export function getStringAndScalarTokenFromMap(
   node: yaml.YAMLMap,
   key: string,
-): { scalarToken: CSTScalarToken; value: string } | null {
+): {
+  scalarToken: CSTScalarToken;
+  value: string;
+  range?: yaml.Range | null | undefined;
+} | null {
   if (!node.has(key)) {
     return null;
   }
@@ -108,12 +112,13 @@ export function getStringAndScalarTokenFromMap(
   if (typeof scalar.value !== 'string') {
     throw Error(`${key} value must be a string`);
   }
-  return { scalarToken, value: scalar.value };
+  return { scalarToken, value: scalar.value, range: scalar.range };
 }
 
 export function parseYAML(contents: string): {
   document: yaml.Document.Parsed | null;
   stringify: () => string;
+  lineCounter: yaml.LineCounter;
 } {
   // The yaml module lets us parse YAML into three layers of abstraction:
   // - It can create raw JS arrays/objects/etc, which is simple to dealing
@@ -133,9 +138,14 @@ export function parseYAML(contents: string): {
   // we do that by writing to the CST node found in a `srcToken` reference.
   // Finally, when we're done, we stringify the CSTs (which have been mutated)
   // rather than the ASTs (via the `stringify` function we return).
-  const topLevelTokens = [...new yaml.Parser().parse(contents)];
+  const lineCounter = new yaml.LineCounter();
+  const topLevelTokens = [
+    ...new yaml.Parser(lineCounter.addNewLine).parse(contents),
+  ];
   const documents = [
-    ...new yaml.Composer({ keepSourceTokens: true }).compose(topLevelTokens),
+    ...new yaml.Composer({
+      keepSourceTokens: true,
+    }).compose(topLevelTokens),
   ];
 
   // These files are all Helm values.yaml files, and Helm doesn't support a
@@ -151,6 +161,7 @@ export function parseYAML(contents: string): {
   if (documents.length < 1) {
     return {
       document: null,
+      lineCounter,
       stringify() {
         return '';
       },
@@ -165,6 +176,7 @@ export function parseYAML(contents: string): {
 
   return {
     document,
+    lineCounter,
     stringify() {
       return topLevelTokens
         .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
