@@ -427,7 +427,11 @@ function formatPromotedCommits(
             environmentPromotions;
           const lines = [`  - ${environment}\n`];
           for (const link of links) {
-            lines.push(`    + [${link.text}](${link.url})\n`);
+            if (link.url) {
+              lines.push(`    + [${link.text}](${link.url})\n`);
+            } else {
+              lines.push(`    + ${link.text}\n`);
+            }
           }
           let alreadyMentionedGitNoCommits = false;
           if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
