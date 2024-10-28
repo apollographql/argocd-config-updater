@@ -13,12 +13,12 @@ export type TemplatePart = TemplateLiteral | TemplateVariable;
 
 export interface LinkTemplate {
   text: TemplatePart[];
-  url: TemplatePart[];
+  url?: TemplatePart[];
 }
 
 export interface Link {
   text: string;
-  url: string;
+  url?: string;
 }
 
 export type LinkTemplateMap = Map<string, LinkTemplate>;
@@ -50,10 +50,11 @@ export function renderLinkTemplate(
   if (!template) {
     throw Error(`Unknown template ${name}`);
   }
-  return {
-    text: renderTemplate(template.text, variables),
-    url: renderTemplate(template.url, variables),
-  };
+  const text = renderTemplate(template.text, variables);
+  if (template.url) {
+    return { text, url: renderTemplate(template.url, variables) };
+  }
+  return { text };
 }
 
 export async function readLinkTemplateMapFile(
@@ -70,21 +71,22 @@ export async function readLinkTemplateMapFile(
     if (typeof parsedLinkTemplate !== 'object' || parsedLinkTemplate === null) {
       throw Error(`Template ${name} in ${filename} must be a map`);
     }
-    if (!('text' in parsedLinkTemplate && 'url' in parsedLinkTemplate)) {
-      throw Error(
-        `Template ${name} in ${filename} must contain 'text' and 'url' keys`,
-      );
+    if (!('text' in parsedLinkTemplate)) {
+      throw Error(`Template ${name} in ${filename} must contain a 'text' key`);
     }
-    templateMap.set(name, {
-      text: ensureTemplate(
-        parsedLinkTemplate.text,
-        `Template ${name}.text in ${filename}`,
-      ),
-      url: ensureTemplate(
-        parsedLinkTemplate.url,
-        `Template ${name}.url in ${filename}`,
-      ),
-    });
+    const text = ensureTemplate(
+      parsedLinkTemplate.text,
+      `Template ${name}.text in ${filename}`,
+    );
+    const url =
+      'url' in parsedLinkTemplate
+        ? ensureTemplate(
+            parsedLinkTemplate.url,
+            `Template ${name}.url in ${filename}`,
+          )
+        : undefined;
+
+    templateMap.set(name, { text, url });
   }
   return templateMap;
 }
