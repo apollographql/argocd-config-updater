@@ -413,7 +413,7 @@ async function maybeReadAPICache(
   };
 }
 
-function formatPromotedCommits(
+export function formatPromotedCommits(
   promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
 ): string {
   return [...promotionsByFileThenEnvironment.entries()]
@@ -422,15 +422,15 @@ function formatPromotedCommits(
       const fileHeader = `* ${filename}\n`;
       const byEnvironment = [...promotionsByTargetEnvironment.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([environment, environmentPromotions]) => {
+        .map(([, environmentPromotions]) => {
           const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage, links } =
             environmentPromotions;
-          const lines = [`  - ${environment}\n`];
+          const lines = [];
           for (const link of links) {
             if (link.url) {
-              lines.push(`    + [${link.text}](${link.url})\n`);
+              lines.push(`  + [${link.text}](${link.url})\n`);
             } else {
-              lines.push(`    + ${link.text}\n`);
+              lines.push(`  + ${link.text}\n`);
             }
           }
           let alreadyMentionedGitNoCommits = false;
@@ -439,10 +439,10 @@ function formatPromotedCommits(
             if (gitConfigPromotionInfo.type === 'no-commits') {
               alreadyMentionedGitNoCommits = true;
               maybeGitConfigNoCommits =
-                ' (and the git ref for the Helm chart made a no-op change to match)';
+                ' (and the Helm chart had a no-op change to match)';
             }
             lines.push(
-              `    + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
+              `  + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
               ...(dockerImage.promotionInfo.type === 'no-commits'
                 ? ['No changes affect the built Docker image.']
                 : dockerImage.promotionInfo.type === 'unknown'
@@ -452,7 +452,7 @@ function formatPromotedCommits(
                   : dockerImage.promotionInfo.commitSHAs.map(
                       (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
                     )
-              ).map((line) => `      * ${line}\n`),
+              ).map((line) => `    * ${line}\n`),
             );
           }
           if (
@@ -460,7 +460,7 @@ function formatPromotedCommits(
             !alreadyMentionedGitNoCommits
           ) {
             lines.push(
-              `    + Changes to Helm chart\n`,
+              `  + Changes to Helm chart\n`,
               ...(gitConfigPromotionInfo.type === 'no-commits'
                 ? // This one shows up when the ref changes even though there are no
                   // new commits. This is something we do to try to make the ref
@@ -479,7 +479,7 @@ function formatPromotedCommits(
                   : gitConfigPromotionInfo.commitSHAs.map(
                       (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
                     )
-              ).map((line) => `      * ${line}\n`),
+              ).map((line) => `    * ${line}\n`),
             );
           }
           return lines.join('');
