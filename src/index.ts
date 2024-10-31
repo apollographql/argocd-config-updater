@@ -68,7 +68,7 @@ export async function main(): Promise<void> {
 
     core.setOutput(
       'suggested-promotion-branch-name',
-      `${core.getInput('promotion-target-regexp')}_${core.getInput('files')}`.replaceAll(
+      `${core.getInput('promotion-target')}_${core.getInput('files')}`.replaceAll(
         /[^-a-zA-Z0-9._]/g,
         '_',
       ),
@@ -332,11 +332,11 @@ async function processFile(options: {
   }
 
   if (core.getBooleanInput('update-promoted-values')) {
-    const promotionTargetRegexp = core.getInput('promotion-target-regexp');
+    const promotionTarget = core.getInput('promotion-target');
     const { newContents, promotionsByTargetEnvironment } =
       await updatePromotedValues(
         contents,
-        promotionTargetRegexp || null,
+        promotionTarget || null,
         frozenEnvironments,
         logger,
         generatePromotedCommitsMarkdown ? dockerRegistryClient : null,

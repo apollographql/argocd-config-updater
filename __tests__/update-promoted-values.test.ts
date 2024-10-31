@@ -17,7 +17,7 @@ describe('action', () => {
     const contents = await fixture('sample.yaml');
     const { newContents } = await updatePromotedValues(
       contents,
-      'prod',
+      'some-service-prod',
       new Set<string>(),
       logger,
     );
@@ -26,7 +26,7 @@ describe('action', () => {
     // It should be idempotent in this case.
     const { newContents: actual } = await updatePromotedValues(
       newContents,
-      'prod',
+      'some-service-prod',
       new Set<string>(),
       logger,
     );

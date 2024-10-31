@@ -1,4 +1,3 @@
-import { RE2 } from 're2-wasm';
 import * as yaml from 'yaml';
 import {
   ScalarTokenWriter,
@@ -30,7 +29,7 @@ const DEFAULT_YAML_PATHS = [
 
 export async function updatePromotedValues(
   contents: string,
-  promotionTargetRegexp: string | null,
+  promotionTarget: string | null,
   frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
   dockerRegistryClient: DockerRegistryClient | null = null,
@@ -41,12 +40,6 @@ export async function updatePromotedValues(
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
 }> {
   const logger = _logger.withExtendedPrefix('[promote] ');
-
-  // We use re2-wasm instead of built-in RegExp so we don't have to worry about
-  // REDOS attacks.
-  const promotionTargetRE2 = promotionTargetRegexp
-    ? new RE2(promotionTargetRegexp, 'u')
-    : null;
 
   const { document, stringify, lineCounter } = parseYAML(contents);
 
@@ -62,7 +55,7 @@ export async function updatePromotedValues(
   const { promotes, promotionsByTargetEnvironment } = await findPromotes(
     document,
     lineCounter,
-    promotionTargetRE2,
+    promotionTarget,
     dockerRegistryClient,
     gitHubClient,
     linkTemplateMap,
@@ -80,7 +73,7 @@ export async function updatePromotedValues(
 async function findPromotes(
   document: yaml.Document.Parsed,
   lineCounter: yaml.LineCounter,
-  promotionTargetRE2: RE2 | null,
+  promotionTarget: string | null,
   dockerRegistryClient: DockerRegistryClient | null,
   gitHubClient: GitHubClient | null,
   linkTemplateMap: LinkTemplateMap | null,
@@ -139,7 +132,9 @@ async function findPromotes(
     if (frozenEnvironments.has(myName)) {
       continue;
     }
-    if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
+    console.log('promotionTarget', promotionTarget);
+    console.log('myName', myName);
+    if (promotionTarget && promotionTarget !== myName) {
       continue;
     }
     if (!me.has('promote')) {

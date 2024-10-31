@@ -16,7 +16,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "bundle": "npm run format:write && rm -rf dist && mkdir dist && npm run copy-wasm && npm run package",
+    "bundle": "npm run format:write && rm -rf dist && mkdir dist && npm run package",
     "ci-test": "jest",
     "format:write": "prettier --write **/*.ts",
     "format:check": "prettier --check **/*.ts",
@@ -24,8 +24,7 @@
     "package": "ncc build src/index.ts --license licenses.txt",
     "package:watch": "npm run package -- --watch",
     "test": "jest",
-    "all": "npm run format:write && npm run lint && npm run test && npm run copy-wasm && npm run package",
-    "copy-wasm": "cp node_modules/re2-wasm/build/wasm/re2.wasm dist/re2.wasm"
+    "all": "npm run format:write && npm run lint && npm run test && npm run package"
   },
   "license": "MIT",
   "jest": {
@@ -57,7 +56,6 @@
     "async": "^3.2.5",
     "lodash": "^4.17.21",
     "lru-cache": "^10.2.0",
-    "re2-wasm": "^1.0.2",
     "yaml": "^2.3.4"
   },
   "devDependencies": {

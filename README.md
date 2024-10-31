@@ -158,7 +158,7 @@ You should run the `google-github-actions/auth` action before this one.
 
 Top-level sections can have a `promote` block with a `from` key naming a
 different top-level section. If the action is run with `update-promoted-values`
-set (and, if provided, `promotion-target-regexp` matches the section's name),
+set (and, if provided, `promotion-target` matches the section's name),
 then the automation will copy values from the other block to the target block.
 By default, the copied values are `gitConfig.ref` and `dockerImage.tag`; you can
 specify a different set of paths via `promote.yamlPaths`. This is applied after
