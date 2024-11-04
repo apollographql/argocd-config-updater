@@ -42,6 +42,7 @@ const applications: ApplicationTestData[] = [
     commits: ['bbb111222333444555666777888999000111222'],
   },
 ];
+
 export function createTestPromotionMap(): PromotionsByFile {
   const byFile: PromotionsByFile = new Map();
 
