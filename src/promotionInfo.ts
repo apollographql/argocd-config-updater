@@ -40,6 +40,7 @@ export type PromotionInfo =
   | PromotionInfoUnknown;
 
 export interface EnvironmentPromotions {
+  environment: string;
   trimmedRepoURL: string;
   gitConfigPromotionInfo: PromotionInfo;
   dockerImage: {
@@ -48,6 +49,5 @@ export interface EnvironmentPromotions {
   } | null; // null if there's no Docker image being tracked
   links: Link[];
 }
-
-// Map from environment (eg `staging`) to EnvironmentPromotions.
-export type PromotionsByTargetEnvironment = Map<string, EnvironmentPromotions>;
+// Map from application-values filenames to EnvironmentPromotions.
+export type PromotionsByFile = Map<string, EnvironmentPromotions[]>;

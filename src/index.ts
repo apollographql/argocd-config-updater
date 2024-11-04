@@ -24,7 +24,7 @@ import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
 import { inspect } from 'util';
-import { PromotionsByTargetEnvironment } from './promotionInfo';
+import { EnvironmentPromotions, PromotionsByFile } from './promotionInfo';
 import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
 
 export class AnnotatedError extends Error {
@@ -205,13 +205,11 @@ export async function main(): Promise<void> {
         endColumn?: number;
       };
     }[] = [];
-    const promotionsByFileThenEnvironment = new Map<
-      string,
-      PromotionsByTargetEnvironment
-    >();
+
+    const promotionsByFile: PromotionsByFile = new Map();
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotionsByTargetEnvironment } = await processFile({
+        const { environmentPromotions: promotions } = await processFile({
           filename,
           gitHubClient,
           dockerRegistryClient,
@@ -221,11 +219,8 @@ export async function main(): Promise<void> {
           linkTemplateMap,
           frozenEnvironments,
         });
-        if (promotionsByTargetEnvironment) {
-          promotionsByFileThenEnvironment.set(
-            shortFilename(filename),
-            promotionsByTargetEnvironment,
-          );
+        if (promotions) {
+          promotionsByFile.set(shortFilename(filename), [promotions]);
         }
       } catch (error) {
         if (error instanceof AnnotatedError) {
@@ -267,7 +262,7 @@ export async function main(): Promise<void> {
     ) {
       core.setOutput(
         'promoted-commits-markdown',
-        formatPromotedCommits(promotionsByFileThenEnvironment),
+        formatPromotedCommits(promotionsByFile),
       );
     }
   } catch (error) {
@@ -292,7 +287,7 @@ async function processFile(options: {
   linkTemplateMap: LinkTemplateMap | null;
   frozenEnvironments: Set<string>;
 }): Promise<{
-  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
+  environmentPromotions: EnvironmentPromotions | null;
 }> {
   const {
     filename,
@@ -305,8 +300,8 @@ async function processFile(options: {
     frozenEnvironments,
   } = options;
   const ret: {
-    promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
-  } = { promotionsByTargetEnvironment: null };
+    environmentPromotions: EnvironmentPromotions | null;
+  } = { environmentPromotions: null };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
   let contents = await readFile(filename, 'utf-8');
@@ -333,18 +328,17 @@ async function processFile(options: {
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTarget = core.getInput('promotion-target');
-    const { newContents, promotionsByTargetEnvironment } =
-      await updatePromotedValues(
-        contents,
-        promotionTarget || null,
-        frozenEnvironments,
-        logger,
-        generatePromotedCommitsMarkdown ? dockerRegistryClient : null,
-        generatePromotedCommitsMarkdown ? gitHubClient : null,
-        linkTemplateMap,
-      );
+    const { newContents, environmentPromotions } = await updatePromotedValues(
+      contents,
+      promotionTarget || null,
+      frozenEnvironments,
+      logger,
+      generatePromotedCommitsMarkdown ? dockerRegistryClient : null,
+      generatePromotedCommitsMarkdown ? gitHubClient : null,
+      linkTemplateMap,
+    );
     contents = newContents;
-    ret.promotionsByTargetEnvironment = promotionsByTargetEnvironment;
+    ret.environmentPromotions = environmentPromotions;
   }
 
   await writeFile(filename, contents);
@@ -414,77 +408,79 @@ async function maybeReadAPICache(
 }
 
 export function formatPromotedCommits(
-  promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
+  promotionsByFile: PromotionsByFile,
 ): string {
-  return [...promotionsByFileThenEnvironment.entries()]
+  return [...promotionsByFile.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([filename, promotionsByTargetEnvironment]) => {
+    .map(([filename, promotions]) => {
       const fileHeader = `* ${filename}\n`;
-      const byEnvironment = [...promotionsByTargetEnvironment.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, environmentPromotions]) => {
-          const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage, links } =
-            environmentPromotions;
-          const lines = [];
-          for (const link of links) {
-            if (link.url) {
-              lines.push(`  + [${link.text}](${link.url})\n`);
-            } else {
-              lines.push(`  + ${link.text}\n`);
-            }
-          }
-          let alreadyMentionedGitNoCommits = false;
-          if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
-            let maybeGitConfigNoCommits = '';
-            if (gitConfigPromotionInfo.type === 'no-commits') {
-              alreadyMentionedGitNoCommits = true;
-              maybeGitConfigNoCommits =
-                ' (and the Helm chart had a no-op change to match)';
-            }
-            lines.push(
-              `  + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
-              ...(dockerImage.promotionInfo.type === 'no-commits'
-                ? ['No changes affect the built Docker image.']
-                : dockerImage.promotionInfo.type === 'unknown'
-                  ? [
-                      `Cannot determine set of changes to the Docker image: ${dockerImage.promotionInfo.message}`,
-                    ]
-                  : dockerImage.promotionInfo.commitSHAs.map(
-                      (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
-                    )
-              ).map((line) => `    * ${line}\n`),
-            );
-          }
-          if (
-            gitConfigPromotionInfo.type !== 'no-change' &&
-            !alreadyMentionedGitNoCommits
-          ) {
-            lines.push(
-              `  + Changes to Helm chart\n`,
-              ...(gitConfigPromotionInfo.type === 'no-commits'
-                ? // This one shows up when the ref changes even though there are no
-                  // new commits. This is something we do to try to make the ref
-                  // match the Docker tag, so it actually does happen frequently
-                  // (though usually only when the Docker tag is making a
-                  // substantive change) so this message might end up being a bit
-                  // spammy; we can remove it if it's not helpful.
+      const appUpdateDescription = promotions.map((promotion) => {
+        const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage, links } =
+          promotion;
+        const lines = [];
 
-                  [
-                    'The git ref for the Helm chart has changed, but there are no new commits in the range.',
-                  ]
-                : gitConfigPromotionInfo.type === 'unknown'
-                  ? [
-                      `Cannot determine set of changes to the Helm chart: ${gitConfigPromotionInfo.message}`,
-                    ]
-                  : gitConfigPromotionInfo.commitSHAs.map(
-                      (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
-                    )
-              ).map((line) => `    * ${line}\n`),
-            );
+        for (const link of links) {
+          if (link.url) {
+            lines.push(`  + [${link.text}](${link.url})\n`);
+          } else {
+            lines.push(`  + ${link.text}\n`);
           }
-          return lines.join('');
-        });
-      return fileHeader + byEnvironment.join('\n');
+        }
+
+        let alreadyMentionedGitNoCommits = false;
+        if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
+          let maybeGitConfigNoCommits = '';
+          if (gitConfigPromotionInfo.type === 'no-commits') {
+            alreadyMentionedGitNoCommits = true;
+            maybeGitConfigNoCommits =
+              ' (and the Helm chart had a no-op change to match)';
+          }
+          lines.push(
+            `  + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
+            ...(dockerImage.promotionInfo.type === 'no-commits'
+              ? ['No changes affect the built Docker image.']
+              : dockerImage.promotionInfo.type === 'unknown'
+                ? [
+                    `Cannot determine set of changes to the Docker image: ${dockerImage.promotionInfo.message}`,
+                  ]
+                : dockerImage.promotionInfo.commitSHAs.map(
+                    (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+                  )
+            ).map((line) => `    * ${line}\n`),
+          );
+        }
+
+        if (
+          gitConfigPromotionInfo.type !== 'no-change' &&
+          !alreadyMentionedGitNoCommits
+        ) {
+          lines.push(
+            ` + Changes to Helm chart\n`,
+            ...(gitConfigPromotionInfo.type === 'no-commits'
+              ? // This one shows up when the ref changes even though there are no
+                // new commits. This is something we do to try to make the ref
+                // match the Docker tag, so it actually does happen frequently
+                // (though usually only when the Docker tag is making a
+                // substantive change) so this message might end up being a bit
+                // spammy; we can remove it if it's not helpful.
+
+                [
+                  'The git ref for the Helm chart has changed, but there are no new commits in the range.',
+                ]
+              : gitConfigPromotionInfo.type === 'unknown'
+                ? [
+                    `Cannot determine set of changes to the Helm chart: ${gitConfigPromotionInfo.message}`,
+                  ]
+                : gitConfigPromotionInfo.commitSHAs.map(
+                    (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+                  )
+            ).map((line) => `    * ${line}\n`),
+          );
+        }
+
+        return lines.join('');
+      });
+      return fileHeader + appUpdateDescription.join('\n');
     })
     .join('');
 }

@@ -7,11 +7,7 @@ import {
 } from './yaml';
 import { PrefixingLogger } from './log';
 import { DockerRegistryClient } from './artifactRegistry';
-import {
-  EnvironmentPromotions,
-  PromotionInfo,
-  PromotionsByTargetEnvironment,
-} from './promotionInfo';
+import { EnvironmentPromotions, PromotionInfo } from './promotionInfo';
 import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
 import { LinkTemplateMap, renderLinkTemplate } from './templates';
 import { createHash } from 'node:crypto';
@@ -37,7 +33,7 @@ export async function updatePromotedValues(
   linkTemplateMap: LinkTemplateMap | null = null,
 ): Promise<{
   newContents: string;
-  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
+  environmentPromotions: EnvironmentPromotions | null;
 }> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
@@ -46,13 +42,13 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return { newContents: contents, promotionsByTargetEnvironment: null };
+    return { newContents: contents, environmentPromotions: null };
   }
 
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
-  const { promotes, promotionsByTargetEnvironment } = await findPromotes(
+  const { promotes, environmentPromotions } = await findPromotes(
     document,
     lineCounter,
     promotionTarget,
@@ -67,7 +63,7 @@ export async function updatePromotedValues(
     scalarTokenWriter.write(value);
   }
 
-  return { newContents: stringify(), promotionsByTargetEnvironment };
+  return { newContents: stringify(), environmentPromotions };
 }
 
 async function findPromotes(
@@ -80,15 +76,12 @@ async function findPromotes(
   frozenEnvironments: Set<string>,
 ): Promise<{
   promotes: Promote[];
-  promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
+  environmentPromotions: EnvironmentPromotions | null;
 }> {
   const { blocks, globalBlock } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
 
-  const promotionsByTargetEnvironment = new Map<
-    string,
-    EnvironmentPromotions
-  >();
+  let environmentPromotions: EnvironmentPromotions | null = null;
 
   // This initialization is somewhat copy-pasted from updateDockerTags and updateGitRefs.
   let globalRepoURL: string | null = null;
@@ -132,8 +125,6 @@ async function findPromotes(
     if (frozenEnvironments.has(myName)) {
       continue;
     }
-    console.log('promotionTarget', promotionTarget);
-    console.log('myName', myName);
     if (promotionTarget && promotionTarget !== myName) {
       continue;
     }
@@ -368,7 +359,8 @@ async function findPromotes(
           templateVariables.set('docker-image-sha256-63', 'unknown');
         }
       }
-      promotionsByTargetEnvironment.set(myName, {
+      environmentPromotions = {
+        environment: myName,
         trimmedRepoURL,
         gitConfigPromotionInfo,
         dockerImage: dockerImageRepository
@@ -389,14 +381,12 @@ async function findPromotes(
             templateVariables,
           );
         }),
-      });
+      };
     }
   }
   return {
     promotes,
-    promotionsByTargetEnvironment: promotionsByTargetEnvironment.size
-      ? promotionsByTargetEnvironment
-      : null,
+    environmentPromotions,
   };
 }
 

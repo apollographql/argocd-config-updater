@@ -1,6 +1,6 @@
 import {
-  PromotionsByTargetEnvironment,
   EnvironmentPromotions,
+  PromotionsByFile,
 } from '../../src/promotionInfo';
 
 interface ApplicationTestData {
@@ -42,16 +42,12 @@ const applications: ApplicationTestData[] = [
     commits: ['bbb111222333444555666777888999000111222'],
   },
 ];
-export function createTestPromotionMap(): Map<
-  string,
-  PromotionsByTargetEnvironment
-> {
-  const testMap = new Map<string, PromotionsByTargetEnvironment>();
+export function createTestPromotionMap(): PromotionsByFile {
+  const byFile: PromotionsByFile = new Map();
 
   for (const app of applications) {
-    const promotions: PromotionsByTargetEnvironment = new Map();
-
-    const envPromotions: EnvironmentPromotions = {
+    const promotion: EnvironmentPromotions = {
+      environment: 'dev',
       trimmedRepoURL: 'https://github.com/example/test-repo',
       gitConfigPromotionInfo: {
         type: 'no-commits',
@@ -68,9 +64,8 @@ export function createTestPromotionMap(): Map<
       links: [],
     };
 
-    promotions.set('prod', envPromotions);
-    testMap.set(app.file, promotions);
+    byFile.set(app.file, [promotion]);
   }
 
-  return testMap;
+  return byFile;
 }

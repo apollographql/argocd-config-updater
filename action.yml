@@ -33,7 +33,7 @@ inputs:
     default: 'false'
 
   promotion-target:
-    description: 'Only process promote instructions for a target matching this string'
+    description: 'Only process promote instructions for a single target matching this string'
 
   parallelism:
     description: 'How many files to process in parallel'
