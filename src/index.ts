@@ -209,7 +209,7 @@ export async function main(): Promise<void> {
     const promotionsByFile: PromotionsByFile = new Map();
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { environmentPromotions: promotions } = await processFile({
+        const { environmentPromotions } = await processFile({
           filename,
           gitHubClient,
           dockerRegistryClient,
@@ -219,8 +219,10 @@ export async function main(): Promise<void> {
           linkTemplateMap,
           frozenEnvironments,
         });
-        if (promotions) {
-          promotionsByFile.set(shortFilename(filename), [promotions]);
+        if (environmentPromotions) {
+          promotionsByFile.set(shortFilename(filename), [
+            environmentPromotions,
+          ]);
         }
       } catch (error) {
         if (error instanceof AnnotatedError) {
