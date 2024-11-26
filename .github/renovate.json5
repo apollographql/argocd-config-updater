@@ -36,5 +36,16 @@
       matchPackageNames: ['node', '@types/node'],
       allowedVersions: '20.x',
     },
+    // Upgrade all the major eslint things in a single PR.
+    {
+      matchPackageNames: [
+        'eslint',
+        '/^eslint-plugin/',
+        '/^@typescript-eslint/',
+      ],
+      matchUpdateTypes: ['major'],
+      groupName: 'all eslint-related major dependencies',
+      groupSlug: 'all-eslint-major',
+    },
   ],
 }
