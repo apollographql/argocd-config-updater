@@ -31,5 +31,10 @@
       matchPackageNames: ['typescript'],
       matchUpdateTypes: ['minor'],
     },
+    // Until action.yml lets us do runs.using 'node22', let's stick to Node 20.
+    {
+      matchPackageNames: ['node', '@types/node'],
+      allowedVersions: '20.x',
+    },
   ],
 }
