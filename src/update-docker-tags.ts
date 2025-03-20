@@ -151,11 +151,16 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
           if (e instanceof Error) {
             let message = e.message;
             if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
-              message =
-                'Docker image not found. Check the image name or tracking tags. ' +
-                'If this is a PR, check that the docker image has been successfully built ' +
-                'at least once after the PR was created (CircleCI workflows that started ' +
-                'before the PR was created do not count; rerun them!).';
+              message = `The tag '${trackable.trackMutableTag}' on the Docker image '${
+                trackable.dockerImageRepository
+              }' does not exist. Check that both the image and tag are spelled correctly.`;
+              if (trackable.trackMutableTag.startsWith('pr-')) {
+                message +=
+                  ' Check that the Docker image has been successfully built ' +
+                  'at least once after the PR was created. (CircleCI workflows ' +
+                  'that started before the PR was created do not count! Push ' +
+                  'another change to trigger a build that knows the PR number.)';
+              }
             }
             throw new AnnotatedError(message, {
               range: trackable?.trackRange,
