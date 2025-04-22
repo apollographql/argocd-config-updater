@@ -9,9 +9,15 @@ export function formatPromotedCommits(
       const fileHeader = `* ${filename}\n`;
       const byEnvironment = [...promotionsByTargetEnvironment.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([environment, environmentPromotions]) => {
-          const { trimmedRepoURL, gitConfigPromotionInfo, dockerImage, links } =
-            environmentPromotions;
+        .map(([environment, promotionSetWithDockerImage]) => {
+          const { promotionSet, dockerImageRepository } =
+            promotionSetWithDockerImage;
+          const {
+            trimmedRepoURL,
+            gitConfigPromotionInfo,
+            dockerImagePromotionInfo,
+            links,
+          } = promotionSet;
           const lines = [`  - ${environment}\n`];
           for (const link of links) {
             if (link.url) {
@@ -21,7 +27,11 @@ export function formatPromotedCommits(
             }
           }
           let alreadyMentionedGitNoCommits = false;
-          if (dockerImage && dockerImage.promotionInfo.type !== 'no-change') {
+          if (
+            dockerImageRepository &&
+            dockerImagePromotionInfo &&
+            dockerImagePromotionInfo.type !== 'no-change'
+          ) {
             let maybeGitConfigNoCommits = '';
             if (gitConfigPromotionInfo.type === 'no-commits') {
               alreadyMentionedGitNoCommits = true;
@@ -29,14 +39,14 @@ export function formatPromotedCommits(
                 ' (and the git ref for the Helm chart made a no-op change to match)';
             }
             lines.push(
-              `    + Changes to Docker image \`${dockerImage.repository}\`${maybeGitConfigNoCommits}\n`,
-              ...(dockerImage.promotionInfo.type === 'no-commits'
+              `    + Changes to Docker image \`${dockerImageRepository}\`${maybeGitConfigNoCommits}\n`,
+              ...(dockerImagePromotionInfo.type === 'no-commits'
                 ? ['No changes affect the built Docker image.']
-                : dockerImage.promotionInfo.type === 'unknown'
+                : dockerImagePromotionInfo.type === 'unknown'
                   ? [
-                      `Cannot determine set of changes to the Docker image: ${dockerImage.promotionInfo.message}`,
+                      `Cannot determine set of changes to the Docker image: ${dockerImagePromotionInfo.message}`,
                     ]
-                  : dockerImage.promotionInfo.commitSHAs.map(
+                  : dockerImagePromotionInfo.commitSHAs.map(
                       (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
                     )
               ).map((line) => `      * ${line}\n`),

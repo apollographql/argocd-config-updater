@@ -9,9 +9,9 @@ import {
 import { PrefixingLogger } from './log';
 import { DockerRegistryClient } from './artifactRegistry';
 import {
-  EnvironmentPromotions,
   PromotionInfo,
   PromotionsByTargetEnvironment,
+  PromotionSetWithDockerImage,
 } from './promotionInfo';
 import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
 import { LinkTemplateMap, renderLinkTemplate } from './templates';
@@ -94,7 +94,7 @@ async function findPromotes(
 
   const promotionsByTargetEnvironment = new Map<
     string,
-    EnvironmentPromotions
+    PromotionSetWithDockerImage
   >();
 
   // This initialization is somewhat copy-pasted from updateDockerTags and updateGitRefs.
@@ -108,10 +108,7 @@ async function findPromotes(
     if (!yaml.isMap(gitConfigBlock)) {
       throw new AnnotatedError(
         'Document has `global.gitConfig` that is not a map',
-        {
-          range: gitConfigBlock?.range,
-          lineCounter,
-        },
+        { range: gitConfigBlock?.range, lineCounter },
       );
     }
     globalRepoURL = getStringValue(gitConfigBlock, 'repoURL');
@@ -122,10 +119,7 @@ async function findPromotes(
     if (!yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
         'Document has `global.dockerImageBlock` that is not a map',
-        {
-          range: dockerImageBlock?.range,
-          lineCounter,
-        },
+        { range: dockerImageBlock?.range, lineCounter },
       );
     }
     globalDockerImageRepository = getStringValue(
@@ -156,20 +150,14 @@ async function findPromotes(
     if (typeof from !== 'string') {
       throw new AnnotatedError(
         `The value at ${myName}.promote.from must be a string`,
-        {
-          range: from?.range,
-          lineCounter,
-        },
+        { range: from?.range, lineCounter },
       );
     }
     const fromBlock = blocks.get(from);
     if (!fromBlock) {
       throw new AnnotatedError(
         `The value at ${myName}.promote.from must reference a top-level key with map value`,
-        {
-          range: promote?.range,
-          lineCounter,
-        },
+        { range: promote?.range, lineCounter },
       );
     }
 
@@ -177,10 +165,7 @@ async function findPromotes(
     if (gitConfigBlock && !yaml.isMap(gitConfigBlock)) {
       throw new AnnotatedError(
         `Document has \`${myName}.gitConfig\` that is not a map`,
-        {
-          range: gitConfigBlock?.range,
-          lineCounter,
-        },
+        { range: gitConfigBlock?.range, lineCounter },
       );
     }
     const repoURL =
@@ -194,10 +179,7 @@ async function findPromotes(
     if (dockerImageBlock && !yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
         `Document has \`${myName}.dockerImage\` that is not a map`,
-        {
-          range: dockerImageBlock?.range,
-          lineCounter,
-        },
+        { range: dockerImageBlock?.range, lineCounter },
       );
     }
     const dockerImageRepository =
@@ -210,29 +192,20 @@ async function findPromotes(
       if (!yaml.isSeq(yamlPathsSeq)) {
         throw new AnnotatedError(
           `The value at ${myName}.promote.yamlPaths must be an array`,
-          {
-            range: yamlPathsSeq?.range,
-            lineCounter,
-          },
+          { range: yamlPathsSeq?.range, lineCounter },
         );
       }
       const explicitYamlPaths = yamlPathsSeq.toJSON();
       if (!Array.isArray(explicitYamlPaths)) {
         throw new AnnotatedError(
           'YAMLSeq.toJSON surprisingly did not return an array',
-          {
-            range: yamlPathsSeq?.range,
-            lineCounter,
-          },
+          { range: yamlPathsSeq?.range, lineCounter },
         );
       }
       if (!explicitYamlPaths.every(isCollectionPath)) {
         throw new AnnotatedError(
           `The value at ${myName}.promote.yamlPaths must be an array whose elements are arrays of strings or numbers`,
-          {
-            range: yamlPathsSeq?.range,
-            lineCounter,
-          },
+          { range: yamlPathsSeq?.range, lineCounter },
         );
       }
       yamlPaths.push(...explicitYamlPaths);
@@ -374,26 +347,26 @@ async function findPromotes(
         }
       }
       promotionsByTargetEnvironment.set(myName, {
-        trimmedRepoURL,
-        gitConfigPromotionInfo,
-        dockerImage: dockerImageRepository
-          ? {
-              repository: dockerImageRepository,
-              promotionInfo: dockerImagePromotionInfo,
+        promotionSet: {
+          trimmedRepoURL,
+          gitConfigPromotionInfo,
+          dockerImagePromotionInfo: dockerImageRepository
+            ? dockerImagePromotionInfo
+            : null,
+          links: linkNames.map((linkName) => {
+            if (!linkTemplateMap) {
+              throw Error(
+                `${myName}.promote.links requires the link-template-file input to be set`,
+              );
             }
-          : null,
-        links: linkNames.map((linkName) => {
-          if (!linkTemplateMap) {
-            throw Error(
-              `${myName}.promote.links requires the link-template-file input to be set`,
+            return renderLinkTemplate(
+              linkTemplateMap,
+              linkName,
+              templateVariables,
             );
-          }
-          return renderLinkTemplate(
-            linkTemplateMap,
-            linkName,
-            templateVariables,
-          );
-        }),
+          }),
+        },
+        dockerImageRepository,
       });
     }
   }
