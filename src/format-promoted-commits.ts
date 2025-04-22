@@ -1,34 +1,114 @@
-import { PromotionsByTargetEnvironment } from './promotionInfo';
+import { basename, dirname } from 'node:path';
+import { PromotionsByTargetEnvironment, PromotionSet } from './promotionInfo';
+
+interface App {
+  appDirectory: string;
+  dockerImageRepository: string | null;
+}
+interface PromotionSetWithApps {
+  promotionSet: PromotionSet;
+  apps: App[];
+}
+
+type OrganizedPromotionsByTargetEnvironment = Map<
+  string,
+  OrganizedPromotionsByPromotionSetJSON
+>;
+type OrganizedPromotionsByPromotionSetJSON = Map<string, PromotionSetWithApps>;
+
+function reorganizePromotionInfoForMessage(
+  promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
+): OrganizedPromotionsByTargetEnvironment {
+  const organizedPromotionsByTargetEnvironment = new Map<
+    string,
+    OrganizedPromotionsByPromotionSetJSON
+  >();
+  for (const [
+    filename,
+    promotionsByTargetEnvironment,
+  ] of promotionsByFileThenEnvironment.entries()) {
+    const appDirectory = dirname(filename);
+    for (const [
+      targetEnvironment,
+      promotionSetWithDockerImage,
+    ] of promotionsByTargetEnvironment.entries()) {
+      let organizedPromotionsByPromotionSetJSON =
+        organizedPromotionsByTargetEnvironment.get(targetEnvironment);
+      if (!organizedPromotionsByPromotionSetJSON) {
+        organizedPromotionsByPromotionSetJSON = new Map();
+        organizedPromotionsByTargetEnvironment.set(
+          targetEnvironment,
+          organizedPromotionsByPromotionSetJSON,
+        );
+      }
+
+      const { promotionSet, dockerImageRepository } =
+        promotionSetWithDockerImage;
+      const promotionSetJSON = JSON.stringify(promotionSet);
+
+      let promotionSetWithApps =
+        organizedPromotionsByPromotionSetJSON.get(promotionSetJSON);
+      if (!promotionSetWithApps) {
+        promotionSetWithApps = { promotionSet, apps: [] };
+        organizedPromotionsByPromotionSetJSON.set(
+          promotionSetJSON,
+          promotionSetWithApps,
+        );
+      }
+
+      promotionSetWithApps.apps.push({ appDirectory, dockerImageRepository });
+    }
+  }
+  return organizedPromotionsByTargetEnvironment;
+}
 
 export function formatPromotedCommits(
   promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
 ): string {
-  return [...promotionsByFileThenEnvironment.entries()]
+  const organizedPromotionsByTargetEnvironment =
+    reorganizePromotionInfoForMessage(promotionsByFileThenEnvironment);
+  return [...organizedPromotionsByTargetEnvironment.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([filename, promotionsByTargetEnvironment]) => {
-      const fileHeader = `* ${filename}\n`;
-      const byEnvironment = [...promotionsByTargetEnvironment.entries()]
+    .map(([targetEnvironment, organizedPromotionsByPromotionSetJSON]) => {
+      const environmentHeader = `### Promoting to ${targetEnvironment}\n`;
+      const forEnvironment = [
+        ...organizedPromotionsByPromotionSetJSON.entries(),
+      ]
+        // We sort by the JSON value just to keep things consistent when we
+        // refresh.
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([environment, promotionSetWithDockerImage]) => {
-          const { promotionSet, dockerImageRepository } =
-            promotionSetWithDockerImage;
+        .map((entry) => {
+          const { promotionSet, apps } = entry[1];
           const {
             trimmedRepoURL,
             gitConfigPromotionInfo,
             dockerImagePromotionInfo,
             links,
           } = promotionSet;
-          const lines = [`  - ${environment}\n`];
-          for (const link of links) {
-            if (link.url) {
-              lines.push(`    + [${link.text}](${link.url})\n`);
-            } else {
-              lines.push(`    + ${link.text}\n`);
+          const text = [
+            `Apps:\n${apps
+              .sort((a, b) => a.appDirectory.localeCompare(b.appDirectory))
+              .map(({ appDirectory, dockerImageRepository }) =>
+                dockerImageRepository &&
+                dockerImageRepository !== basename(appDirectory)
+                  ? `- ${appDirectory} (image \`${dockerImageRepository}\`)\n`
+                  : `- ${appDirectory}\n`,
+              )
+              .join('')}\n`,
+          ];
+          if (links.length) {
+            text.push(`Links:\n`);
+            for (const link of links) {
+              if (link.url) {
+                text.push(`- [${link.text}](${link.url})\n`);
+              } else {
+                text.push(`- ${link.text}\n`);
+              }
             }
+            text.push(`\n`);
           }
           let alreadyMentionedGitNoCommits = false;
           if (
-            dockerImageRepository &&
             dockerImagePromotionInfo &&
             dockerImagePromotionInfo.type !== 'no-change'
           ) {
@@ -38,8 +118,8 @@ export function formatPromotedCommits(
               maybeGitConfigNoCommits =
                 ' (and the git ref for the Helm chart made a no-op change to match)';
             }
-            lines.push(
-              `    + Changes to Docker image \`${dockerImageRepository}\`${maybeGitConfigNoCommits}\n`,
+            text.push(
+              `Changes to Docker images${maybeGitConfigNoCommits}:\n`,
               ...(dockerImagePromotionInfo.type === 'no-commits'
                 ? ['No changes affect the built Docker image.']
                 : dockerImagePromotionInfo.type === 'unknown'
@@ -49,15 +129,16 @@ export function formatPromotedCommits(
                   : dockerImagePromotionInfo.commitSHAs.map(
                       (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
                     )
-              ).map((line) => `      * ${line}\n`),
+              ).map((line) => `- ${line}\n`),
             );
+            text.push('\n');
           }
           if (
             gitConfigPromotionInfo.type !== 'no-change' &&
             !alreadyMentionedGitNoCommits
           ) {
-            lines.push(
-              `    + Changes to Helm chart\n`,
+            text.push(
+              `Changes to Helm chart\n`,
               ...(gitConfigPromotionInfo.type === 'no-commits'
                 ? // This one shows up when the ref changes even though there are no
 
@@ -76,12 +157,12 @@ export function formatPromotedCommits(
                   : gitConfigPromotionInfo.commitSHAs.map(
                       (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
                     )
-              ).map((line) => `      * ${line}\n`),
+              ).map((line) => `- ${line}\n`),
             );
           }
-          return lines.join('');
+          return text.join('');
         });
-      return fileHeader + byEnvironment.join('\n');
+      return environmentHeader + forEnvironment.join('\n\n---\n\n');
     })
     .join('');
 }
