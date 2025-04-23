@@ -39,15 +39,26 @@ export type PromotionInfo =
   | PromotionInfoNoChange
   | PromotionInfoUnknown;
 
-export interface EnvironmentPromotions {
+// This is the set of data about a promotion that, if two apps have the same
+// values for it, will make them be treated as having identical promotions (ie,
+// we'll only have one section about it in the PR description). Notably, it does
+// not include the Docker image (or app name) because we often (due to
+// monorepos) have the same set of commits contributing to multiple Docker
+// images.
+export interface PromotionSet {
   trimmedRepoURL: string;
   gitConfigPromotionInfo: PromotionInfo;
-  dockerImage: {
-    repository: string;
-    promotionInfo: PromotionInfo;
-  } | null; // null if there's no Docker image being tracked
+  // null if there's no Docker image being tracked
+  dockerImagePromotionInfo: PromotionInfo | null;
   links: Link[];
+}
+export interface PromotionSetWithDockerImage {
+  promotionSet: PromotionSet;
+  dockerImageRepository: string | null; // null if there's no Docker image being tracked
 }
 
 // Map from environment (eg `staging`) to EnvironmentPromotions.
-export type PromotionsByTargetEnvironment = Map<string, EnvironmentPromotions>;
+export type PromotionsByTargetEnvironment = Map<
+  string,
+  PromotionSetWithDockerImage
+>;
