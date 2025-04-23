@@ -116,7 +116,7 @@ export function formatPromotedCommits(
             if (gitConfigPromotionInfo.type === 'no-commits') {
               alreadyMentionedGitNoCommits = true;
               maybeGitConfigNoCommits =
-                ' (and the git ref for the Helm chart made a no-op change to match)';
+                ' (matching Helm chart update is a no-op)';
             }
             text.push(
               `Changes to Docker images${maybeGitConfigNoCommits}:\n`,
@@ -138,7 +138,7 @@ export function formatPromotedCommits(
             !alreadyMentionedGitNoCommits
           ) {
             text.push(
-              `Changes to Helm chart\n`,
+              `Changes to Helm chart:\n`,
               ...(gitConfigPromotionInfo.type === 'no-commits'
                 ? // This one shows up when the ref changes even though there are no
 
