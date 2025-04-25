@@ -65,7 +65,7 @@
     "@types/async": "3.2.24",
     "@types/jest": "29.5.14",
     "@types/lodash": "4.17.16",
-    "@types/node": "20.17.30",
+    "@types/node": "20.17.31",
     "@typescript-eslint/eslint-plugin": "7.18.0",
     "@typescript-eslint/parser": "7.18.0",
     "@vercel/ncc": "0.38.3",
