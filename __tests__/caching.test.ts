@@ -47,6 +47,9 @@ describe('CachingGitHubClient caches', () => {
       async getCommitSHAsForPath() {
         return [];
       },
+      async getPullRequest() {
+        return { state: 'open' };
+      },
     });
 
     async function exp(
@@ -80,6 +83,9 @@ describe('CachingGitHubClient caches', () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async getPullRequest() {
+        return { state: 'open' };
       },
     });
 

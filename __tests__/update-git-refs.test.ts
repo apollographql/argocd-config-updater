@@ -17,6 +17,9 @@ const mockGitHubClient: GitHubClient = {
   async getCommitSHAsForPath() {
     return [];
   },
+  async getPullRequest() {
+    return { state: 'open' };
+  },
 };
 
 const logger = PrefixingLogger.silent();
@@ -84,6 +87,9 @@ describe('action', () => {
       async getCommitSHAsForPath() {
         return [];
       },
+      async getPullRequest() {
+        return { state: 'open' };
+      },
     };
 
     const contents = await fixture('tree-sha.yaml');
@@ -124,6 +130,9 @@ describe('action', () => {
       async getCommitSHAsForPath() {
         return [];
       },
+      async getPullRequest() {
+        return { state: 'open' };
+      },
     };
 
     const contents = await fixture('tree-sha.yaml');
@@ -148,6 +157,9 @@ describe('action', () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async getPullRequest() {
+        return { state: 'open' };
       },
     };
 
@@ -176,6 +188,9 @@ describe('action', () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async getPullRequest() {
+        return { state: 'open' };
       },
     };
 

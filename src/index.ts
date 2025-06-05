@@ -89,7 +89,15 @@ export async function main(): Promise<void> {
       'generate-promoted-commits-markdown',
     );
     const doUpdateGitRefs = core.getBooleanInput('update-git-refs');
-    if (doUpdateGitRefs || generatePromotedCommitsMarkdown) {
+    const doCleanupClosedPrTracking = core.getBooleanInput(
+      'cleanup-closed-pr-tracking',
+    );
+    const cleanupTargetRepo = core.getInput('cleanup-target-repository');
+    if (
+      doUpdateGitRefs ||
+      generatePromotedCommitsMarkdown ||
+      doCleanupClosedPrTracking
+    ) {
       const githubToken = core.getInput('github-token');
       const octokit = github.getOctokit(
         githubToken,
@@ -181,7 +189,6 @@ export async function main(): Promise<void> {
         'Must set artifact-registry-repository with generate-promoted-commits-markdown',
       );
     }
-
     const linkTemplateFile = core.getInput('link-template-file');
     const linkTemplateMap: LinkTemplateMap | null = linkTemplateFile
       ? await readLinkTemplateMapFile(linkTemplateFile)
@@ -216,6 +223,8 @@ export async function main(): Promise<void> {
           generatePromotedCommitsMarkdown,
           doUpdateDockerTags,
           doUpdateGitRefs,
+          doCleanupClosedPrTracking,
+          cleanupTargetRepo,
           linkTemplateMap,
           frozenEnvironments,
         });
@@ -282,6 +291,8 @@ async function processFile(options: {
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
   doUpdateGitRefs: boolean;
+  doCleanupClosedPrTracking: boolean;
+  cleanupTargetRepo: string;
   linkTemplateMap: LinkTemplateMap | null;
   frozenEnvironments: Set<string>;
 }): Promise<{
@@ -294,6 +305,8 @@ async function processFile(options: {
     generatePromotedCommitsMarkdown,
     doUpdateDockerTags,
     doUpdateGitRefs,
+    doCleanupClosedPrTracking,
+    cleanupTargetRepo,
     linkTemplateMap,
     frozenEnvironments,
   } = options;
@@ -303,6 +316,18 @@ async function processFile(options: {
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
   let contents = await readFile(filename, 'utf-8');
+
+  if (doCleanupClosedPrTracking && gitHubClient && cleanupTargetRepo) {
+    const { newContents, changesCount } = await cleanupClosedPrTracking(
+      contents,
+      cleanupTargetRepo,
+      gitHubClient,
+      logger,
+    );
+    if (changesCount) {
+      contents = newContents;
+    }
+  }
 
   if (dockerRegistryClient && doUpdateDockerTags) {
     contents = await updateDockerTags(
@@ -342,6 +367,52 @@ async function processFile(options: {
 
   await writeFile(filename, contents);
   return ret;
+}
+
+export async function cleanupClosedPrTracking(
+  contents: string,
+  targetRepo: string,
+  gitHubClient: GitHubClient,
+  logger: PrefixingLogger,
+): Promise<{ newContents: string; changesCount: number }> {
+  const doc = yaml.parseDocument(contents);
+  let changesCount = 0;
+
+  await yaml.visitAsync(doc, {
+    async Pair(_, pair) {
+      if (
+        pair.key instanceof yaml.Scalar &&
+        pair.key.value === 'track' &&
+        pair.value instanceof yaml.Scalar &&
+        typeof pair.value.value === 'string'
+      ) {
+        const match = pair.value.value.match(/^pr-(\d+)$/);
+        if (!match) return;
+
+        const prNumber = parseInt(match[1], 10);
+        try {
+          const pr = await gitHubClient.getPullRequest({
+            repoURL: `https://github.com/${targetRepo}`,
+            prNumber,
+          });
+
+          if (pr.state === 'closed') {
+            pair.value.value = 'main';
+            changesCount++;
+          }
+
+          logger.info(`PR #${prNumber} is ${pr.state}`);
+        } catch (error) {
+          logger.info(`PR #${prNumber} lookup failed, leaving unchanged`);
+        }
+      }
+    },
+  });
+
+  return {
+    newContents: changesCount > 0 ? doc.toString() : contents,
+    changesCount,
+  };
 }
 
 interface APICache {

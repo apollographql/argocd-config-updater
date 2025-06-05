@@ -24,10 +24,22 @@ export interface GetCommitSHAsForPathOptions {
   path: string;
 }
 
+export interface GetPullRequestForNumberOptions {
+  repoURL: string;
+  prNumber: number;
+}
+
+export type PullRequestState = 'open' | 'closed';
+
+export interface PullRequest {
+  state: PullRequestState;
+}
+
 export interface GitHubClient {
   resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string>;
   getTreeSHAForPath(options: GetTreeSHAForPathOptions): Promise<string | null>;
   getCommitSHAsForPath(options: GetCommitSHAsForPathOptions): Promise<string[]>;
+  getPullRequest(options: GetPullRequestForNumberOptions): Promise<PullRequest>;
 }
 
 interface OwnerAndRepo {
@@ -239,6 +251,20 @@ export class OctokitGitHubClient {
       .map(({ sha }) => sha)
       .reverse(); // Chronological order
   }
+
+  async getPullRequest({
+    repoURL,
+    prNumber,
+  }: GetPullRequestForNumberOptions): Promise<PullRequest> {
+    const { owner, repo } = parseRepoURL(repoURL);
+    this.logAPICall('pulls.get', `${owner}/${repo} #${prNumber}`);
+    const response = await this.octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    return { state: response.data.state as PullRequestState };
+  }
 }
 
 export class CachingGitHubClient {
@@ -286,6 +312,18 @@ export class CachingGitHubClient {
     max: 1024,
     fetchMethod: async (_key, _staleValue, { context }) => {
       return await this.wrapped.getCommitSHAsForPath(context);
+    },
+  });
+
+  private getPullRequestCache = new LRUCache<
+    string,
+    PullRequest,
+    GetPullRequestForNumberOptions
+  >({
+    max: 512,
+    ttl: 1 * 60 * 1000, // 1 minute
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return await this.wrapped.getPullRequest(context);
     },
   });
 
@@ -349,6 +387,20 @@ export class CachingGitHubClient {
         .dump()
         .filter(([key]) => key.startsWith('SHA!')),
     };
+  }
+
+  async getPullRequest(
+    options: GetPullRequestForNumberOptions,
+  ): Promise<PullRequest> {
+    const pr = await this.getPullRequestCache.fetch(JSON.stringify(options), {
+      context: options,
+    });
+    if (!pr) {
+      throw Error(
+        'getPullRequestCache.fetch should never resolve without a real PullRequest',
+      );
+    }
+    return pr;
   }
 }
 
