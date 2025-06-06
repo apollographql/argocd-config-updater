@@ -1,7 +1,4 @@
-import {
-  cleanupClosedPrTracking,
-  readFrozenEnvironmentsFile,
-} from '../src/index';
+import { cleanupClosedPrTracking } from '../src/index';
 import { GitHubClient } from '../src/github';
 import { PrefixingLogger } from '../src/log';
 
