@@ -151,9 +151,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
           if (e instanceof Error) {
             let message = e.message;
             if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
-              message = `The tag '${trackable.trackMutableTag}' on the Docker image '${
-                trackable.dockerImageRepository
-              }' does not exist. Check that both the image and tag are spelled correctly.`;
+              message = `The tag '${trackable.trackMutableTag}' on the Docker image '${trackable.dockerImageRepository}' does not exist. Check that both the image and tag are spelled correctly.`;
               if (trackable.trackMutableTag.startsWith('pr-')) {
                 message +=
                   ' Check that the Docker image has been successfully built ' +

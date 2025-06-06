@@ -20,9 +20,10 @@ import {
   isCachingGitHubClientDump,
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
-import { updateGitRefs } from './update-git-refs';
+import { updateGitRefs, findTrackables } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
+import { parseYAML } from './yaml';
 import { inspect } from 'util';
 import { PromotionsByTargetEnvironment } from './promotionInfo';
 import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
@@ -318,15 +319,13 @@ async function processFile(options: {
   let contents = await readFile(filename, 'utf-8');
 
   if (doCleanupClosedPrTracking && gitHubClient && cleanupTargetRepo) {
-    const { newContents, changesCount } = await cleanupClosedPrTracking(
+    const result = await cleanupClosedPrTracking({
       contents,
-      cleanupTargetRepo,
+      frozenEnvironments,
       gitHubClient,
       logger,
-    );
-    if (changesCount) {
-      contents = newContents;
-    }
+    });
+    contents = result.contents;
   }
 
   if (dockerRegistryClient && doUpdateDockerTags) {
@@ -369,49 +368,44 @@ async function processFile(options: {
   return ret;
 }
 
-export async function cleanupClosedPrTracking(
-  contents: string,
-  targetRepo: string,
-  gitHubClient: GitHubClient,
-  logger: PrefixingLogger,
-): Promise<{ newContents: string; changesCount: number }> {
-  const doc = yaml.parseDocument(contents);
-  let changesCount = 0;
+export async function cleanupClosedPrTracking(options: {
+  contents: string;
+  frozenEnvironments: Set<string>;
+  gitHubClient: GitHubClient;
+  logger: PrefixingLogger;
+}): Promise<{ contents: string }> {
+  const { contents, frozenEnvironments, gitHubClient, logger } = options;
 
-  await yaml.visitAsync(doc, {
-    async Pair(_, pair) {
-      if (
-        pair.key instanceof yaml.Scalar &&
-        pair.key.value === 'track' &&
-        pair.value instanceof yaml.Scalar &&
-        typeof pair.value.value === 'string'
-      ) {
-        const match = pair.value.value.match(/^pr-(\d+)$/);
-        if (!match) return;
+  const { document, stringify } = parseYAML(contents);
+  if (!document) {
+    return { contents };
+  }
 
-        const prNumber = parseInt(match[1], 10);
-        try {
-          const pr = await gitHubClient.getPullRequest({
-            repoURL: `https://github.com/${targetRepo}`,
-            prNumber,
-          });
+  const trackables = findTrackables(document, frozenEnvironments);
+  for (const trackable of trackables) {
+    const match = trackable.trackMutableRef.match(/^pr-(\d+)$/);
+    if (match && trackable.trackScalarTokenWriter) {
+      const prNumber = parseInt(match[1], 10);
+      try {
+        const pr = await gitHubClient.getPullRequest({
+          repoURL: trackable.repoURL,
+          prNumber,
+        });
 
-          if (pr.state === 'closed') {
-            pair.value.value = 'main';
-            changesCount++;
-          }
-
+        if (pr.state === 'closed') {
+          trackable.trackScalarTokenWriter.write('main');
+          logger.info(`PR #${prNumber} is closed, updated to main`);
+        } else {
           logger.info(`PR #${prNumber} is ${pr.state}`);
-        } catch (error) {
-          logger.info(`PR #${prNumber} lookup failed, leaving unchanged`);
         }
+      } catch (error) {
+        logger.info(`PR #${prNumber} lookup failed, leaving unchanged`);
       }
-    },
-  });
+    }
+  }
 
   return {
-    newContents: changesCount > 0 ? doc.toString() : contents,
-    changesCount,
+    contents: stringify(),
   };
 }
 

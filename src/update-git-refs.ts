@@ -13,13 +13,14 @@ import {
 } from './yaml';
 import { PrefixingLogger } from './log';
 
-interface Trackable {
+export interface Trackable {
   trackMutableRef: string;
   repoURL: string;
   path: string;
   ref: string;
   maybeDockerCommit: string | null;
   refScalarTokenWriter: ScalarTokenWriter;
+  trackScalarTokenWriter: ScalarTokenWriter | null;
 }
 
 export async function updateGitRefs(
@@ -50,7 +51,7 @@ export async function updateGitRefs(
   return stringify();
 }
 
-function findTrackables(
+export function findTrackables(
   doc: yaml.Document.Parsed,
   frozenEnvironments: Set<string>,
 ): Trackable[] {
@@ -97,6 +98,11 @@ function findTrackables(
       'ref',
     );
 
+    // Get token writer for the track field if trackMutableRef came from there
+    const trackScalarTokenAndValue = getStringValue(value, 'track')
+      ? getStringAndScalarTokenFromMap(value, 'track')
+      : null;
+
     let maybeDockerCommit: string | null = null;
 
     if (value.has('dockerImage')) {
@@ -123,6 +129,12 @@ function findTrackables(
           refScalarTokenAndValue.scalarToken,
           doc.schema,
         ),
+        trackScalarTokenWriter: trackScalarTokenAndValue
+          ? new ScalarTokenWriter(
+              trackScalarTokenAndValue.scalarToken,
+              doc.schema,
+            )
+          : null,
         maybeDockerCommit,
       });
     }

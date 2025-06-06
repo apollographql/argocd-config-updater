@@ -53,9 +53,6 @@ inputs:
     description: 'Clean up track: pr-N patterns where PR N is closed'
     default: 'false'
 
-  cleanup-target-repository:
-    description: 'Repository to check PR status for cleanup (required when cleanup-closed-pr-tracking is true). Format: owner/repo'
-
 outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
