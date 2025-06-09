@@ -58,7 +58,9 @@ prod:
       frozenEnvironments: new Set(),
     });
 
+    expect(result.contents).not.toContain('track: pr-123');
     expect((result.contents.match(/track: main/g) || []).length).toBe(2);
+    expect(result.contents).toMatchSnapshot();
   });
 
   it('should not change pr references that are open', async () => {
@@ -93,7 +95,9 @@ prod:
     });
 
     expect(result.contents).toContain('track: pr-100');
+    expect(result.contents).not.toContain('track: pr-123');
     expect(result.contents).toContain('track: main');
+    expect(result.contents).toMatchSnapshot();
   });
 
   it('should handle PR lookup errors by leaving PR references unchanged', async () => {
@@ -120,6 +124,7 @@ dev:
     });
 
     expect(result.contents).toContain('track: pr-999');
+    expect(result.contents).toMatchSnapshot();
   });
 
   it('should not modify YAML unnecessarily', async () => {
@@ -156,5 +161,6 @@ prod:
     expect(result.contents).toContain('# Top level comment');
     expect(result.contents).toContain('# Inline comment');
     expect((result.contents.match(/track: main/g) || []).length).toBe(2);
+    expect(result.contents).toMatchSnapshot();
   });
 });
