@@ -18,7 +18,7 @@ const mockGitHubClient: GitHubClient = {
     return [];
   },
   async getPullRequest() {
-    return { state: 'open' };
+    return { state: 'open', title: 'Test PR' };
   },
 };
 
@@ -88,7 +88,7 @@ describe('action', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open' };
+        return { state: 'open', title: 'Test PR' };
       },
     };
 
@@ -131,7 +131,7 @@ describe('action', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open' };
+        return { state: 'open', title: 'Test PR' };
       },
     };
 
@@ -159,7 +159,7 @@ describe('action', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open' };
+        return { state: 'open', title: 'Test PR' };
       },
     };
 
@@ -190,7 +190,7 @@ describe('action', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open' };
+        return { state: 'open', title: 'Test PR' };
       },
     };
 

@@ -33,6 +33,7 @@ export type PullRequestState = 'open' | 'closed';
 
 export interface PullRequest {
   state: PullRequestState;
+  title: string;
 }
 
 export interface GitHubClient {
@@ -263,7 +264,10 @@ export class OctokitGitHubClient {
       repo,
       pull_number: prNumber,
     });
-    return { state: response.data.state as PullRequestState };
+    return {
+      state: response.data.state as PullRequestState,
+      title: response.data.title,
+    };
   }
 }
 
@@ -315,6 +319,7 @@ export class CachingGitHubClient {
     },
   });
 
+  // We mainly care about the state of the PR, a very dynamic value, so we don't really want to cache it
   private getPullRequestCache = new LRUCache<
     string,
     PullRequest,

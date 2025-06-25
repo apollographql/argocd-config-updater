@@ -20,14 +20,15 @@ import {
   isCachingGitHubClientDump,
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
-import { updateGitRefs, findTrackables } from './update-git-refs';
+import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
-import { parseYAML } from './yaml';
 import { inspect } from 'util';
 import { PromotionsByTargetEnvironment } from './promotionInfo';
 import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
 import { formatPromotedCommits } from './format-promoted-commits';
+import { CleanupChange, formatCleanupChanges } from './format-cleanup-changes';
+import { cleanupClosedPrTracking } from './update-closed-prs';
 
 export class AnnotatedError extends Error {
   startLine: number | undefined;
@@ -93,7 +94,6 @@ export async function main(): Promise<void> {
     const doCleanupClosedPrTracking = core.getBooleanInput(
       'cleanup-closed-pr-tracking',
     );
-    const cleanupTargetRepo = core.getInput('cleanup-target-repository');
     if (
       doUpdateGitRefs ||
       generatePromotedCommitsMarkdown ||
@@ -215,26 +215,28 @@ export async function main(): Promise<void> {
       string,
       PromotionsByTargetEnvironment
     >();
+    const allCleanupChanges: CleanupChange[] = [];
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotionsByTargetEnvironment } = await processFile({
-          filename,
-          gitHubClient,
-          dockerRegistryClient,
-          generatePromotedCommitsMarkdown,
-          doUpdateDockerTags,
-          doUpdateGitRefs,
-          doCleanupClosedPrTracking,
-          cleanupTargetRepo,
-          linkTemplateMap,
-          frozenEnvironments,
-        });
+        const { promotionsByTargetEnvironment, cleanupChanges } =
+          await processFile({
+            filename,
+            gitHubClient,
+            dockerRegistryClient,
+            generatePromotedCommitsMarkdown,
+            doUpdateDockerTags,
+            doUpdateGitRefs,
+            doCleanupClosedPrTracking,
+            linkTemplateMap,
+            frozenEnvironments,
+          });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
             shortFilename(filename),
             promotionsByTargetEnvironment,
           );
         }
+        allCleanupChanges.push(...cleanupChanges);
       } catch (error) {
         if (error instanceof AnnotatedError) {
           errors.push({
@@ -273,6 +275,13 @@ export async function main(): Promise<void> {
         formatPromotedCommits(promotionsByFileThenEnvironment),
       );
     }
+
+    if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
+      core.setOutput(
+        'cleanup-changes-markdown',
+        formatCleanupChanges(allCleanupChanges),
+      );
+    }
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -293,11 +302,11 @@ async function processFile(options: {
   doUpdateDockerTags: boolean;
   doUpdateGitRefs: boolean;
   doCleanupClosedPrTracking: boolean;
-  cleanupTargetRepo: string;
   linkTemplateMap: LinkTemplateMap | null;
   frozenEnvironments: Set<string>;
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
+  cleanupChanges: CleanupChange[];
 }> {
   const {
     filename,
@@ -307,18 +316,18 @@ async function processFile(options: {
     doUpdateDockerTags,
     doUpdateGitRefs,
     doCleanupClosedPrTracking,
-    cleanupTargetRepo,
     linkTemplateMap,
     frozenEnvironments,
   } = options;
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
-  } = { promotionsByTargetEnvironment: null };
+    cleanupChanges: CleanupChange[];
+  } = { promotionsByTargetEnvironment: null, cleanupChanges: [] };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
   let contents = await readFile(filename, 'utf-8');
 
-  if (doCleanupClosedPrTracking && gitHubClient && cleanupTargetRepo) {
+  if (doCleanupClosedPrTracking && gitHubClient) {
     const result = await cleanupClosedPrTracking({
       contents,
       frozenEnvironments,
@@ -326,6 +335,7 @@ async function processFile(options: {
       logger,
     });
     contents = result.contents;
+    ret.cleanupChanges = result.changes;
   }
 
   if (dockerRegistryClient && doUpdateDockerTags) {
@@ -366,47 +376,6 @@ async function processFile(options: {
 
   await writeFile(filename, contents);
   return ret;
-}
-
-export async function cleanupClosedPrTracking(options: {
-  contents: string;
-  frozenEnvironments: Set<string>;
-  gitHubClient: GitHubClient;
-  logger: PrefixingLogger;
-}): Promise<{ contents: string }> {
-  const { contents, frozenEnvironments, gitHubClient, logger } = options;
-
-  const { document, stringify } = parseYAML(contents);
-  if (!document) {
-    return { contents };
-  }
-
-  const trackables = findTrackables(document, frozenEnvironments);
-  for (const trackable of trackables) {
-    const match = trackable.trackMutableRef.match(/^pr-(\d+)$/);
-    if (match && trackable.trackScalarTokenWriter) {
-      const prNumber = parseInt(match[1], 10);
-      try {
-        const pr = await gitHubClient.getPullRequest({
-          repoURL: trackable.repoURL,
-          prNumber,
-        });
-
-        if (pr.state === 'closed') {
-          trackable.trackScalarTokenWriter.write('main');
-          logger.info(`PR #${prNumber} is closed, updated to main`);
-        } else {
-          logger.info(`PR #${prNumber} is ${pr.state}`);
-        }
-      } catch (error) {
-        logger.info(`PR #${prNumber} lookup failed, leaving unchanged`);
-      }
-    }
-  }
-
-  return {
-    contents: stringify(),
-  };
 }
 
 interface APICache {

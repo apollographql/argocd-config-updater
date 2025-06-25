@@ -1,4 +1,4 @@
-import { cleanupClosedPrTracking } from '../src/index';
+import { cleanupClosedPrTracking } from '../src/update-closed-prs';
 import { GitHubClient } from '../src/github';
 import { PrefixingLogger } from '../src/log';
 
@@ -22,7 +22,7 @@ function createMockGitHubClient(
       if (state === 'error') {
         throw new Error('Not found');
       }
-      return { state: state || 'open' };
+      return { state: state || 'open', title: `PR ${prNumber} title` };
     },
   };
 }
@@ -61,6 +61,12 @@ prod:
     expect(result.contents).not.toContain('track: pr-123');
     expect((result.contents.match(/track: main/g) || []).length).toBe(2);
     expect(result.contents).toMatchSnapshot();
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]).toMatchObject({
+      prNumber: 123,
+      prTitle: 'PR 123 title',
+      prURL: 'https://github.com/owner/repo/pull/123',
+    });
   });
 
   it('should not change pr references that are open', async () => {
@@ -97,6 +103,8 @@ prod:
     expect(result.contents).toContain('track: pr-100');
     expect(result.contents).not.toContain('track: pr-123');
     expect(result.contents).toContain('track: main');
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0].prNumber).toBe(123);
     expect(result.contents).toMatchSnapshot();
   });
 
@@ -125,6 +133,7 @@ dev:
 
     expect(result.contents).toContain('track: pr-999');
     expect(result.contents).toMatchSnapshot();
+    expect(result.changes).toHaveLength(0);
   });
 
   it('should not modify YAML unnecessarily', async () => {
@@ -162,5 +171,6 @@ prod:
     expect(result.contents).toContain('# Inline comment');
     expect((result.contents.match(/track: main/g) || []).length).toBe(2);
     expect(result.contents).toMatchSnapshot();
+    expect(result.changes).toHaveLength(1);
   });
 });
