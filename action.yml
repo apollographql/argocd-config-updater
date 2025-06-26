@@ -38,23 +38,30 @@ inputs:
   parallelism:
     description: 'How many files to process in parallel'
     default: '1'
-  
+
   generate-promoted-commits-markdown:
     description: 'Generates the promoted-commits-markdown output'
     default: 'false'
-  
+
   link-template-file:
     description: 'If provided, a path to a YAML file mapping from template names to link templates. A template is a `text` and an `url`, each of which is a list of objects, each of which is of the form `{literal: "literal text"}` or `{variable: "variable-name"}.'
-  
+
   frozen-environments-file:
     description: 'If provided, a path to a YAML file listing environment names where track and promote blocks are ignored'
+
+  cleanup-closed-pr-tracking:
+    description: 'Clean up track: pr-N patterns where PR N is closed'
+    default: 'false'
 
 outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
-  
+
   promoted-commits-markdown:
     description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set.'
+  
+  cleanup-changes-markdown:
+    description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
 
 runs:
   using: node20
