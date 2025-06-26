@@ -319,7 +319,8 @@ export class CachingGitHubClient {
     },
   });
 
-  // We mainly care about the state of the PR, a very dynamic value, so we don't really want to cache it
+  // We mainly care about the state of the PR, a very dynamic value, so this cache is only
+  // for avoiding repeated lookups within a single action run; we don't save it to the Actions cache.
   private getPullRequestCache = new LRUCache<
     string,
     PullRequest,
