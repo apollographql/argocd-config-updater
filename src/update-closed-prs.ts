@@ -1,4 +1,4 @@
-import { GitHubClient } from './github';
+import { getWebURL, GitHubClient } from './github';
 import { PrefixingLogger } from './log';
 import { parseYAML } from './yaml';
 import { findTrackables } from './update-git-refs';
@@ -49,7 +49,7 @@ export async function cleanupClosedPrTracking(options: {
           changes.push({
             prNumber,
             prTitle: pr.title,
-            prURL: `${trackable.repoURL}/pull/${prNumber}`,
+            prURL: `${getWebURL(trackable.repoURL)}/pull/${prNumber}`,
           });
         } else {
           logger.info(`PR #${prNumber} is ${pr.state}`);

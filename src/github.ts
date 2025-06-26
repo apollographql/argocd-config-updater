@@ -56,6 +56,15 @@ function parseRepoURL(repoURL: string): OwnerAndRepo {
   return { owner: m[1], repo: m[2] };
 }
 
+/**
+ * @param repoURL Git repository URL (e.g., "https://github.com/owner/repo.git")
+ * @returns GitHub web URL (e.g., "https://github.com/owner/repo")
+ */
+export function getWebURL(repoURL: string): string {
+  const { owner, repo } = parseRepoURL(repoURL);
+  return `https://github.com/${owner}/${repo}`;
+}
+
 interface AllTreesForCommit {
   pathToTreeSHA: Map<string, string>;
   // If true, GitHub's response to the recursive tree fetch was truncated, so on

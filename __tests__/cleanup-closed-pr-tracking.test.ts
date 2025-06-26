@@ -1,5 +1,5 @@
 import { cleanupClosedPrTracking } from '../src/update-closed-prs';
-import { GitHubClient } from '../src/github';
+import { getWebURL, GitHubClient } from '../src/github';
 import { PrefixingLogger } from '../src/log';
 
 const logger = PrefixingLogger.silent();
@@ -27,12 +27,32 @@ function createMockGitHubClient(
   };
 }
 
+describe('getGitHubWebURL', () => {
+  it('should return a github web url given different repo url formats', () => {
+    // Standard .git URLs
+    expect(getWebURL('https://github.com/mdg-private/monorepo.git')).toBe(
+      'https://github.com/mdg-private/monorepo',
+    );
+    expect(getWebURL('https://github.com/owner/repo.git')).toBe(
+      'https://github.com/owner/repo',
+    );
+
+    // URLs without .git
+    expect(getWebURL('https://github.com/owner/repo')).toBe(
+      'https://github.com/owner/repo',
+    );
+    expect(getWebURL('https://github.com/mdg-private/monorepo')).toBe(
+      'https://github.com/mdg-private/monorepo',
+    );
+  });
+});
+
 describe('cleanupClosedPrTracking', () => {
   it('should replace closed PR references with main', async () => {
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-123
@@ -73,7 +93,7 @@ prod:
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-100
@@ -112,7 +132,7 @@ prod:
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-999
@@ -140,7 +160,7 @@ dev:
     const contents = `# Top level comment
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 # Development environment
 dev:
