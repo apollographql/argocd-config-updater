@@ -12,49 +12,48 @@ export type CleanupChangesByFile = Map<string, CleanupChange[]>;
 export function formatCleanupChanges(changes: CleanupChange[]): string {
   if (!changes.length) return '';
 
-  const changesByApp = groupChangesByApp(changes);
-  const sortedAppNames = [...changesByApp.keys()].sort();
+  const changesByAppEnv = groupChangesByAppAndEnv(changes);
+  const sortedKeys = [...changesByAppEnv.keys()].sort();
 
   const header = `Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}:\n\n`;
-  const sections = buildSections(sortedAppNames, changesByApp);
+  const sections = buildSections(sortedKeys, changesByAppEnv);
 
   return header + sections.join('\n');
 }
 
-function groupChangesByApp(
+function groupChangesByAppAndEnv(
   changes: CleanupChange[],
 ): Map<string, CleanupChange[]> {
-  const changesByApp = new Map<string, CleanupChange[]>();
+  const changesByAppEnv = new Map<string, CleanupChange[]>();
 
   for (const change of changes) {
-    const existing = changesByApp.get(change.appName);
+    const key = `${change.appName}|${change.environment}`;
+    const existing = changesByAppEnv.get(key);
     if (existing) {
       existing.push(change);
     } else {
-      changesByApp.set(change.appName, [change]);
+      changesByAppEnv.set(key, [change]);
     }
   }
 
-  return changesByApp;
+  return changesByAppEnv;
 }
 
 function buildSections(
-  appNames: string[],
-  changesByApp: Map<string, CleanupChange[]>,
+  sortedKeys: string[],
+  changesByAppEnv: Map<string, CleanupChange[]>,
 ): string[] {
-  const sections = appNames.flatMap((appName) => {
-    const appChanges = changesByApp.get(appName);
+  const sections = sortedKeys.flatMap((key) => {
+    const appChanges = changesByAppEnv.get(key);
     if (!appChanges) return [];
-    const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
-    const uniqueEnvironments = [
-      ...new Set(appChanges.map((c) => c.environment)),
-    ].sort();
-    const environmentList = uniqueEnvironments.join(', ');
 
-    const appHeader = `**${appName}** (${environmentList})`;
+    const [appName, environment] = key.split('|');
+    const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
+
+    const appHeader = `**${appName}** (${environment})`;
     const prLines = sortedChanges.map(formatPRLine);
 
-    return [appHeader, ...prLines, '']; // blank line between apps
+    return [appHeader, ...prLines, '']; // blank line between sections
   });
 
   // Remove last blank line
