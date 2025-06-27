@@ -1,0 +1,35 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`formatCleanupChanges should format multiple closed PRs under single app 1`] = `
+"Found 2 closed PRs:
+
+**test-app** (dev, staging)
+- PR [#123](https://github.com/owner/repo/pull/123): First PR (closed Jan 15, 2024)
+- PR [#456](https://github.com/owner/repo/pull/456): Second PR (closed Jan 18, 2024)"
+`;
+
+exports[`formatCleanupChanges should format single closed PR 1`] = `
+"Found 1 closed PR:
+
+**test-app** (dev)
+- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)"
+`;
+
+exports[`formatCleanupChanges should handle multiple environments for same app 1`] = `
+"Found 3 closed PRs:
+
+**test-app** (dev, staging)
+- PR [#123](https://github.com/owner/repo/pull/123): Dev PR (closed Jan 15, 2024)
+- PR [#456](https://github.com/owner/repo/pull/456): Staging PR (closed Jan 18, 2024)
+- PR [#789](https://github.com/owner/repo/pull/789): Another Dev PR (closed Jan 20, 2024)"
+`;
+
+exports[`formatCleanupChanges should sort apps alphabetically with blank lines between 1`] = `
+"Found 2 closed PRs:
+
+**test-api** (staging)
+- PR [#456](https://github.com/owner/repo/pull/456): API PR (closed Jan 18, 2024)
+
+**test-app** (dev)
+- PR [#123](https://github.com/owner/repo/pull/123): Router PR (closed Jan 15, 2024)"
+`;

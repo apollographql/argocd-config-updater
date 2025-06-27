@@ -12,56 +12,59 @@ export type CleanupChangesByFile = Map<string, CleanupChange[]>;
 export function formatCleanupChanges(changes: CleanupChange[]): string {
   if (!changes.length) return '';
 
-  // Group changes by app
-  const changesByApp = new Map<string, CleanupChange[]>();
-  for (const change of changes) {
-    const key = change.appName;
-    if (!changesByApp.has(key)) {
-      changesByApp.set(key, []);
-    }
-    const appChanges = changesByApp.get(key);
-    if (appChanges) {
-      appChanges.push(change);
-    }
-  }
+  const changesByApp = groupChangesByApp(changes);
+  const sortedAppNames = [...changesByApp.keys()].sort();
 
   const header = `Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}:\n\n`;
-  const sections: string[] = [];
-
-  // Sort apps alphabetically
-  const sortedApps = [...changesByApp.keys()].sort();
-
-  for (const appName of sortedApps) {
-    const appChanges = changesByApp.get(appName);
-    if (!appChanges) continue;
-
-    // Sort changes by PR number within each app
-    appChanges.sort((a, b) => a.prNumber - b.prNumber);
-
-    // Get unique environments for this app
-    const environments = [
-      ...new Set(appChanges.map((c) => c.environment)),
-    ].sort();
-    const envString = environments.join(', ');
-
-    sections.push(`**${appName}** (${envString})`);
-
-    for (const change of appChanges) {
-      const closedDateStr = formatClosedDate(change.closedAt);
-      sections.push(
-        `- PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`,
-      );
-    }
-
-    sections.push(''); // Add blank line between apps
-  }
-
-  // Remove last blank line
-  if (sections.length > 0 && sections[sections.length - 1] === '') {
-    sections.pop();
-  }
+  const sections = buildSections(sortedAppNames, changesByApp);
 
   return header + sections.join('\n');
+}
+
+function groupChangesByApp(
+  changes: CleanupChange[],
+): Map<string, CleanupChange[]> {
+  const changesByApp = new Map<string, CleanupChange[]>();
+
+  for (const change of changes) {
+    const existing = changesByApp.get(change.appName);
+    if (existing) {
+      existing.push(change);
+    } else {
+      changesByApp.set(change.appName, [change]);
+    }
+  }
+
+  return changesByApp;
+}
+
+function buildSections(
+  appNames: string[],
+  changesByApp: Map<string, CleanupChange[]>,
+): string[] {
+  const sections = appNames.flatMap((appName) => {
+    const appChanges = changesByApp.get(appName);
+    if (!appChanges) return [];
+    const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
+    const uniqueEnvironments = [
+      ...new Set(appChanges.map((c) => c.environment)),
+    ].sort();
+    const environmentList = uniqueEnvironments.join(', ');
+
+    const appHeader = `**${appName}** (${environmentList})`;
+    const prLines = sortedChanges.map(formatPRLine);
+
+    return [appHeader, ...prLines, '']; // blank line between apps
+  });
+
+  // Remove last blank line
+  sections.pop();
+  return sections;
+}
+
+function formatPRLine(change: CleanupChange): string {
+  const closedDateStr = formatClosedDate(change.closedAt);
+  return `- PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`;
 }
 
 function formatClosedDate(closedAt: string | null): string {
@@ -69,12 +72,12 @@ function formatClosedDate(closedAt: string | null): string {
 
   try {
     const date = new Date(closedAt);
-    const options: Intl.DateTimeFormatOptions = {
+    const formattedDate = date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-    };
-    return ` (closed ${date.toLocaleDateString('en-US', options)})`;
+    });
+    return ` (closed ${formattedDate})`;
   } catch {
     return '';
   }

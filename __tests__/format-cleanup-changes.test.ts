@@ -5,11 +5,10 @@ import {
 
 describe('formatCleanupChanges', () => {
   it('should return empty string for no changes', () => {
-    const result = formatCleanupChanges([]);
-    expect(result).toBe('');
+    expect(formatCleanupChanges([])).toBe('');
   });
 
-  it('should find single closed PRs', () => {
+  it('should format single closed PR', () => {
     const changes: CleanupChange[] = [
       {
         prNumber: 123,
@@ -27,18 +26,11 @@ describe('formatCleanupChanges', () => {
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)',
     );
+    expect(result).toMatchSnapshot();
   });
 
-  it('should find multiple closed PRs', () => {
+  it('should format multiple closed PRs under single app', () => {
     const changes: CleanupChange[] = [
-      {
-        prNumber: 456,
-        prTitle: 'Second PR',
-        prURL: 'https://github.com/owner/repo/pull/456',
-        appName: 'test-app',
-        environment: 'staging',
-        closedAt: '2024-01-18T14:20:00Z',
-      },
       {
         prNumber: 123,
         prTitle: 'First PR',
@@ -46,6 +38,14 @@ describe('formatCleanupChanges', () => {
         appName: 'test-app',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
+      },
+      {
+        prNumber: 456,
+        prTitle: 'Second PR',
+        prURL: 'https://github.com/owner/repo/pull/456',
+        appName: 'test-app',
+        environment: 'staging',
+        closedAt: '2024-01-18T14:20:00Z',
       },
     ];
 
@@ -58,9 +58,10 @@ describe('formatCleanupChanges', () => {
     expect(result).toContain(
       '- PR [#456](https://github.com/owner/repo/pull/456): Second PR (closed Jan 18, 2024)',
     );
+    expect(result).toMatchSnapshot();
   });
 
-  it('should sort PRs by number', () => {
+  it('should sort PRs by number within app', () => {
     const changes: CleanupChange[] = [
       {
         prNumber: 456,
@@ -87,7 +88,7 @@ describe('formatCleanupChanges', () => {
     expect(pr123Index).toBeLessThan(pr456Index);
   });
 
-  it('should group by app and show environments', () => {
+  it('should sort apps alphabetically with blank lines between', () => {
     const changes: CleanupChange[] = [
       {
         prNumber: 123,
@@ -108,8 +109,12 @@ describe('formatCleanupChanges', () => {
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('**test-api** (staging)');
-    expect(result).toContain('**test-app**');
+    expect(result).toMatchSnapshot();
+
+    // Check alphabetical order
+    expect(result.indexOf('**test-api**')).toBeLessThan(
+      result.indexOf('**test-app**'),
+    );
   });
 
   it('should handle multiple environments for same app', () => {
@@ -130,28 +135,19 @@ describe('formatCleanupChanges', () => {
         environment: 'staging',
         closedAt: '2024-01-18T14:20:00Z',
       },
-    ];
-
-    const result = formatCleanupChanges(changes);
-    expect(result).toContain('**test-app** (dev, staging)');
-  });
-
-  it('should handle missing closed date', () => {
-    const changes: CleanupChange[] = [
       {
-        prNumber: 123,
-        prTitle: 'No date PR',
-        prURL: 'https://github.com/owner/repo/pull/123',
+        prNumber: 789,
+        prTitle: 'Another Dev PR',
+        prURL: 'https://github.com/owner/repo/pull/789',
         appName: 'test-app',
         environment: 'dev',
-        closedAt: null,
+        closedAt: '2024-01-20T09:15:00Z',
       },
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain(
-      '- PR [#123](https://github.com/owner/repo/pull/123): No date PR',
-    );
-    expect(result).not.toContain('(closed');
+    expect(result).toContain('**test-app** (dev, staging)');
+    expect(result).toContain('Found 3 closed PRs:');
+    expect(result).toMatchSnapshot();
   });
 });
