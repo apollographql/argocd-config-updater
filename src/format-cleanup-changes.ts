@@ -12,53 +12,30 @@ export type CleanupChangesByFile = Map<string, CleanupChange[]>;
 export function formatCleanupChanges(changes: CleanupChange[]): string {
   if (!changes.length) return '';
 
-  const changesByAppEnv = groupChangesByAppAndEnv(changes);
-  const sortedKeys = [...changesByAppEnv.keys()].sort();
-
-  const header = `Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}:\n\n`;
-  const sections = buildSections(sortedKeys, changesByAppEnv);
-
-  return header + sections.join('\n');
-}
-
-function groupChangesByAppAndEnv(
-  changes: CleanupChange[],
-): Map<string, CleanupChange[]> {
-  const changesByAppEnv = new Map<string, CleanupChange[]>();
-
-  for (const change of changes) {
-    const key = `${change.appName}|${change.environment}`;
-    const existing = changesByAppEnv.get(key);
-    if (existing) {
-      existing.push(change);
-    } else {
-      changesByAppEnv.set(key, [change]);
-    }
-  }
-
-  return changesByAppEnv;
-}
-
-function buildSections(
-  sortedKeys: string[],
-  changesByAppEnv: Map<string, CleanupChange[]>,
-): string[] {
-  const sections = sortedKeys.flatMap((key) => {
-    const appChanges = changesByAppEnv.get(key);
-    if (!appChanges) return [];
-
-    const [appName, environment] = key.split('|');
-    const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
-
-    const appHeader = `**${appName}** (${environment})`;
-    const prLines = sortedChanges.map(formatPRLine);
-
-    return [appHeader, ...prLines, '']; // blank line between sections
+  const sorted = [...changes].sort((a, b) => {
+    const appCompare = a.appName.localeCompare(b.appName);
+    if (appCompare !== 0) return appCompare;
+    const envCompare = a.environment.localeCompare(b.environment);
+    if (envCompare !== 0) return envCompare;
+    return a.prNumber - b.prNumber;
   });
 
-  // Remove last blank line
-  sections.pop();
-  return sections;
+  const sections: string[] = [];
+  let currentApp = '';
+  let currentEnv = '';
+
+  for (const change of sorted) {
+    if (change.appName !== currentApp || change.environment !== currentEnv) {
+      if (sections.length > 0) sections.push(''); // blank line between sections
+      sections.push(`**${change.appName}** (${change.environment})`);
+      currentApp = change.appName;
+      currentEnv = change.environment;
+    }
+    sections.push(formatPRLine(change));
+  }
+
+  const header = `Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}:\n\n`;
+  return header + sections.join('\n');
 }
 
 function formatPRLine(change: CleanupChange): string {
