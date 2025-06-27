@@ -22,7 +22,11 @@ function createMockGitHubClient(
       if (state === 'error') {
         throw new Error('Not found');
       }
-      return { state: state || 'open', title: `PR ${prNumber} title` };
+      return {
+        state: state || 'open',
+        title: `PR ${prNumber} title`,
+        closedAt: state === 'closed' ? '2024-01-15T10:30:00Z' : null,
+      };
     },
   };
 }
@@ -76,6 +80,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-app/application-values.yaml',
     });
 
     expect(result.contents).not.toContain('track: pr-123');
@@ -86,6 +91,9 @@ prod:
       prNumber: 123,
       prTitle: 'PR 123 title',
       prURL: 'https://github.com/owner/repo/pull/123',
+      appName: 'test-app',
+      environment: 'dev',
+      closedAt: '2024-01-15T10:30:00Z',
     });
   });
 
@@ -118,6 +126,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-100');
@@ -149,6 +158,7 @@ dev:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-999');
@@ -185,6 +195,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('# Top level comment');

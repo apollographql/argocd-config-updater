@@ -48,7 +48,7 @@ describe('CachingGitHubClient caches', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open', title: 'Test PR' };
+        return { state: 'open', title: 'Test PR', closedAt: null };
       },
     });
 
@@ -85,7 +85,7 @@ describe('CachingGitHubClient caches', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open', title: 'Test PR' };
+        return { state: 'open', title: 'Test PR', closedAt: null };
       },
     });
 

@@ -34,6 +34,7 @@ export type PullRequestState = 'open' | 'closed';
 export interface PullRequest {
   state: PullRequestState;
   title: string;
+  closedAt: string | null;
 }
 
 export interface GitHubClient {
@@ -276,6 +277,7 @@ export class OctokitGitHubClient {
     return {
       state: response.data.state as PullRequestState,
       title: response.data.title,
+      closedAt: response.data.closed_at,
     };
   }
 }
