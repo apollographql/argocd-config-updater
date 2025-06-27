@@ -31,7 +31,7 @@ function createMockGitHubClient(
   };
 }
 
-describe('getGitHubWebURL', () => {
+describe('getWebURL', () => {
   it('should return a github web url given different repo url formats', () => {
     // Standard .git URLs
     expect(getWebURL('https://github.com/mdg-private/monorepo.git')).toBe(

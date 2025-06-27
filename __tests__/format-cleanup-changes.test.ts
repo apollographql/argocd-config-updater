@@ -8,7 +8,7 @@ describe('formatCleanupChanges', () => {
     expect(formatCleanupChanges([])).toBe('');
   });
 
-  it('should format single closed PR', () => {
+  it('should format a single closed PR', () => {
     const changes: CleanupChange[] = [
       {
         prNumber: 123,
@@ -158,7 +158,6 @@ describe('formatCleanupChanges', () => {
 
     const result = formatCleanupChanges(changes);
 
-    // Check order: test-api|dev, test-app|dev, test-app|staging
     const apiProdIndex = result.indexOf('**test-api** (dev)');
     const appDevIndex = result.indexOf('**test-app** (dev)');
     const appStagingIndex = result.indexOf('**test-app** (staging)');

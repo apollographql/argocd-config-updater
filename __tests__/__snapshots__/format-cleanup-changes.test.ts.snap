@@ -1,5 +1,12 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`formatCleanupChanges should format a single closed PR 1`] = `
+"Found 1 closed PR:
+
+**test-app** (dev)
+- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)"
+`;
+
 exports[`formatCleanupChanges should format multiple closed PRs under same app and environment 1`] = `
 "Found 2 closed PRs:
 
