@@ -7,26 +7,13 @@ import { CleanupChange } from './format-cleanup-changes';
 /**
  * Extract app name from file path.
  * Examples:
- *   - "teams/governance/operationcollections/application-values.yaml" -> "operationcollections"
- *   - "/path/to/teams/apollo-router/application-values.yaml" -> "apollo-router"
+ *   - "teams/backend/test-app/application-values.yaml" -> "test-app"
+ *   - "/path/to/teams/test-api/application-values.yaml" -> "test-api"
  */
 function extractAppNameFromFilename(filename: string): string {
-  // Split the path and find the directory containing application-values.yaml
   const parts = filename.split('/');
-  const yamlIndex = parts.findIndex(
-    (part) => part === 'application-values.yaml',
-  );
-
-  if (yamlIndex > 0) {
-    // The app name is the directory just before application-values.yaml
-    return parts[yamlIndex - 1];
-  }
-
-  // Fallback: try to extract from any filename pattern
-  const basename = parts[parts.length - 1];
-  if (basename.endsWith('.yaml') || basename.endsWith('.yml')) {
-    return basename.replace(/\.(yaml|yml)$/, '');
-  }
+  const appValuesIndex = parts.indexOf('application-values.yaml');
+  if (appValuesIndex > 0) return parts[appValuesIndex - 1];
 
   return 'unknown-app';
 }
