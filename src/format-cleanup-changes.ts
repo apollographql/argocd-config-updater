@@ -26,7 +26,9 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
 
   for (const change of sorted) {
     if (change.appName !== currentApp || change.environment !== currentEnv) {
-      if (sections.length > 0) sections.push(''); // blank line between sections
+      if (sections.length > 0) {
+        sections.push(''); // blank line between sections
+      }
       sections.push(`**${change.appName}** (${change.environment})`);
       currentApp = change.appName;
       currentEnv = change.environment;
