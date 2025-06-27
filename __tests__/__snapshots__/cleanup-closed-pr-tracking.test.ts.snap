@@ -4,7 +4,7 @@ exports[`cleanupClosedPrTracking should handle PR lookup errors by leaving PR re
 "
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-999
@@ -17,7 +17,7 @@ exports[`cleanupClosedPrTracking should not change pr references that are open 1
 "
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-100
@@ -37,7 +37,7 @@ exports[`cleanupClosedPrTracking should not modify YAML unnecessarily 1`] = `
 "# Top level comment
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 # Development environment
 dev:
@@ -58,7 +58,7 @@ exports[`cleanupClosedPrTracking should replace closed PR references with main 1
 "
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: main

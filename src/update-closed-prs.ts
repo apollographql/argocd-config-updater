@@ -1,8 +1,22 @@
-import { GitHubClient } from './github';
+import { getWebURL, GitHubClient } from './github';
 import { PrefixingLogger } from './log';
 import { parseYAML } from './yaml';
 import { findTrackables } from './update-git-refs';
 import { CleanupChange } from './format-cleanup-changes';
+
+/**
+ * Extract app name from file path.
+ * Examples:
+ *   - "teams/backend/test-app/application-values.yaml" -> "test-app"
+ *   - "/path/to/teams/test-api/application-values.yaml" -> "test-api"
+ */
+function extractAppNameFromFilename(filename: string): string {
+  const parts = filename.split('/');
+  const appValuesIndex = parts.indexOf('application-values.yaml');
+  if (appValuesIndex > 0) return parts[appValuesIndex - 1];
+
+  return 'unknown-app';
+}
 
 /**
  * Updates closed PR tracking references to point to 'main' branch.
@@ -23,8 +37,10 @@ export async function cleanupClosedPrTracking(options: {
   frozenEnvironments: Set<string>;
   gitHubClient: GitHubClient;
   logger: PrefixingLogger;
+  filename: string;
 }): Promise<{ contents: string; changes: CleanupChange[] }> {
-  const { contents, frozenEnvironments, gitHubClient, logger } = options;
+  const { contents, frozenEnvironments, gitHubClient, logger, filename } =
+    options;
 
   const { document, stringify } = parseYAML(contents);
   if (!document) {
@@ -46,10 +62,17 @@ export async function cleanupClosedPrTracking(options: {
         if (pr.state === 'closed') {
           trackable.trackScalarTokenWriter.write('main');
           logger.info(`PR #${prNumber} is closed, updated to main`);
+
+          const appName = extractAppNameFromFilename(filename);
+          const environment = trackable.environment;
+
           changes.push({
             prNumber,
             prTitle: pr.title,
-            prURL: `${trackable.repoURL}/pull/${prNumber}`,
+            prURL: `${getWebURL(trackable.repoURL)}/pull/${prNumber}`,
+            appName,
+            environment,
+            closedAt: pr.closedAt,
           });
         } else {
           logger.info(`PR #${prNumber} is ${pr.state}`);
