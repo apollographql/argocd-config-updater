@@ -63,9 +63,8 @@ export async function cleanupClosedPrTracking(options: {
           trackable.trackScalarTokenWriter.write('main');
           logger.info(`PR #${prNumber} is closed, updated to main`);
 
-          // Extract app name from filename and environment from blockKey
           const appName = extractAppNameFromFilename(filename);
-          const environment = trackable.environment; // environment from YAML top-level key
+          const environment = trackable.environment;
 
           changes.push({
             prNumber,
