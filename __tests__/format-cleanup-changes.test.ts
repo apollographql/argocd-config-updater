@@ -14,16 +14,16 @@ describe('formatCleanupChanges', () => {
         prNumber: 123,
         prTitle: 'Add new feature',
         prURL: 'https://github.com/owner/repo/pull/123',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('Found 1 closed PR:');
-    expect(result).toContain('**test-team/test-app** (dev)');
+    expect(result).toContain('# Found 1 closed PR');
+    expect(result).toContain('## dev');
+    expect(result).toContain('### teams/test-team/test-app');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)',
     );
@@ -36,8 +36,7 @@ describe('formatCleanupChanges', () => {
         prNumber: 123,
         prTitle: 'First PR',
         prURL: 'https://github.com/owner/repo/pull/123',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -45,16 +44,16 @@ describe('formatCleanupChanges', () => {
         prNumber: 456,
         prTitle: 'Second PR',
         prURL: 'https://github.com/owner/repo/pull/456',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'dev',
         closedAt: '2024-01-18T14:20:00Z',
       },
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('Found 2 closed PRs:');
-    expect(result).toContain('**test-team/test-app** (dev)');
+    expect(result).toContain('# Found 2 closed PRs');
+    expect(result).toContain('## dev');
+    expect(result).toContain('### teams/test-team/test-app');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): First PR (closed Jan 15, 2024)',
     );
@@ -70,8 +69,7 @@ describe('formatCleanupChanges', () => {
         prNumber: 123,
         prTitle: 'Dev PR 1',
         prURL: 'https://github.com/owner/repo/pull/123',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -79,8 +77,7 @@ describe('formatCleanupChanges', () => {
         prNumber: 456,
         prTitle: 'Staging PR',
         prURL: 'https://github.com/owner/repo/pull/456',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'staging',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -88,29 +85,31 @@ describe('formatCleanupChanges', () => {
         prNumber: 789,
         prTitle: 'Dev PR 2',
         prURL: 'https://github.com/owner/repo/pull/789',
-        appName: 'test-app',
-        teamName: 'test-team',
+        filename: 'teams/test-team/test-app/application-values.yaml',
         environment: 'dev',
         closedAt: '2024-01-20T09:15:00Z',
       },
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('Found 3 closed PRs:');
+    expect(result).toContain('# Found 3 closed PRs');
 
-    // Verify dev PRs are grouped together
+    // Verify dev PRs are grouped together and come before staging
     const lines = result.split('\n');
-    const devSectionIndex = lines.findIndex((line) =>
-      line.includes('**test-team/test-app** (dev)'),
+    const devSectionIndex = lines.findIndex((line) => line === '## dev');
+    const stagingSectionIndex = lines.findIndex(
+      (line) => line === '## staging',
     );
-    expect(lines[devSectionIndex + 1]).toContain('#123');
-    expect(lines[devSectionIndex + 2]).toContain('#789');
+    expect(devSectionIndex).toBeGreaterThan(-1);
+    expect(stagingSectionIndex).toBeGreaterThan(-1);
 
-    // Verify staging is separate
-    const stagingSectionIndex = lines.findIndex((line) =>
-      line.includes('**test-team/test-app** (staging)'),
+    // Check that both dev PRs are under the dev section
+    const devAppIndex = lines.findIndex(
+      (line) => line === '### teams/test-team/test-app',
+      devSectionIndex,
     );
-    expect(lines[stagingSectionIndex + 1]).toContain('#456');
+    expect(lines[devAppIndex + 1]).toContain('#123');
+    expect(lines[devAppIndex + 2]).toContain('#789');
 
     expect(result).toMatchSnapshot();
   });

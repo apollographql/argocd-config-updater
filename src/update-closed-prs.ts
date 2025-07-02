@@ -5,32 +5,6 @@ import { findTrackables } from './update-git-refs';
 import { CleanupChange } from './format-cleanup-changes';
 
 /**
- * Extract team and app name from file path.
- * Example:
- *   - "teams/backend/test-app/application-values.yaml" -> { teamName: "backend", appName: "test-app" }
- */
-function extractTeamAndAppFromFilename(filename: string): {
-  teamName: string;
-  appName: string;
-} {
-  const parts = filename.split('/');
-  const teamsIndex = parts.indexOf('teams');
-
-  if (
-    teamsIndex >= 0 &&
-    parts.length >= teamsIndex + 4 &&
-    parts[teamsIndex + 3] === 'application-values.yaml'
-  ) {
-    return {
-      teamName: parts[teamsIndex + 1],
-      appName: parts[teamsIndex + 2],
-    };
-  }
-
-  return { teamName: 'unknown-team', appName: 'unknown-app' };
-}
-
-/**
  * Updates closed PR tracking references to point to 'main' branch.
  *
  * This function scans YAML configuration files for Git references that track
@@ -75,15 +49,13 @@ export async function cleanupClosedPrTracking(options: {
           trackable.trackScalarTokenWriter.write('main');
           logger.info(`PR #${prNumber} is closed, updated to main`);
 
-          const { teamName, appName } = extractTeamAndAppFromFilename(filename);
           const environment = trackable.environment;
 
           changes.push({
             prNumber,
             prTitle: pr.title,
             prURL: `${getWebURL(trackable.repoURL)}/pull/${prNumber}`,
-            appName,
-            teamName,
+            filename,
             environment,
             closedAt: pr.closedAt,
           });

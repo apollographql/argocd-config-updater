@@ -84,8 +84,7 @@ prod:
       prNumber: 123,
       prTitle: 'PR 123 title',
       prURL: 'https://github.com/owner/repo/pull/123',
-      appName: 'test-app',
-      teamName: 'test-team',
+      filename: 'teams/test-team/test-app/application-values.yaml',
       environment: 'dev',
       closedAt: '2024-01-15T10:30:00Z',
     });
