@@ -1,3 +1,5 @@
+import { dirname } from 'node:path';
+
 export interface CleanupChange {
   prNumber: number;
   prTitle: string;
@@ -14,7 +16,7 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
   const grouped = new Map<string, Map<string, CleanupChange[]>>();
 
   for (const change of changes) {
-    const appDir = change.filename.replace(/\/application-values\.yaml$/, '');
+    const appDir = dirname(change.filename);
     const env = change.environment;
 
     let envGroup = grouped.get(env);
@@ -49,7 +51,6 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
       lines.push(`### ${appDir}`);
 
       const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
-
       for (const change of sortedChanges) {
         const closedDateStr = change.closedAt
           ? ` (closed ${new Date(change.closedAt).toLocaleDateString('en-US', {
@@ -63,7 +64,6 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
           `- PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`,
         );
       }
-
       lines.push('');
     }
   }
