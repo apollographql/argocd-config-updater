@@ -17,11 +17,19 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
     const appDir = change.filename.replace(/\/application-values\.yaml$/, '');
     const env = change.environment;
 
-    if (!grouped.has(env)) grouped.set(env, new Map());
-    const envGroup = grouped.get(env)!;
+    let envGroup = grouped.get(env);
+    if (!envGroup) {
+      envGroup = new Map();
+      grouped.set(env, envGroup);
+    }
 
-    if (!envGroup.has(appDir)) envGroup.set(appDir, []);
-    envGroup.get(appDir)!.push(change);
+    let appChanges = envGroup.get(appDir);
+    if (!appChanges) {
+      appChanges = [];
+      envGroup.set(appDir, appChanges);
+    }
+
+    appChanges.push(change);
   }
 
   const lines: string[] = [];
