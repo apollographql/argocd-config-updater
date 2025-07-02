@@ -25,26 +25,3 @@ exports[`formatCleanupChanges should handle multiple PRs across different apps a
 **test-team/test-app** (staging)
 - PR [#456](https://github.com/owner/repo/pull/456): Staging PR (closed Jan 18, 2024)"
 `;
-
-exports[`formatCleanupChanges should separate same app with different environments 1`] = `
-"Found 2 closed PRs:
-
-**test-team/test-app** (dev)
-- PR [#123](https://github.com/owner/repo/pull/123): Dev PR (closed Jan 15, 2024)
-
-**test-team/test-app** (staging)
-- PR [#456](https://github.com/owner/repo/pull/456): Staging PR (closed Jan 18, 2024)"
-`;
-
-exports[`formatCleanupChanges should sort sections alphabetically by app name then environment 1`] = `
-"Found 3 closed PRs:
-
-**api-team/test-api** (dev)
-- PR [#456](https://github.com/owner/repo/pull/456): API PR (closed Jan 18, 2024)
-
-**test-team/test-app** (dev)
-- PR [#789](https://github.com/owner/repo/pull/789): App Dev PR (closed Jan 20, 2024)
-
-**test-team/test-app** (staging)
-- PR [#123](https://github.com/owner/repo/pull/123): Router PR (closed Jan 15, 2024)"
-`;
