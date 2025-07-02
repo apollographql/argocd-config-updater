@@ -6,8 +6,7 @@ import { CleanupChange } from './format-cleanup-changes';
 
 /**
  * Extract team and app name from file path.
- * Only works for teams/<teamname>/<appname>/application-values.yaml pattern.
- * Examples:
+ * Example:
  *   - "teams/backend/test-app/application-values.yaml" -> { teamName: "backend", appName: "test-app" }
  */
 function extractTeamAndAppFromFilename(filename: string): {
