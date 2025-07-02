@@ -99,16 +99,10 @@ export function findTrackables(
       'ref',
     );
 
-    // Get token writer for the track field - either top-level track or gitConfig.trackMutableRef
-    let trackScalarTokenAndValue = null;
-    if (getStringValue(value, 'track')) {
-      trackScalarTokenAndValue = getStringAndScalarTokenFromMap(value, 'track');
-    } else if (getStringValue(gitConfigBlock, 'trackMutableRef')) {
-      trackScalarTokenAndValue = getStringAndScalarTokenFromMap(
-        gitConfigBlock,
-        'trackMutableRef',
-      );
-    }
+    // Get token writer for the top level track field
+    const trackScalarTokenAndValue = getStringValue(value, 'track')
+      ? getStringAndScalarTokenFromMap(value, 'track')
+      : null;
 
     let maybeDockerCommit: string | null = null;
 
