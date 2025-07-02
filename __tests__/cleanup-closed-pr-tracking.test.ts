@@ -34,19 +34,12 @@ function createMockGitHubClient(
 describe('getWebURL', () => {
   it('should return a github web url given different repo url formats', () => {
     // Standard .git URLs
-    expect(getWebURL('https://github.com/mdg-private/monorepo.git')).toBe(
-      'https://github.com/mdg-private/monorepo',
-    );
     expect(getWebURL('https://github.com/owner/repo.git')).toBe(
       'https://github.com/owner/repo',
     );
-
     // URLs without .git
     expect(getWebURL('https://github.com/owner/repo')).toBe(
       'https://github.com/owner/repo',
-    );
-    expect(getWebURL('https://github.com/mdg-private/monorepo')).toBe(
-      'https://github.com/mdg-private/monorepo',
     );
   });
 });
