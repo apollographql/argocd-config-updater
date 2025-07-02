@@ -15,6 +15,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Add new feature',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -22,7 +23,7 @@ describe('formatCleanupChanges', () => {
 
     const result = formatCleanupChanges(changes);
     expect(result).toContain('Found 1 closed PR:');
-    expect(result).toContain('**test-app** (dev)');
+    expect(result).toContain('**test-team/test-app** (dev)');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)',
     );
@@ -36,6 +37,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'First PR',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -44,6 +46,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Second PR',
         prURL: 'https://github.com/owner/repo/pull/456',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -51,7 +54,7 @@ describe('formatCleanupChanges', () => {
 
     const result = formatCleanupChanges(changes);
     expect(result).toContain('Found 2 closed PRs:');
-    expect(result).toContain('**test-app** (dev)');
+    expect(result).toContain('**test-team/test-app** (dev)');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): First PR (closed Jan 15, 2024)',
     );
@@ -68,6 +71,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Dev PR',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -76,6 +80,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Staging PR',
         prURL: 'https://github.com/owner/repo/pull/456',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'staging',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -83,16 +88,16 @@ describe('formatCleanupChanges', () => {
 
     const result = formatCleanupChanges(changes);
     expect(result).toContain('Found 2 closed PRs:');
-    expect(result).toContain('**test-app** (dev)');
-    expect(result).toContain('**test-app** (staging)');
+    expect(result).toContain('**test-team/test-app** (dev)');
+    expect(result).toContain('**test-team/test-app** (staging)');
 
     // Verify they're in separate sections
     const lines = result.split('\n');
     const devIndex = lines.findIndex((line) =>
-      line.includes('**test-app** (dev)'),
+      line.includes('**test-team/test-app** (dev)'),
     );
     const stagingIndex = lines.findIndex((line) =>
-      line.includes('**test-app** (staging)'),
+      line.includes('**test-team/test-app** (staging)'),
     );
     expect(devIndex).toBeGreaterThan(-1);
     expect(stagingIndex).toBeGreaterThan(-1);
@@ -108,6 +113,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Second PR',
         prURL: 'https://github.com/owner/repo/pull/456',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -116,6 +122,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'First PR',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -135,6 +142,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Router PR',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'staging',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -143,6 +151,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'API PR',
         prURL: 'https://github.com/owner/repo/pull/456',
         appName: 'test-api',
+        teamName: 'api-team',
         environment: 'dev',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -151,6 +160,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'App Dev PR',
         prURL: 'https://github.com/owner/repo/pull/789',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-20T09:15:00Z',
       },
@@ -158,9 +168,9 @@ describe('formatCleanupChanges', () => {
 
     const result = formatCleanupChanges(changes);
 
-    const apiProdIndex = result.indexOf('**test-api** (dev)');
-    const appDevIndex = result.indexOf('**test-app** (dev)');
-    const appStagingIndex = result.indexOf('**test-app** (staging)');
+    const apiProdIndex = result.indexOf('**api-team/test-api** (dev)');
+    const appDevIndex = result.indexOf('**test-team/test-app** (dev)');
+    const appStagingIndex = result.indexOf('**test-team/test-app** (staging)');
 
     expect(apiProdIndex).toBeLessThan(appDevIndex);
     expect(appDevIndex).toBeLessThan(appStagingIndex);
@@ -175,6 +185,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Dev PR 1',
         prURL: 'https://github.com/owner/repo/pull/123',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-15T10:30:00Z',
       },
@@ -183,6 +194,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Staging PR',
         prURL: 'https://github.com/owner/repo/pull/456',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'staging',
         closedAt: '2024-01-18T14:20:00Z',
       },
@@ -191,6 +203,7 @@ describe('formatCleanupChanges', () => {
         prTitle: 'Dev PR 2',
         prURL: 'https://github.com/owner/repo/pull/789',
         appName: 'test-app',
+        teamName: 'test-team',
         environment: 'dev',
         closedAt: '2024-01-20T09:15:00Z',
       },
@@ -202,14 +215,14 @@ describe('formatCleanupChanges', () => {
     // Verify dev PRs are grouped together
     const lines = result.split('\n');
     const devSectionIndex = lines.findIndex((line) =>
-      line.includes('**test-app** (dev)'),
+      line.includes('**test-team/test-app** (dev)'),
     );
     expect(lines[devSectionIndex + 1]).toContain('#123');
     expect(lines[devSectionIndex + 2]).toContain('#789');
 
     // Verify staging is separate
     const stagingSectionIndex = lines.findIndex((line) =>
-      line.includes('**test-app** (staging)'),
+      line.includes('**test-team/test-app** (staging)'),
     );
     expect(lines[stagingSectionIndex + 1]).toContain('#456');
 

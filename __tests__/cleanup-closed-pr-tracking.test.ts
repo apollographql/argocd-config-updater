@@ -80,7 +80,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
-      filename: 'teams/test-app/application-values.yaml',
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).not.toContain('track: pr-123');
@@ -92,6 +92,7 @@ prod:
       prTitle: 'PR 123 title',
       prURL: 'https://github.com/owner/repo/pull/123',
       appName: 'test-app',
+      teamName: 'test-team',
       environment: 'dev',
       closedAt: '2024-01-15T10:30:00Z',
     });
@@ -126,7 +127,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
-      filename: 'teams/test-app/application-values.yaml',
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-100');
@@ -158,7 +159,7 @@ dev:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
-      filename: 'teams/test-app/application-values.yaml',
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-999');
@@ -195,7 +196,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
-      filename: 'teams/test-app/application-values.yaml',
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('# Top level comment');

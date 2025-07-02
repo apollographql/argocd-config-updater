@@ -3,6 +3,7 @@ export interface CleanupChange {
   prTitle: string;
   prURL: string;
   appName: string;
+  teamName: string;
   environment: string;
   closedAt: string | null;
 }
@@ -29,7 +30,9 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
       if (sections.length > 0) {
         sections.push(''); // blank line between sections
       }
-      sections.push(`**${change.appName}** (${change.environment})`);
+      sections.push(
+        `**${change.teamName}/${change.appName}** (${change.environment})`,
+      );
       currentApp = change.appName;
       currentEnv = change.environment;
     }

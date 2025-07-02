@@ -5,17 +5,30 @@ import { findTrackables } from './update-git-refs';
 import { CleanupChange } from './format-cleanup-changes';
 
 /**
- * Extract app name from file path.
+ * Extract team and app name from file path.
+ * Only works for teams/<teamname>/<appname>/application-values.yaml pattern.
  * Examples:
- *   - "teams/backend/test-app/application-values.yaml" -> "test-app"
- *   - "/path/to/teams/test-api/application-values.yaml" -> "test-api"
+ *   - "teams/backend/test-app/application-values.yaml" -> { teamName: "backend", appName: "test-app" }
  */
-function extractAppNameFromFilename(filename: string): string {
+function extractTeamAndAppFromFilename(filename: string): {
+  teamName: string;
+  appName: string;
+} {
   const parts = filename.split('/');
-  const appValuesIndex = parts.indexOf('application-values.yaml');
-  if (appValuesIndex > 0) return parts[appValuesIndex - 1];
+  const teamsIndex = parts.indexOf('teams');
 
-  return 'unknown-app';
+  if (
+    teamsIndex >= 0 &&
+    parts.length >= teamsIndex + 4 &&
+    parts[teamsIndex + 3] === 'application-values.yaml'
+  ) {
+    return {
+      teamName: parts[teamsIndex + 1],
+      appName: parts[teamsIndex + 2],
+    };
+  }
+
+  return { teamName: 'unknown-team', appName: 'unknown-app' };
 }
 
 /**
@@ -63,7 +76,7 @@ export async function cleanupClosedPrTracking(options: {
           trackable.trackScalarTokenWriter.write('main');
           logger.info(`PR #${prNumber} is closed, updated to main`);
 
-          const appName = extractAppNameFromFilename(filename);
+          const { teamName, appName } = extractTeamAndAppFromFilename(filename);
           const environment = trackable.environment;
 
           changes.push({
@@ -71,6 +84,7 @@ export async function cleanupClosedPrTracking(options: {
             prTitle: pr.title,
             prURL: `${getWebURL(trackable.repoURL)}/pull/${prNumber}`,
             appName,
+            teamName,
             environment,
             closedAt: pr.closedAt,
           });
