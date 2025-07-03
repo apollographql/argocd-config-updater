@@ -48,7 +48,7 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
     );
 
     for (const [appDir, appChanges] of sortedApps) {
-      lines.push(`### ${appDir}`);
+      lines.push(`- ${appDir}`);
 
       const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
       for (const change of sortedChanges) {
