@@ -21,6 +21,7 @@ export interface Trackable {
   maybeDockerCommit: string | null;
   refScalarTokenWriter: ScalarTokenWriter;
   trackScalarTokenWriter: ScalarTokenWriter | null;
+  environment: string;
 }
 
 export async function updateGitRefs(
@@ -98,7 +99,7 @@ export function findTrackables(
       'ref',
     );
 
-    // Get token writer for the track field if trackMutableRef came from there
+    // Get token writer for the top level track field
     const trackScalarTokenAndValue = getStringValue(value, 'track')
       ? getStringAndScalarTokenFromMap(value, 'track')
       : null;
@@ -136,6 +137,7 @@ export function findTrackables(
             )
           : null,
         maybeDockerCommit,
+        environment: key,
       });
     }
   }

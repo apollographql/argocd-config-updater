@@ -34,6 +34,7 @@ export type PullRequestState = 'open' | 'closed';
 export interface PullRequest {
   state: PullRequestState;
   title: string;
+  closedAt: string | null;
 }
 
 export interface GitHubClient {
@@ -54,6 +55,15 @@ function parseRepoURL(repoURL: string): OwnerAndRepo {
     throw Error(`Can only track GitHub repoURLs, not ${repoURL}`);
   }
   return { owner: m[1], repo: m[2] };
+}
+
+/**
+ * @param repoURL Git repository URL (e.g., "https://github.com/owner/repo.git")
+ * @returns GitHub web URL (e.g., "https://github.com/owner/repo")
+ */
+export function getWebURL(repoURL: string): string {
+  const { owner, repo } = parseRepoURL(repoURL);
+  return `https://github.com/${owner}/${repo}`;
 }
 
 interface AllTreesForCommit {
@@ -267,6 +277,7 @@ export class OctokitGitHubClient {
     return {
       state: response.data.state as PullRequestState,
       title: response.data.title,
+      closedAt: response.data.closed_at,
     };
   }
 }

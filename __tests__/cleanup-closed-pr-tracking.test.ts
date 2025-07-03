@@ -1,5 +1,5 @@
 import { cleanupClosedPrTracking } from '../src/update-closed-prs';
-import { GitHubClient } from '../src/github';
+import { getWebURL, GitHubClient } from '../src/github';
 import { PrefixingLogger } from '../src/log';
 
 const logger = PrefixingLogger.silent();
@@ -22,17 +22,34 @@ function createMockGitHubClient(
       if (state === 'error') {
         throw new Error('Not found');
       }
-      return { state: state || 'open', title: `PR ${prNumber} title` };
+      return {
+        state: state || 'open',
+        title: `PR ${prNumber} title`,
+        closedAt: state === 'closed' ? '2024-01-15T10:30:00Z' : null,
+      };
     },
   };
 }
+
+describe('getWebURL', () => {
+  it('should return a github web url given different repo url formats', () => {
+    // Standard .git URLs
+    expect(getWebURL('https://github.com/owner/repo.git')).toBe(
+      'https://github.com/owner/repo',
+    );
+    // URLs without .git
+    expect(getWebURL('https://github.com/owner/repo')).toBe(
+      'https://github.com/owner/repo',
+    );
+  });
+});
 
 describe('cleanupClosedPrTracking', () => {
   it('should replace closed PR references with main', async () => {
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-123
@@ -56,6 +73,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).not.toContain('track: pr-123');
@@ -66,6 +84,9 @@ prod:
       prNumber: 123,
       prTitle: 'PR 123 title',
       prURL: 'https://github.com/owner/repo/pull/123',
+      filename: 'teams/test-team/test-app/application-values.yaml',
+      environment: 'dev',
+      closedAt: '2024-01-15T10:30:00Z',
     });
   });
 
@@ -73,7 +94,7 @@ prod:
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-100
@@ -98,6 +119,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-100');
@@ -112,7 +134,7 @@ prod:
     const contents = `
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 dev:
   track: pr-999
@@ -129,6 +151,7 @@ dev:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('track: pr-999');
@@ -140,7 +163,7 @@ dev:
     const contents = `# Top level comment
 global:
   gitConfig:
-    repoURL: https://github.com/owner/repo
+    repoURL: https://github.com/owner/repo.git
     path: some/path
 # Development environment
 dev:
@@ -165,6 +188,7 @@ prod:
       gitHubClient,
       logger,
       frozenEnvironments: new Set(),
+      filename: 'teams/test-team/test-app/application-values.yaml',
     });
 
     expect(result.contents).toContain('# Top level comment');

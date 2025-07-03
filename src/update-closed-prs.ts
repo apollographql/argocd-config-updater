@@ -1,4 +1,4 @@
-import { GitHubClient } from './github';
+import { getWebURL, GitHubClient } from './github';
 import { PrefixingLogger } from './log';
 import { parseYAML } from './yaml';
 import { findTrackables } from './update-git-refs';
@@ -23,8 +23,10 @@ export async function cleanupClosedPrTracking(options: {
   frozenEnvironments: Set<string>;
   gitHubClient: GitHubClient;
   logger: PrefixingLogger;
+  filename: string;
 }): Promise<{ contents: string; changes: CleanupChange[] }> {
-  const { contents, frozenEnvironments, gitHubClient, logger } = options;
+  const { contents, frozenEnvironments, gitHubClient, logger, filename } =
+    options;
 
   const { document, stringify } = parseYAML(contents);
   if (!document) {
@@ -46,10 +48,16 @@ export async function cleanupClosedPrTracking(options: {
         if (pr.state === 'closed') {
           trackable.trackScalarTokenWriter.write('main');
           logger.info(`PR #${prNumber} is closed, updated to main`);
+
+          const environment = trackable.environment;
+
           changes.push({
             prNumber,
             prTitle: pr.title,
-            prURL: `${trackable.repoURL}/pull/${prNumber}`,
+            prURL: `${getWebURL(trackable.repoURL)}/pull/${prNumber}`,
+            filename,
+            environment,
+            closedAt: pr.closedAt,
           });
         } else {
           logger.info(`PR #${prNumber} is ${pr.state}`);

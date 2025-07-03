@@ -333,6 +333,7 @@ async function processFile(options: {
       frozenEnvironments,
       gitHubClient,
       logger,
+      filename,
     });
     contents = result.contents;
     ret.cleanupChanges = result.changes;
