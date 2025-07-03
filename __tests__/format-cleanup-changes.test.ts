@@ -21,8 +21,8 @@ describe('formatCleanupChanges', () => {
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('# Found 1 closed PR');
-    expect(result).toContain('## dev');
+    expect(result).toContain('## Found 1 closed PR');
+    expect(result).toContain('### dev');
     expect(result).toContain('- teams/test-team/test-app');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)',
@@ -51,8 +51,8 @@ describe('formatCleanupChanges', () => {
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('# Found 2 closed PRs');
-    expect(result).toContain('## dev');
+    expect(result).toContain('## Found 2 closed PRs');
+    expect(result).toContain('### dev');
     expect(result).toContain('- teams/test-team/test-app');
     expect(result).toContain(
       '- PR [#123](https://github.com/owner/repo/pull/123): First PR (closed Jan 15, 2024)',
@@ -92,13 +92,13 @@ describe('formatCleanupChanges', () => {
     ];
 
     const result = formatCleanupChanges(changes);
-    expect(result).toContain('# Found 3 closed PRs');
+    expect(result).toContain('## Found 3 closed PRs');
 
     // Verify dev PRs are grouped together and come before staging
     const lines = result.split('\n');
-    const devSectionIndex = lines.findIndex((line) => line === '## dev');
+    const devSectionIndex = lines.findIndex((line) => line === '### dev');
     const stagingSectionIndex = lines.findIndex(
-      (line) => line === '## staging',
+      (line) => line === '### staging',
     );
     expect(devSectionIndex).toBeGreaterThan(-1);
     expect(stagingSectionIndex).toBeGreaterThan(-1);

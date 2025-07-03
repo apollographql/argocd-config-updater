@@ -40,7 +40,7 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
   );
 
   for (const [environment, appGroups] of sortedEnvs) {
-    lines.push(`## ${environment}`);
+    lines.push(`### ${environment}`);
     lines.push('');
 
     const sortedApps = [...appGroups.entries()].sort(([a], [b]) =>
@@ -61,13 +61,13 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
           : '';
 
         lines.push(
-          `- PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`,
+          `  - PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`,
         );
       }
       lines.push('');
     }
   }
 
-  const header = `# Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}\n\n`;
+  const header = `## Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}\n\n`;
   return header + lines.join('\n').trim();
 }
