@@ -59,7 +59,7 @@ outputs:
 
   promoted-commits-markdown:
     description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set.'
-  
+
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
 

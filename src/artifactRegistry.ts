@@ -21,11 +21,17 @@ export interface GitCommitsBetweenTagsOptions {
   dockerImageRepository: string;
 }
 
+export interface GetDigestForTagOptions {
+  packageName: string;
+  tagName: string;
+}
+
 export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getGitCommitsBetweenTags(
     options: GitCommitsBetweenTagsOptions,
   ): Promise<PromotionInfo>;
+  getDigestForTag(options: GetDigestForTagOptions): Promise<string>;
 }
 
 export class ArtifactRegistryDockerRegistryClient {
@@ -58,6 +64,29 @@ export class ArtifactRegistryDockerRegistryClient {
     }
 
     this.repositoryFields = { project, location, repository };
+  }
+
+  async getDigestForTag({
+    packageName,
+    tagName,
+  }: {
+    packageName: string;
+    tagName: string;
+  }): Promise<string> {
+    const tagPath = this.client.pathTemplates.tagPathTemplate.render({
+      ...this.repositoryFields,
+      package: encodeURIComponent(packageName),
+      tagName,
+    });
+
+    // Fetch the tag object
+    const [tag] = await this.client.getTag({ name: tagPath });
+
+    if (!tag.version) {
+      throw new Error(`Tag '${tagName}' has no associated version`);
+    }
+    // version.name is like projects/.../versions/{versionId}, but digest is in version metadata field
+    return tag.version;
   }
 
   /**
@@ -181,6 +210,12 @@ export class CachingDockerRegistryClient {
       return this.wrapped.getAllEquivalentTags(context);
     },
   });
+
+  async getDigestForTag(): Promise<string> {
+    throw Error(
+      'getDigestForTag is not implemented for CachingDockerRegistryClient',
+    );
+  }
 
   async getAllEquivalentTags(
     options: GetAllEquivalentTagsOptions,

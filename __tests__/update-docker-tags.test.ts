@@ -18,6 +18,9 @@ describe('action', () => {
   it('updates docker tags', async () => {
     const contents = await fixture('sample.yaml');
     const dockerRegistryClient: DockerRegistryClient = {
+      async getDigestForTag(): Promise<string> {
+        return 'mock-digest';
+      },
       async getAllEquivalentTags({ tag }: GetAllEquivalentTagsOptions) {
         return (
           {
