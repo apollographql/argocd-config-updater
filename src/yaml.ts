@@ -92,9 +92,9 @@ export function getMapFromSeqWithName(
   name: string,
 ): yaml.YAMLMap | null {
   const graphArtifactMap = node.items.find(
-    (item) => item.get('name') === name,
-  ) as yaml.YAMLMap;
-  return graphArtifactMap;
+    (item) => yaml.isMap(item) && item.get('name') === name,
+  ) as yaml.YAMLMap | undefined;
+  return graphArtifactMap || null;
 }
 
 /**  Returns null if the value isn't there at all; throws if it's there but isn't

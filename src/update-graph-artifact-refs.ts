@@ -66,25 +66,69 @@ export function findTrackables(
       value,
       'trackSupergraph',
     );
+    
+    if (!trackSupergraph) {
+      // trackSupergraph is not provided at all, skip this entry
+      continue;
+    }
+    
+    // After this point, we're guaranteed to have a trackSupergraph. And everything will throw
+    // instead of failing silently because the customer must have intended to track a supergraph.
+    if (!trackSupergraph.value) {
+      // trackSupergraph is provided but empty, throw error since customer intended to track
+      throw Error(
+        `trackSupergraph value is empty, must be in the format \`image:tag\``,
+      );
+    }
+    
     const [, imageName, tag] =
-      trackSupergraph?.value.match(/^([^:]+):([^:]+)$/) || [];
+      trackSupergraph.value.match(/^([^:]+):([^:]+)$/) || [];
+    
+    // Skip if the trackSupergraph format is invalid (doesn't match image:tag pattern)
+    if (!imageName || !tag) {
+      throw Error(
+        `trackSupergraph \`${trackSupergraph.value}\` is invalid, must be in the format \`image:tag\``,
+      );
+    }
+    
+    // Safely navigate the YAML structure
+    const values = value.get('values');
+    if (!values || !yaml.isMap(values)) {
+      throw Error(
+        `\`values\` must be provided in the document if using trackSupergraph`,
+      );
+    }
+    
+    const router = values.get('router');
+    if (!router || !yaml.isMap(router)) {
+      throw Error(
+        `\`router\` must be provided in the document if using trackSupergraph`,
+      );
+    }
+    
+    const extraEnvVars = router.get('extraEnvVars');
+    if (!extraEnvVars || !yaml.isSeq(extraEnvVars)) {
+      throw Error(
+        `\`extraEnvVars\` must be provided in the document if using trackSupergraph`,
+      );
+    }
+    
     const graphArtifactMap = getMapFromSeqWithName(
-      value.getIn([
-        'values',
-        'router',
-        'extraEnvVars',
-      ]) as yaml.YAMLSeq<yaml.YAMLMap>,
+      extraEnvVars as yaml.YAMLSeq<yaml.YAMLMap>,
       'GRAPH_ARTIFACT_REFERENCE',
     );
+    
     if (graphArtifactMap === null) {
       throw Error(
         `Document does not provide \`${key}.values.router.extraEnvVars\` with GRAPH_ARTIFACT_REFERENCE that is a map`,
       );
     }
+    
     const graphArtifactRef = getStringAndScalarTokenFromMap(
       graphArtifactMap,
       'value',
     );
+    
     if (imageName && tag && graphArtifactRef) {
       trackables.push({
         imageName,
@@ -119,12 +163,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
         });
       } catch (e) {
         if (e instanceof Error) {
-          let message = e.message;
-          if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
-            message = `The tag '${trackable.tag}' on the Docker image '${trackable.imageName}'
-                does not exist. Check that both the image and tag are spelled correctly.`;
-          }
-          throw new AnnotatedError(message, {
+          throw new AnnotatedError(e.message, {
             range: trackable?.trackRange,
             lineCounter,
           });
@@ -134,9 +173,15 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
       }
     })();
 
-    if (!digest) {
-      throw new Error(`No tag ${trackable.tag} on ${trackable.imageName}`);
-    }
+    // if (!digest) {
+    //   throw new AnnotatedError(
+    //     `The digest for tag '${trackable.tag}' on the image '${trackable.imageName}' does not exist. Check that both the image and tag are spelled correctly.`,
+    //     {
+    //       range: trackable?.trackRange,
+    //       lineCounter,
+    //     },
+    //   );
+    // }
 
     // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
     // overwrite *to* something that doesn't exist.

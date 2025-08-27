@@ -38,7 +38,12 @@ const dockerRegistryClient: DockerRegistryClient = {
     packageName,
     tagName,
   }: GetDigestForTagOptions): Promise<string> {
-    return imageTagMap[packageName][tagName];
+    const digest = imageTagMap[packageName]?.[tagName];
+    if (!digest) {
+      throw new Error(`The tag '${tagName}' on the image '${packageName}'
+        does not exist. Check that both the image and tag are spelled correctly.`);
+    }
+    return digest;
   },
   async getAllEquivalentTags() {
     return [];
@@ -58,5 +63,319 @@ describe('action', () => {
       logger,
     );
     expect(newContents).toMatchSnapshot();
+  });
+
+  describe('edge cases and error handling', () => {
+    it('handles empty YAML file gracefully', async () => {
+      const contents = '';
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      );
+      expect(newContents).toBe('');
+    });
+
+    it('handles YAML with only whitespace gracefully', async () => {
+      const contents = '   \n  \t  \n';
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      );
+      expect(newContents).toBe(contents);
+    });
+
+    it('handles YAML without any trackSupergraph entries', async () => {
+      const contents = `
+some-service:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+  values:
+    router:
+      extraEnvVars:
+        - name: NODE_IP
+          value: '127.0.0.1'
+`;
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      );
+      // Should return unchanged content since no trackSupergraph entries exist
+      expect(newContents).toBe(contents);
+    });
+
+    it('handles malformed trackSupergraph value - missing colon', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service-dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('trackSupergraph `some-service-dev0` is invalid, must be in the format `image:tag`');
+    });
+
+    it('handles malformed trackSupergraph value - extra colons', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0:extra'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('trackSupergraph `some-service:dev0:extra` is invalid, must be in the format `image:tag`');
+    });
+
+    it('handles malformed trackSupergraph value - empty string', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: ''
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('trackSupergraph value is empty, must be in the format `image:tag`');
+    });
+
+    it('handles missing values section', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('`values` must be provided in the document if using trackSupergraph');
+    });
+
+    it('handles missing router section', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    someOtherSection:
+      key: value
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('`router` must be provided in the document if using trackSupergraph');
+    });
+
+    it('handles missing extraEnvVars section', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      someOtherKey: value
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('`extraEnvVars` must be provided in the document if using trackSupergraph');
+    });
+
+    it('handles missing GRAPH_ARTIFACT_REFERENCE environment variable', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: NODE_IP
+          value: '127.0.0.1'
+        - name: OTHER_VAR
+          value: 'other-value'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('Document does not provide `some-service-dev0.values.router.extraEnvVars` with GRAPH_ARTIFACT_REFERENCE that is a map');
+    });
+
+    it('handles extraEnvVars that is not a sequence', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars: not-a-sequence
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('`extraEnvVars` must be provided in the document if using trackSupergraph');
+    });
+
+    it('handles GRAPH_ARTIFACT_REFERENCE that is not a map', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+        - GRAPH_ARTIFACT_REFERENCE: 'not-a-map'
+`;
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      );
+      // Should update the valid GRAPH_ARTIFACT_REFERENCE entry while leaving the malformed one unchanged
+      expect(newContents).toContain('artifacts-staging.api.apollographql.com/some-service@sha256:90ee9ef20ce29314b29ccbbf4c50c1a881e35fdba7f53445cc083247bba9a6fb');
+      expect(newContents).toContain('- GRAPH_ARTIFACT_REFERENCE: \'not-a-map\'');
+    });
+
+    it('handles trackSupergraph with special characters in image name', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service-with-dashes:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow(/The tag 'dev0' on the image 'some-service-with-dashes'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/);
+    });
+
+    it('handles trackSupergraph with special characters in tag', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev-0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow(/The tag 'dev-0' on the image 'some-service'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/);
+    });
+
+    it('handles frozen environments correctly', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+`;
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(['some-service-dev0']), // This environment is frozen
+        logger,
+      );
+      // Should return unchanged content since environment is frozen
+      expect(newContents).toBe(contents);
+    });
+
+    it('handles mixed valid and invalid entries', async () => {
+      const contents = `
+valid-service:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+
+invalid-service:
+  trackSupergraph: 'invalid:format:here'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+
+another-invalid:
+  trackSupergraph: 'some-service:dev0'
+  # Missing values section
+`;
+      await expect(updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      )).rejects.toThrow('trackSupergraph `invalid:format:here` is invalid, must be in the format `image:tag`');
+    });
+
+    it('handles malformed YAML structure gracefully', async () => {
+      const contents = `
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+        - name: NODE_IP
+          value: '127.0.0.1'
+          # Missing closing bracket for extraEnvVars
+`;
+      const newContents = await updateGraphArtifactRefs(
+        contents,
+        dockerRegistryClient,
+        new Set<string>(),
+        logger,
+      );
+      // Should handle malformed YAML gracefully
+      expect(newContents).toBeDefined();
+    });
   });
 });
