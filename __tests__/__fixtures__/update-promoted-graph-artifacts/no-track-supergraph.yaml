@@ -1,0 +1,9 @@
+some-service:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+  values:
+    router:
+      extraEnvVars:
+        - name: NODE_IP
+          value: '127.0.0.1' 

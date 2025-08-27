@@ -1,0 +1,10 @@
+some-service-dev0:
+  trackSupergraph: 'some-service:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+        - name: NODE_IP
+          value: '127.0.0.1'
+          # Missing closing bracket for extraEnvVars 

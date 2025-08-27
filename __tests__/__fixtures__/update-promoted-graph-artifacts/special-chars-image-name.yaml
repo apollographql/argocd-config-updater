@@ -1,0 +1,7 @@
+some-service-dev0:
+  trackSupergraph: 'some-service-with-dashes:dev0'
+  values:
+    router:
+      extraEnvVars:
+        - name: GRAPH_ARTIFACT_REFERENCE
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234' 
