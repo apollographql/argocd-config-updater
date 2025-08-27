@@ -2,5 +2,7 @@
     id = "apollo-graphos-api-key"
     [ rules.allowlist ]
         commits = [
-            "3239fc90af300700e0095509d3a89707399895d0",
+            "f6f1749ffaaf7f6d7cb76143bb63f6c9b7472773",
+            "b0c2160c3685c57e264e1ae63f94aa2098e5064f",
+            "3239fc90af300700e0095509d3a89707399895d0"
         ]
