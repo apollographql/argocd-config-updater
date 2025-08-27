@@ -2,4 +2,4 @@ some-service-dev0:
   trackSupergraph: 'some-service:dev0'
   values:
     someOtherSection:
-      key: value 
+      key: value

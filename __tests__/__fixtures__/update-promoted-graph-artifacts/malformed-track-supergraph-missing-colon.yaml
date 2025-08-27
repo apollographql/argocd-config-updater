@@ -4,4 +4,4 @@ some-service-dev0:
     router:
       extraEnvVars:
         - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234' 
+          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'

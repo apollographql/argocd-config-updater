@@ -93,7 +93,7 @@ export function getMapFromSeqWithName(
 ): yaml.YAMLMap | null {
   const graphArtifactMap = node.items.find(
     (item) => yaml.isMap(item) && item.get('name') === name,
-  ) as yaml.YAMLMap | undefined;
+  );
   return graphArtifactMap || null;
 }
 

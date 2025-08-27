@@ -2,4 +2,4 @@ some-service-dev0:
   trackSupergraph: 'some-service:dev0'
   values:
     router:
-      someOtherKey: value 
+      someOtherKey: value

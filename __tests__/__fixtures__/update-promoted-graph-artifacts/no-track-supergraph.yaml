@@ -6,4 +6,4 @@ some-service:
     router:
       extraEnvVars:
         - name: NODE_IP
-          value: '127.0.0.1' 
+          value: '127.0.0.1'

@@ -6,4 +6,4 @@ some-service-dev0:
         - name: NODE_IP
           value: '127.0.0.1'
         - name: OTHER_VAR
-          value: 'other-value' 
+          value: 'other-value'

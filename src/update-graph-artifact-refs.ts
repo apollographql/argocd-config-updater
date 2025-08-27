@@ -66,12 +66,12 @@ export function findTrackables(
       value,
       'trackSupergraph',
     );
-    
+
     if (!trackSupergraph) {
       // trackSupergraph is not provided at all, skip this entry
       continue;
     }
-    
+
     // After this point, we're guaranteed to have a trackSupergraph. And everything will throw
     // instead of failing silently because the customer must have intended to track a supergraph.
     if (!trackSupergraph.value) {
@@ -80,17 +80,17 @@ export function findTrackables(
         `trackSupergraph value is empty, must be in the format \`image:tag\``,
       );
     }
-    
+
     const [, imageName, tag] =
       trackSupergraph.value.match(/^([^:]+):([^:]+)$/) || [];
-    
+
     // Skip if the trackSupergraph format is invalid (doesn't match image:tag pattern)
     if (!imageName || !tag) {
       throw Error(
         `trackSupergraph \`${trackSupergraph.value}\` is invalid, must be in the format \`image:tag\``,
       );
     }
-    
+
     // Safely navigate the YAML structure
     const values = value.get('values');
     if (!values || !yaml.isMap(values)) {
@@ -98,37 +98,37 @@ export function findTrackables(
         `\`values\` must be provided in the document if using trackSupergraph`,
       );
     }
-    
+
     const router = values.get('router');
     if (!router || !yaml.isMap(router)) {
       throw Error(
         `\`router\` must be provided in the document if using trackSupergraph`,
       );
     }
-    
+
     const extraEnvVars = router.get('extraEnvVars');
     if (!extraEnvVars || !yaml.isSeq(extraEnvVars)) {
       throw Error(
         `\`extraEnvVars\` must be provided in the document if using trackSupergraph`,
       );
     }
-    
+
     const graphArtifactMap = getMapFromSeqWithName(
       extraEnvVars as yaml.YAMLSeq<yaml.YAMLMap>,
       'GRAPH_ARTIFACT_REFERENCE',
     );
-    
+
     if (graphArtifactMap === null) {
       throw Error(
         `Document does not provide \`${key}.values.router.extraEnvVars\` with GRAPH_ARTIFACT_REFERENCE that is a map`,
       );
     }
-    
+
     const graphArtifactRef = getStringAndScalarTokenFromMap(
       graphArtifactMap,
       'value',
     );
-    
+
     if (imageName && tag && graphArtifactRef) {
       trackables.push({
         imageName,

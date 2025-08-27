@@ -16,4 +16,4 @@ invalid-service:
 
 another-invalid:
   trackSupergraph: 'some-service:dev0'
-  # Missing values section 
+  # Missing values section

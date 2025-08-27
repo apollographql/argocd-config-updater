@@ -1,4 +1,4 @@
 some-service-dev0:
   trackSupergraph: 'some-service:dev0'
   gitConfig:
-    repoURL: https://github.com/apollographql/some-repo.git 
+    repoURL: https://github.com/apollographql/some-repo.git

@@ -101,83 +101,121 @@ describe('action', () => {
     });
 
     it('handles malformed trackSupergraph value - missing colon', async () => {
-      const contents = await fixture('malformed-track-supergraph-missing-colon.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('trackSupergraph `some-service-dev0` is invalid, must be in the format `image:tag`');
+      const contents = await fixture(
+        'malformed-track-supergraph-missing-colon.yaml',
+      );
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        'trackSupergraph `some-service-dev0` is invalid, must be in the format `image:tag`',
+      );
     });
 
     it('handles malformed trackSupergraph value - extra colons', async () => {
-      const contents = await fixture('malformed-track-supergraph-extra-colons.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('trackSupergraph `some-service:dev0:extra` is invalid, must be in the format `image:tag`');
+      const contents = await fixture(
+        'malformed-track-supergraph-extra-colons.yaml',
+      );
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        'trackSupergraph `some-service:dev0:extra` is invalid, must be in the format `image:tag`',
+      );
     });
 
     it('handles malformed trackSupergraph value - empty string', async () => {
-      const contents = await fixture('malformed-track-supergraph-empty-string.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('trackSupergraph value is empty, must be in the format `image:tag`');
+      const contents = await fixture(
+        'malformed-track-supergraph-empty-string.yaml',
+      );
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        'trackSupergraph value is empty, must be in the format `image:tag`',
+      );
     });
 
     it('handles missing values section', async () => {
       const contents = await fixture('missing-values-section.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('`values` must be provided in the document if using trackSupergraph');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        '`values` must be provided in the document if using trackSupergraph',
+      );
     });
 
     it('handles missing router section', async () => {
       const contents = await fixture('missing-router-section.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('`router` must be provided in the document if using trackSupergraph');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        '`router` must be provided in the document if using trackSupergraph',
+      );
     });
 
     it('handles missing extraEnvVars section', async () => {
       const contents = await fixture('missing-extra-env-vars-section.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('`extraEnvVars` must be provided in the document if using trackSupergraph');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        '`extraEnvVars` must be provided in the document if using trackSupergraph',
+      );
     });
 
     it('handles missing GRAPH_ARTIFACT_REFERENCE environment variable', async () => {
       const contents = await fixture('missing-graph-artifact-reference.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('Document does not provide `some-service-dev0.values.router.extraEnvVars` with GRAPH_ARTIFACT_REFERENCE that is a map');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        'Document does not provide `some-service-dev0.values.router.extraEnvVars` with GRAPH_ARTIFACT_REFERENCE that is a map',
+      );
     });
 
     it('handles extraEnvVars that is not a sequence', async () => {
       const contents = await fixture('extra-env-vars-not-sequence.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('`extraEnvVars` must be provided in the document if using trackSupergraph');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        '`extraEnvVars` must be provided in the document if using trackSupergraph',
+      );
     });
 
     it('handles GRAPH_ARTIFACT_REFERENCE that is not a map', async () => {
@@ -189,28 +227,38 @@ describe('action', () => {
         logger,
       );
       // Should update the valid GRAPH_ARTIFACT_REFERENCE entry while leaving the malformed one unchanged
-      expect(newContents).toContain('artifacts-staging.api.apollographql.com/some-service@sha256:90ee9ef20ce29314b29ccbbf4c50c1a881e35fdba7f53445cc083247bba9a6fb');
-      expect(newContents).toContain('- GRAPH_ARTIFACT_REFERENCE: \'not-a-map\'');
+      expect(newContents).toContain(
+        'artifacts-staging.api.apollographql.com/some-service@sha256:90ee9ef20ce29314b29ccbbf4c50c1a881e35fdba7f53445cc083247bba9a6fb',
+      );
+      expect(newContents).toContain("- GRAPH_ARTIFACT_REFERENCE: 'not-a-map'");
     });
 
     it('handles trackSupergraph with special characters in image name', async () => {
       const contents = await fixture('special-chars-image-name.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow(/The tag 'dev0' on the image 'some-service-with-dashes'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/);
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        /The tag 'dev0' on the image 'some-service-with-dashes'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/,
+      );
     });
 
     it('handles trackSupergraph with special characters in tag', async () => {
       const contents = await fixture('special-chars-tag.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow(/The tag 'dev-0' on the image 'some-service'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/);
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        /The tag 'dev-0' on the image 'some-service'[\s\S]*does not exist[\s\S]*Check that both the image and tag are spelled correctly/,
+      );
     });
 
     it('handles frozen environments correctly', async () => {
@@ -227,12 +275,16 @@ describe('action', () => {
 
     it('handles mixed valid and invalid entries', async () => {
       const contents = await fixture('mixed-valid-invalid-entries.yaml');
-      await expect(updateGraphArtifactRefs(
-        contents,
-        dockerRegistryClient,
-        new Set<string>(),
-        logger,
-      )).rejects.toThrow('trackSupergraph `invalid:format:here` is invalid, must be in the format `image:tag`');
+      await expect(
+        updateGraphArtifactRefs(
+          contents,
+          dockerRegistryClient,
+          new Set<string>(),
+          logger,
+        ),
+      ).rejects.toThrow(
+        'trackSupergraph `invalid:format:here` is invalid, must be in the format `image:tag`',
+      );
     });
 
     it('handles malformed YAML structure gracefully', async () => {

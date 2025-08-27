@@ -7,4 +7,4 @@ some-service-dev0:
           value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
         - name: NODE_IP
           value: '127.0.0.1'
-          # Missing closing bracket for extraEnvVars 
+          # Missing closing bracket for extraEnvVars
