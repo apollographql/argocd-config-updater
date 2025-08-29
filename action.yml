@@ -22,8 +22,15 @@ inputs:
     description: 'Update tracked dockerImage.tag fields'
     default: 'false'
 
+  update-graph-artifact-refs:
+    description: 'Update tracked graphArtifact.ref fields'
+    default: 'false'
+
   artifact-registry-repository:
     description: 'If update-docker-tags or generate-promoted-commits-markdown is set, must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
+
+  graph-artifact-repository:
+    description: 'If update-graph-artifacts is set, must be set to a string of the form `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`'
 
   update-docker-tags-for-artifact-registry-repository:
     description: 'DEPRECATED: equivalent to setting artifact-registry-repository and update-docker-tags'
@@ -59,7 +66,7 @@ outputs:
 
   promoted-commits-markdown:
     description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set.'
-  
+
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
 

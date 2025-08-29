@@ -1,0 +1,36 @@
+global:
+  namespace: router
+  gitConfig:
+    repoURL: https://github.com/mdg-private/parochial-router.git
+    path: helm/chart/in-house-router
+  supergraph:
+    artifactURL: artifacts-staging.api.apollographql.com
+    imageName: some-service-ed9f6f25068608ef
+
+some-service-dev0:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev0-00872a1964b50f1b
+
+some-service-dev1:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev1-00872a1964b50f1b
+
+some-service-invalid:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph: 'not-a-map'

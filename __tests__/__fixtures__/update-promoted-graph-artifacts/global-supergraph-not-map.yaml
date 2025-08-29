@@ -1,0 +1,16 @@
+global:
+  namespace: router
+  gitConfig:
+    repoURL: https://github.com/mdg-private/parochial-router.git
+    path: helm/chart/in-house-router
+  supergraph: 'not-a-map'
+
+some-service-dev0:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev0-00872a1964b50f1b

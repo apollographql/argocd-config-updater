@@ -1,0 +1,80 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`action updates graph artifact refs 1`] = `
+"global:
+  namespace: router
+  gitConfig:
+    repoURL: https://github.com/mdg-private/parochial-router.git
+    path: helm/chart/in-house-router
+  dockerImage:
+    # We don't track a mutable tag for the main Router image: we use an
+    # "upstream" image that we build as part of the public project, and specify
+    # its tag in the Helm chart's Chart.yaml (so we get that upgrade as part of
+    # tracking gitConfig.ref). However, we *do* build the apilogger image
+    # in parochial-router, so we use our tracking machinery on this image.
+    repository: apilogger
+    setValue: [global, apilogger]
+  supergraph:
+    artifactURL: artifacts-staging.api.apollographql.com
+    imageName: some-service-ed9f6f25068608ef
+
+some-service-dev0:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef' # this should change but stay double-quoted!
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: sha256:90ee9ef20ce29314b29ccbbf4c50c1a881e35fdba7f53445cc083247bba9a6fb
+    trackMutableTag: dev0-00872a1964b50f1b
+
+some-service-dev1:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef' # this should change but stay single-quoted!
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: sha256:ecb1de1af081bbad2e770d3db8dde4fc4b4eca6ab3e6950f8f2d833f1690b280
+    trackMutableTag: dev1-00872a1964b50f1b
+
+some-service-staging:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    trackMutableRef: main
+    ref: 01234a #this can stay unquoted because it won't look like a number
+  supergraph:
+    digest: sha256:81b06e1d3cafc6d2e29d9ed9f6b1ee6a7b09914ff9fe2c0fded6dc00e337566d
+    trackMutableTag: staging-00872a1964b50f1b
+
+some-service-prod:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: abcdef1234 # NO TOUCHING! No tracking.
+  supergraph:
+    digest: sha256:23241438abb41ee697d51878a5f2d29bf5824496e7aeb8649c8d826541160a4b
+    trackMutableTag: prod-00872a1964b50f1b
+
+another:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: abcdef # this becomes a number and will definitely need to be quoted
+    trackMutableRef: make-it-numeric
+  supergraph:
+    digest: sha256:ffc964f26300b5fb3fe36b379ad832963fec1529ea98d1bb5e1bf3acc0e210b6
+    trackMutableTag: another-00872a1964b50f1b
+
+some-service-top-level:
+  track: pr-1234
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef' # this should change but stay double-quoted!
+  supergraph:
+    digest: sha256:113e331763502fcfadfa3f7de2e2abcebd966a1af4e3bd2ac25d65ace3e7cc08
+    trackMutableTag: top-level-00872a1964b50f1b
+"
+`;

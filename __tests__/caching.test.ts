@@ -6,6 +6,9 @@ describe('CachingDockerRegistryClient caches', () => {
   it('getAllEquivalentTags caches', async () => {
     let call = 0;
     const client = new CachingDockerRegistryClient({
+      async getDigestForTag(): Promise<string> {
+        return 'mock-digest';
+      },
       async getAllEquivalentTags() {
         return [(++call).toString()];
       },
