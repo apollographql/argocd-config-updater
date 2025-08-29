@@ -1,142 +1,76 @@
+global:
+  namespace: router
+  gitConfig:
+    repoURL: https://github.com/mdg-private/parochial-router.git
+    path: helm/chart/in-house-router
+  dockerImage:
+    # We don't track a mutable tag for the main Router image: we use an
+    # "upstream" image that we build as part of the public project, and specify
+    # its tag in the Helm chart's Chart.yaml (so we get that upgrade as part of
+    # tracking gitConfig.ref). However, we *do* build the apilogger image
+    # in parochial-router, so we use our tracking machinery on this image.
+    repository: apilogger
+    setValue: [global, apilogger]
+  supergraph:
+    artifactURL: artifacts-staging.api.apollographql.com
+    imageName: some-service-ed9f6f25068608ef
+
 some-service-dev0:
-  trackSupergraph: 'some-service:dev0'
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref: 'abcdef' # this should change but stay double-quoted!
     trackMutableRef: pr-1234
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev0-00872a1964b50f1b
 
 some-service-dev1:
-  trackSupergraph: 'some-service:dev1'
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref: 'abcdef' # this should change but stay single-quoted!
     trackMutableRef: pr-1234
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev1-00872a1964b50f1b
+  
 
 some-service-staging:
-  trackSupergraph: 'some-service:staging'
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     trackMutableRef: main
     ref: 01234a #this can stay unquoted because it won't look like a number
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: staging-00872a1964b50f1b
 
 some-service-prod:
-  trackSupergraph: 'some-service:prod'
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref: abcdef1234 # NO TOUCHING! No tracking.
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: prod-00872a1964b50f1b
 
 another:
-  trackSupergraph: 'some-service:another'
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref: abcdef # this becomes a number and will definitely need to be quoted
     trackMutableRef: make-it-numeric
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: another-00872a1964b50f1b
 
 some-service-top-level:
-  trackSupergraph: 'some-service:top-level'
   track: pr-1234
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref: 'abcdef' # this should change but stay double-quoted!
-  values:
-    router:
-      extraEnvVars:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: APOLLO_UPLINK_ENDPOINTS
-          value: 'https://uplink-staging.api.apollographql.com/,https://aws-staging.uplink.api.apollographql.com/'
-        - name: APOLLO_USAGE_REPORTING_INGRESS_URL
-          # Same as Staging (THIS MUST NOT BE CHANGED)
-          value: 'https://usage-reporting.api.staging.c0.gql.zone/api/ingress/traces'
-        - name: APOLLO_USAGE_REPORTING_OTLP_INGRESS_URL
-          value: 'https://usage-reporting.api.staging.c0.gql.zone'
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: top-level-00872a1964b50f1b

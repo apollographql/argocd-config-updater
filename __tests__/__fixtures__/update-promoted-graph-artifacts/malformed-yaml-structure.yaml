@@ -1,10 +1,28 @@
+global:
+  namespace: router
+  gitConfig:
+    repoURL: https://github.com/mdg-private/parochial-router.git
+    path: helm/chart/in-house-router
+  supergraph:
+    artifactURL: artifacts-staging.api.apollographql.com
+    imageName: some-service-ed9f6f25068608ef
+
 some-service-dev0:
-  trackSupergraph: 'some-service:dev0'
-  values:
-    router:
-      extraEnvVars:
-        - name: GRAPH_ARTIFACT_REFERENCE
-          value: 'artifacts-staging.api.apollographql.com/some-service@sha256:1234'
-        - name: NODE_IP
-          value: '127.0.0.1'
-          # Missing closing bracket for extraEnvVars
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: dev0-00872a1964b50f1b
+
+some-service-malformed:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+    ref: 'abcdef'
+    trackMutableRef: pr-1234
+  supergraph:
+    digest: overwrite-me
+    trackMutableTag: "unclosed-quote 

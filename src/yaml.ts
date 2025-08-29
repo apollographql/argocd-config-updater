@@ -87,16 +87,6 @@ export function getStringValue(node: yaml.YAMLMap, key: string): string | null {
   return getStringAndScalarTokenFromMap(node, key)?.value ?? null;
 }
 
-export function getMapFromSeqWithName(
-  node: yaml.YAMLSeq<yaml.YAMLMap>,
-  name: string,
-): yaml.YAMLMap | null {
-  const graphArtifactMap = node.items.find(
-    (item) => yaml.isMap(item) && item.get('name') === name,
-  );
-  return graphArtifactMap || null;
-}
-
 /**  Returns null if the value isn't there at all; throws if it's there but isn't
  * a string. */
 export function getStringAndScalarTokenFromMap(

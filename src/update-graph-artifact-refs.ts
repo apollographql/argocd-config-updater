@@ -3,7 +3,6 @@ import { DockerRegistryClient } from './artifactRegistry';
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
-  getMapFromSeqWithName,
   getTopLevelBlocks,
   parseYAML,
 } from './yaml';
@@ -14,8 +13,7 @@ export interface TrackableGraphArtifact {
   imageName: string;
   tag: string;
   trackRange: yaml.Range | null | undefined;
-  graphArtifactRef: string;
-  refScalarTokenWriter: ScalarTokenWriter;
+  supergraphDigestToken: ScalarTokenWriter;
 }
 
 export async function updateGraphArtifactRefs(
@@ -52,95 +50,85 @@ export function findTrackables(
   frozenEnvironments: Set<string>,
 ): TrackableGraphArtifact[] {
   const trackables: TrackableGraphArtifact[] = [];
-  const { blocks } = getTopLevelBlocks(doc);
+  const { blocks, globalBlock } = getTopLevelBlocks(doc);
 
+  // First, check if global block has supergraph configuration
+  if (!globalBlock || !yaml.isMap(globalBlock)) {
+    // No global block or global is not a map, skip processing
+    return trackables;
+  }
+
+  const supergraphConfig = globalBlock.get('supergraph');
+  if (!supergraphConfig) {
+    // No supergraph configuration in global, skip processing
+    return trackables;
+  }
+
+  if (!yaml.isMap(supergraphConfig)) {
+    throw Error(
+      `global.supergraph must be a map with artifactURL and imageName`,
+    );
+  }
+
+  const artifactURL = getStringAndScalarTokenFromMap(
+    supergraphConfig,
+    'artifactURL',
+  );
+  const imageName = getStringAndScalarTokenFromMap(
+    supergraphConfig,
+    'imageName',
+  );
+
+  if (!artifactURL?.value || !imageName?.value) {
+    throw Error(
+      `global.supergraph must provide both artifactURL and imageName`,
+    );
+  }
+
+  // Now process each block to find supergraph entries with digest that need updating
   for (const [key, value] of blocks) {
-    if (frozenEnvironments.has(key)) {
-      continue;
-    }
-    if (!value?.has('trackSupergraph')) {
-      // Exit early since this isn't tracking a supergraph artifact at all
-      continue;
-    }
-    const trackSupergraph = getStringAndScalarTokenFromMap(
-      value,
-      'trackSupergraph',
-    );
-
-    if (!trackSupergraph) {
-      // trackSupergraph is not provided at all, skip this entry
+    if (key === 'global' || frozenEnvironments.has(key)) {
       continue;
     }
 
-    // After this point, we're guaranteed to have a trackSupergraph. And everything will throw
-    // instead of failing silently because the customer must have intended to track a supergraph.
-    if (!trackSupergraph.value) {
-      // trackSupergraph is provided but empty, throw error since customer intended to track
-      throw Error(
-        `trackSupergraph value is empty, must be in the format \`image:tag\``,
-      );
+    if (!value?.has('supergraph')) {
+      // Skip blocks without supergraph
+      continue;
     }
 
-    const [, imageName, tag] =
-      trackSupergraph.value.match(/^([^:]+):([^:]+)$/) || [];
-
-    // Skip if the trackSupergraph format is invalid (doesn't match image:tag pattern)
-    if (!imageName || !tag) {
-      throw Error(
-        `trackSupergraph \`${trackSupergraph.value}\` is invalid, must be in the format \`image:tag\``,
-      );
+    const supergraphBlock = value.get('supergraph');
+    if (!yaml.isMap(supergraphBlock)) {
+      throw Error(`\`${key}.supergraph\` must be a map`);
     }
 
-    // Safely navigate the YAML structure
-    const values = value.get('values');
-    if (!values || !yaml.isMap(values)) {
-      throw Error(
-        `\`values\` must be provided in the document if using trackSupergraph`,
-      );
-    }
-
-    const router = values.get('router');
-    if (!router || !yaml.isMap(router)) {
-      throw Error(
-        `\`router\` must be provided in the document if using trackSupergraph`,
-      );
-    }
-
-    const extraEnvVars = router.get('extraEnvVars');
-    if (!extraEnvVars || !yaml.isSeq(extraEnvVars)) {
-      throw Error(
-        `\`extraEnvVars\` must be provided in the document if using trackSupergraph`,
-      );
-    }
-
-    const graphArtifactMap = getMapFromSeqWithName(
-      extraEnvVars as yaml.YAMLSeq<yaml.YAMLMap>,
-      'GRAPH_ARTIFACT_REFERENCE',
+    const digestToken = getStringAndScalarTokenFromMap(
+      supergraphBlock,
+      'digest',
     );
 
-    if (graphArtifactMap === null) {
-      throw Error(
-        `Document does not provide \`${key}.values.router.extraEnvVars\` with GRAPH_ARTIFACT_REFERENCE that is a map`,
-      );
+    if (!digestToken) {
+      throw Error(`\`${key}.supergraph.digest\` must be provided`);
     }
 
-    const graphArtifactRef = getStringAndScalarTokenFromMap(
-      graphArtifactMap,
-      'value',
+    // Extract tag from trackMutableTag if available
+    const trackMutableTag = getStringAndScalarTokenFromMap(
+      supergraphBlock,
+      'trackMutableTag',
     );
 
-    if (imageName && tag && graphArtifactRef) {
-      trackables.push({
-        imageName,
-        tag,
-        trackRange: trackSupergraph?.range,
-        graphArtifactRef: graphArtifactRef.value,
-        refScalarTokenWriter: new ScalarTokenWriter(
-          graphArtifactRef.scalarToken,
-          doc.schema,
-        ),
-      });
+    if (!trackMutableTag?.value) {
+      throw Error(`\`${key}.supergraph.trackMutableTag\` must be provided`);
     }
+
+    trackables.push({
+      imageName: imageName.value,
+      tag: trackMutableTag.value,
+      trackRange: trackMutableTag?.range,
+      supergraphDigestToken: new ScalarTokenWriter(
+        digestToken.scalarToken,
+        doc.schema,
+      ),
+    });
   }
 
   return trackables;
@@ -153,8 +141,8 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
   logger: PrefixingLogger,
 ): Promise<void> {
   for (const trackable of trackables) {
-    const [, graphArtifactReferencePrefix] =
-      trackable.graphArtifactRef.match(/^(.*?)@/) || [];
+    // const [, graphArtifactReferencePrefix] =
+    //   trackable.graphArtifactRef.match(/^(.*?)@/) || [];
     const digest = await (async () => {
       try {
         return await dockerRegistryClient.getDigestForTag({
@@ -173,23 +161,9 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
       }
     })();
 
-    // if (!digest) {
-    //   throw new AnnotatedError(
-    //     `The digest for tag '${trackable.tag}' on the image '${trackable.imageName}' does not exist. Check that both the image and tag are spelled correctly.`,
-    //     {
-    //       range: trackable?.trackRange,
-    //       lineCounter,
-    //     },
-    //   );
-    // }
-
-    // It's OK if the current one is null because that's what we're overwriting, but we shouldn't
-    // overwrite *to* something that doesn't exist.
     logger.info(
-      `for image ${trackable.imageName}:${trackable.tag}, changing to tag ${digest}`,
+      `for image ${trackable.imageName}:${trackable.tag}, changing to digest ${digest}`,
     );
-    trackable.refScalarTokenWriter.write(
-      `${graphArtifactReferencePrefix}@${digest}`,
-    );
+    trackable.supergraphDigestToken.write(digest);
   }
 }

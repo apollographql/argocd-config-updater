@@ -20,6 +20,7 @@ import {
   isCachingGitHubClientDump,
 } from './github';
 import { updateDockerTags } from './update-docker-tags';
+import { updateGraphArtifactRefs } from './update-graph-artifact-refs';
 import { updateGitRefs } from './update-git-refs';
 import { updatePromotedValues } from './update-promoted-values';
 import { PrefixingLogger } from './log';
@@ -176,7 +177,20 @@ export async function main(): Promise<void> {
         finalAPICache.dockerRegistry = cachingDockerRegistryClient.dump();
       };
     }
+    const graphArtifactRegistryRepository = core.getInput(
+      'graph-artifact-repository',
+    );
+    const graphArtifactRegistryClient: DockerRegistryClient =
+      new ArtifactRegistryDockerRegistryClient(graphArtifactRegistryRepository);
 
+    const doUpdateGraphArtifactRefs =
+      core.getBooleanInput('update-graph-artifact-refs') ||
+      !!core.getInput('graph-artifact-repository');
+    if (doUpdateGraphArtifactRefs && !graphArtifactRegistryRepository) {
+      throw new Error(
+        'Must set graph-artifact-repository with update-graph-artifact-refs',
+      );
+    }
     const doUpdateDockerTags =
       core.getBooleanInput('update-docker-tags') ||
       !!core.getInput('update-docker-tags-for-artifact-registry-repository');
@@ -223,8 +237,10 @@ export async function main(): Promise<void> {
             filename,
             gitHubClient,
             dockerRegistryClient,
+            graphArtifactRegistryClient,
             generatePromotedCommitsMarkdown,
             doUpdateDockerTags,
+            doUpdateGraphArtifactRefs,
             doUpdateGitRefs,
             doCleanupClosedPrTracking,
             linkTemplateMap,
@@ -298,8 +314,10 @@ async function processFile(options: {
   filename: string;
   gitHubClient: GitHubClient | null;
   dockerRegistryClient: DockerRegistryClient | null;
+  graphArtifactRegistryClient: DockerRegistryClient;
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
+  doUpdateGraphArtifactRefs: boolean;
   doUpdateGitRefs: boolean;
   doCleanupClosedPrTracking: boolean;
   linkTemplateMap: LinkTemplateMap | null;
@@ -312,8 +330,10 @@ async function processFile(options: {
     filename,
     gitHubClient,
     dockerRegistryClient,
+    graphArtifactRegistryClient,
     generatePromotedCommitsMarkdown,
     doUpdateDockerTags,
+    doUpdateGraphArtifactRefs,
     doUpdateGitRefs,
     doCleanupClosedPrTracking,
     linkTemplateMap,
@@ -343,6 +363,15 @@ async function processFile(options: {
     contents = await updateDockerTags(
       contents,
       dockerRegistryClient,
+      frozenEnvironments,
+      logger,
+    );
+  }
+
+  if (doUpdateGraphArtifactRefs) {
+    contents = await updateGraphArtifactRefs(
+      contents,
+      graphArtifactRegistryClient,
       frozenEnvironments,
       logger,
     );
