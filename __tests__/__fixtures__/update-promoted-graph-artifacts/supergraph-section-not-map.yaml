@@ -13,4 +13,4 @@ some-service-dev0:
     path: services/hello-world
     ref: 'abcdef'
     trackMutableRef: pr-1234
-  supergraph: "not-a-map" 
+  supergraph: 'not-a-map'

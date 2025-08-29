@@ -14,4 +14,4 @@ some-service-dev0:
     ref: 'abcdef'
     trackMutableRef: pr-1234
   supergraph:
-    digest: overwrite-me 
+    digest: overwrite-me

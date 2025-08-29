@@ -1,4 +1,4 @@
-global: "not-a-map"
+global: 'not-a-map'
 
 some-service-dev0:
   gitConfig:
@@ -8,4 +8,4 @@ some-service-dev0:
     trackMutableRef: pr-1234
   supergraph:
     digest: overwrite-me
-    trackMutableTag: dev0-00872a1964b50f1b 
+    trackMutableTag: dev0-00872a1964b50f1b

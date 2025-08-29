@@ -34,7 +34,6 @@ some-service-dev1:
   supergraph:
     digest: overwrite-me
     trackMutableTag: dev1-00872a1964b50f1b
-  
 
 some-service-staging:
   gitConfig:

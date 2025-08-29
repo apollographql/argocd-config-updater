@@ -37,7 +37,6 @@ some-service-dev1:
   supergraph:
     digest: sha256:ecb1de1af081bbad2e770d3db8dde4fc4b4eca6ab3e6950f8f2d833f1690b280
     trackMutableTag: dev1-00872a1964b50f1b
-  
 
 some-service-staging:
   gitConfig:
