@@ -143,10 +143,11 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
   for (const trackable of trackables) {
     const digest = await (async () => {
       try {
-        return await dockerRegistryClient.getDigestForTag({
+        const reference = await dockerRegistryClient.getDigestForTag({
           packageName: trackable.imageName,
           tagName: trackable.tag,
         });
+        return reference.match(/sha256:[a-f0-9]{64}/)![0]; // will always have sha256 because it is returned from OCI registry
       } catch (e) {
         if (e instanceof Error) {
           let message = e.message;
@@ -166,7 +167,7 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
     })();
 
     logger.info(
-      `for image ${trackable.imageName}:${trackable.tag}, changing to digest ${digest}`,
+      `for image ${trackable.imageName}:${trackable.tag}, changing to sha256 digest ${digest}`,
     );
     trackable.supergraphDigestToken.write(digest);
   }

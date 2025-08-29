@@ -368,14 +368,14 @@ async function processFile(options: {
     );
   }
 
-  // if (doUpdateGraphArtifactRefs) {
-  //   contents = await updateGraphArtifactRefs(
-  //     contents,
-  //     graphArtifactRegistryClient,
-  //     frozenEnvironments,
-  //     logger,
-  //   );
-  // }
+  if (doUpdateGraphArtifactRefs) {
+    contents = await updateGraphArtifactRefs(
+      contents,
+      graphArtifactRegistryClient,
+      frozenEnvironments,
+      logger,
+    );
+  }
 
   // The git refs depend on the docker tag potentially so we want to update it after the
   // docker tags are updated.
