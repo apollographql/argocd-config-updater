@@ -177,15 +177,19 @@ export async function main(): Promise<void> {
         finalAPICache.dockerRegistry = cachingDockerRegistryClient.dump();
       };
     }
+    let graphArtifactRegistryClient: DockerRegistryClient | null = null;
     const graphArtifactRegistryRepository = core.getInput(
       'graph-artifact-repository',
     );
-    const graphArtifactRegistryClient: DockerRegistryClient =
-      new ArtifactRegistryDockerRegistryClient(graphArtifactRegistryRepository);
+    if (graphArtifactRegistryRepository) {
+      graphArtifactRegistryClient = new ArtifactRegistryDockerRegistryClient(
+        graphArtifactRegistryRepository,
+      );
+    }
 
-    const doUpdateGraphArtifactRefs =
-      core.getBooleanInput('update-graph-artifact-refs') ||
-      !!core.getInput('graph-artifact-repository');
+    const doUpdateGraphArtifactRefs = core.getBooleanInput(
+      'update-graph-artifact-refs',
+    );
     if (doUpdateGraphArtifactRefs && !graphArtifactRegistryRepository) {
       throw new Error(
         'Must set graph-artifact-repository with update-graph-artifact-refs',
@@ -314,7 +318,7 @@ async function processFile(options: {
   filename: string;
   gitHubClient: GitHubClient | null;
   dockerRegistryClient: DockerRegistryClient | null;
-  graphArtifactRegistryClient: DockerRegistryClient;
+  graphArtifactRegistryClient: DockerRegistryClient | null;
   generatePromotedCommitsMarkdown: boolean;
   doUpdateDockerTags: boolean;
   doUpdateGraphArtifactRefs: boolean;
@@ -368,7 +372,7 @@ async function processFile(options: {
     );
   }
 
-  if (doUpdateGraphArtifactRefs) {
+  if (graphArtifactRegistryClient && doUpdateGraphArtifactRefs) {
     contents = await updateGraphArtifactRefs(
       contents,
       graphArtifactRegistryClient,
