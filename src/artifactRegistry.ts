@@ -76,7 +76,7 @@ export class ArtifactRegistryDockerRegistryClient {
     const tagPath = this.client.pathTemplates.tagPathTemplate.render({
       ...this.repositoryFields,
       package: encodeURIComponent(packageName),
-      tagName,
+      tag: tagName,
     });
 
     // Fetch the tag object

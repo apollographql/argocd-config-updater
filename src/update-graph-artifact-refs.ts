@@ -141,8 +141,6 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
   logger: PrefixingLogger,
 ): Promise<void> {
   for (const trackable of trackables) {
-    // const [, graphArtifactReferencePrefix] =
-    //   trackable.graphArtifactRef.match(/^(.*?)@/) || [];
     const digest = await (async () => {
       try {
         return await dockerRegistryClient.getDigestForTag({
