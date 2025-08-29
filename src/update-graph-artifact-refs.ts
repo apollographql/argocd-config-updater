@@ -149,7 +149,13 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
         });
       } catch (e) {
         if (e instanceof Error) {
-          throw new AnnotatedError(e.message, {
+          let message = e.message;
+          if (e.message === `5 NOT_FOUND: Requested entity was not found.`) {
+            message = `The tag '${trackable.tag}' on the Docker image '${
+              trackable.imageName
+            }' does not exist. Check that both the image and tag are spelled correctly.`;
+          }
+          throw new AnnotatedError(message, {
             range: trackable?.trackRange,
             lineCounter,
           });
