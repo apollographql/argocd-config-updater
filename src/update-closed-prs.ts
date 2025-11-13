@@ -62,7 +62,7 @@ export async function cleanupClosedPrTracking(options: {
         } else {
           logger.info(`PR #${prNumber} is ${pr.state}`);
         }
-      } catch (error) {
+      } catch {
         logger.info(`PR #${prNumber} lookup failed, leaving unchanged`);
       }
     }

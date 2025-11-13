@@ -20,7 +20,7 @@
     "ci-test": "vitest run",
     "format:write": "prettier --write **/*.ts",
     "format:check": "prettier --check **/*.ts",
-    "lint": "npx eslint . -c .eslintrc.yml",
+    "lint": "npx eslint .",
     "package": "ncc build src/index.ts --license licenses.txt",
     "package:watch": "npm run package -- --watch",
     "test": "vitest run",
