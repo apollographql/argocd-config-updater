@@ -71,5 +71,5 @@ outputs:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
 
 runs:
-  using: node20
+  using: node24
   main: dist/index.js
