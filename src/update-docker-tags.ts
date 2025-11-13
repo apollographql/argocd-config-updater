@@ -9,7 +9,7 @@ import {
   parseYAML,
 } from './yaml';
 import { PrefixingLogger } from './log';
-import { AnnotatedError } from './index';
+import { AnnotatedError } from './annotatedError';
 
 interface Trackable {
   trackMutableTag: string;

@@ -30,38 +30,13 @@ import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
 import { formatPromotedCommits } from './format-promoted-commits';
 import { CleanupChange, formatCleanupChanges } from './format-cleanup-changes';
 import { cleanupClosedPrTracking } from './update-closed-prs';
-
-export class AnnotatedError extends Error {
-  startLine: number | undefined;
-  startColumn: number | undefined;
-  endLine: number | undefined;
-  endColumn: number | undefined;
-
-  constructor(
-    message: string,
-    {
-      range,
-      lineCounter,
-    }: { range: yaml.Range | null | undefined; lineCounter: yaml.LineCounter },
-  ) {
-    super(message);
-    if (range) {
-      ({ line: this.startLine, col: this.startColumn } = lineCounter.linePos(
-        range[0],
-      ));
-      // End is exclusive, so subtract 1
-      ({ line: this.endLine, col: this.endColumn } = lineCounter.linePos(
-        range[2] - 1,
-      ));
-    }
-  }
-}
+import { AnnotatedError } from './annotatedError';
 
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
-export async function main(): Promise<void> {
+async function main(): Promise<void> {
   try {
     const files = core.getInput('files');
     const globber = await glob.create(files);
@@ -140,7 +115,10 @@ export async function main(): Promise<void> {
         }
       });
 
-      const octokitGitHubClient = new OctokitGitHubClient(octokit);
+      const octokitGitHubClient = new OctokitGitHubClient(
+        octokit,
+        new PrefixingLogger(),
+      );
 
       const cachingGitHubClient = new CachingGitHubClient(
         octokitGitHubClient,
@@ -167,7 +145,10 @@ export async function main(): Promise<void> {
       core.getInput('update-docker-tags-for-artifact-registry-repository');
     if (artifactRegistryRepository) {
       const artifactRegistryDockerRegistryClient =
-        new ArtifactRegistryDockerRegistryClient(artifactRegistryRepository);
+        new ArtifactRegistryDockerRegistryClient(
+          artifactRegistryRepository,
+          new PrefixingLogger('[docker-registry] '),
+        );
       const cachingDockerRegistryClient = new CachingDockerRegistryClient(
         artifactRegistryDockerRegistryClient,
         initialAPICache?.dockerRegistry,
@@ -184,6 +165,7 @@ export async function main(): Promise<void> {
     if (graphArtifactRegistryRepository) {
       graphArtifactRegistryClient = new ArtifactRegistryDockerRegistryClient(
         graphArtifactRegistryRepository,
+        new PrefixingLogger('[graph-artifact-registry] '),
       );
     }
 
@@ -474,7 +456,7 @@ async function maybeReadAPICache(
   };
 }
 
-export async function readFrozenEnvironmentsFile(
+async function readFrozenEnvironmentsFile(
   filename: string,
 ): Promise<Set<string>> {
   const contents = await readFile(filename, 'utf-8');

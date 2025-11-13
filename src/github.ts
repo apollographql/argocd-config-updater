@@ -1,4 +1,3 @@
-import * as core from '@actions/core';
 import { getOctokit } from '@actions/github';
 import { LRUCache } from 'lru-cache';
 import {
@@ -6,6 +5,7 @@ import {
   promotionInfoCommits,
   promotionInfoUnknown,
 } from './promotionInfo';
+import { PrefixingLogger } from './log';
 
 export interface ResolveRefToSHAOptions {
   repoURL: string;
@@ -79,10 +79,13 @@ function isSHA(s: string): boolean {
 
 export class OctokitGitHubClient {
   apiCalls = new Map<string, number>();
-  constructor(private octokit: ReturnType<typeof getOctokit>) {}
+  constructor(
+    private octokit: ReturnType<typeof getOctokit>,
+    private logger: PrefixingLogger,
+  ) {}
 
   private logAPICall(name: string, description: string): void {
-    core.info(`[GH API] ${name} ${description}`);
+    this.logger.info(`[GH API] ${name} ${description}`);
     this.apiCalls.set(name, (this.apiCalls.get(name) ?? 0) + 1);
   }
 
@@ -462,8 +465,9 @@ export async function getGitConfigRefPromotionInfo(options: {
   repoURL: string;
   path: string;
   gitHubClient: GitHubClient;
+  logger: PrefixingLogger;
 }): Promise<PromotionInfo> {
-  const { oldRef, newRef, repoURL, path, gitHubClient } = options;
+  const { oldRef, newRef, repoURL, path, gitHubClient, logger } = options;
 
   // Figure out what commits affect the path in the new version.
   let newCommitSHAs;
@@ -474,7 +478,7 @@ export async function getGitConfigRefPromotionInfo(options: {
       ref: newRef,
     });
   } catch (e) {
-    core.error(
+    logger.error(
       `Error loading commit SHAs for path ${repoURL}@${newRef} ${path}: ${e}`,
     );
     return promotionInfoUnknown(`Error loading commit SHAs for ${newRef}`);
@@ -493,7 +497,7 @@ export async function getGitConfigRefPromotionInfo(options: {
       ref: oldRef,
     });
   } catch (e) {
-    core.error(
+    logger.error(
       `Error loading commit SHAs for path ${repoURL}@${oldRef} ${path}: ${e}`,
     );
     return promotionInfoUnknown(`Error loading commit SHAs for ${oldRef}`);
