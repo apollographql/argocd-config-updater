@@ -147,7 +147,11 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
           packageName: trackable.imageName,
           tagName: trackable.tag,
         });
-        return reference.match(/sha256:[a-f0-9]{64}/)![0]; // will always have sha256 because it is returned from OCI registry
+        const match = reference.match(/sha256:[a-f0-9]{64}/);
+        if (!match) {
+          throw new Error(`Docker digest is not valid sha256: ${reference}`);
+        }
+        return match[0];
       } catch (e) {
         if (e instanceof Error) {
           let message = e.message;
