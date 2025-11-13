@@ -83,8 +83,9 @@ export class ArtifactRegistryDockerRegistryClient {
     const [tag] = await this.client.getTag({ name: tagPath });
 
     if (!tag || !tag.version) {
-      throw new Error(`The tag '${tagName}' on the image '${packageName}'
-        does not exist. Check that both the image and tag are spelled correctly.`);
+      throw new Error(
+        `The tag '${tagName}' on the image '${packageName}' does not exist. Check that both the image and tag are spelled correctly.`,
+      );
     }
     // version.name is like projects/.../versions/{versionId}, but digest is in version metadata field
     return tag.version;
