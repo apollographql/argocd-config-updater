@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "author": "",
   "private": true,
+  "type": "module",
   "homepage": "https://github.com/apollographql/argocd-config-updater",
   "repository": {
     "type": "git",

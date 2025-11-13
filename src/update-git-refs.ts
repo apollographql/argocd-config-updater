@@ -3,15 +3,15 @@ import {
   GetTreeSHAForPathOptions,
   GitHubClient,
   ResolveRefToSHAOptions,
-} from './github';
+} from './github.js';
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml';
-import { PrefixingLogger } from './log';
+} from './yaml.js';
+import { PrefixingLogger } from './log.js';
 
 export interface Trackable {
   trackMutableRef: string;

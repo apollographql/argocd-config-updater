@@ -5,18 +5,18 @@ import {
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml';
-import { PrefixingLogger } from './log';
-import { DockerRegistryClient } from './artifactRegistry';
+} from './yaml.js';
+import { PrefixingLogger } from './log.js';
+import { DockerRegistryClient } from './artifactRegistry.js';
 import {
   PromotionInfo,
   PromotionsByTargetEnvironment,
   PromotionSetWithDockerImage,
-} from './promotionInfo';
-import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
-import { LinkTemplateMap, renderLinkTemplate } from './templates';
+} from './promotionInfo.js';
+import { GitHubClient, getGitConfigRefPromotionInfo } from './github.js';
+import { LinkTemplateMap, renderLinkTemplate } from './templates.js';
 import { createHash } from 'node:crypto';
-import { AnnotatedError } from './annotatedError';
+import { AnnotatedError } from './annotatedError.js';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;

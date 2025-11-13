@@ -47,6 +47,7 @@ export default [
       'eslint-comments/no-unused-disable': 'off',
       'i18n-text/no-en': 'off',
       'import/no-namespace': 'off',
+      'import/no-unresolved': 'off', // TypeScript handles this
       'no-console': 'error',
       'no-restricted-imports': [
         'error',
