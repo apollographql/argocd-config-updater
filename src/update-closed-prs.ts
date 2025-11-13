@@ -1,8 +1,8 @@
-import { getWebURL, GitHubClient } from './github';
-import { PrefixingLogger } from './log';
-import { parseYAML } from './yaml';
-import { findTrackables } from './update-git-refs';
-import { CleanupChange } from './format-cleanup-changes';
+import { getWebURL, GitHubClient } from './github.js';
+import { PrefixingLogger } from './log.js';
+import { parseYAML } from './yaml.js';
+import { findTrackables } from './update-git-refs.js';
+import { CleanupChange } from './format-cleanup-changes.js';
 
 /**
  * Updates closed PR tracking references to point to 'main' branch.

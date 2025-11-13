@@ -1,4 +1,4 @@
-import { Link } from './templates';
+import { Link } from './templates.js';
 
 export interface PromotionInfoCommits {
   type: 'commits';

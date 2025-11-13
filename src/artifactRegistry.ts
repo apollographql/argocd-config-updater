@@ -3,8 +3,8 @@ import {
   protos,
 } from '@google-cloud/artifact-registry';
 import { LRUCache } from 'lru-cache';
-import { PromotionInfo, promotionInfoUnknown } from './promotionInfo';
-import { PrefixingLogger } from './log';
+import { PromotionInfo, promotionInfoUnknown } from './promotionInfo.js';
+import { PrefixingLogger } from './log.js';
 
 export interface GetAllEquivalentTagsOptions {
   /** The name of the specific Docker image in question (ie, a Docker

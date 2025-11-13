@@ -11,26 +11,29 @@ import {
   CachingDockerRegistryClientDump,
   DockerRegistryClient,
   isCachingDockerRegistryClientDump,
-} from './artifactRegistry';
+} from './artifactRegistry.js';
 import {
   CachingGitHubClient,
   CachingGitHubClientDump,
   GitHubClient,
   OctokitGitHubClient,
   isCachingGitHubClientDump,
-} from './github';
-import { updateDockerTags } from './update-docker-tags';
-import { updateGraphArtifactRefs } from './update-graph-artifact-refs';
-import { updateGitRefs } from './update-git-refs';
-import { updatePromotedValues } from './update-promoted-values';
-import { PrefixingLogger } from './log';
+} from './github.js';
+import { updateDockerTags } from './update-docker-tags.js';
+import { updateGraphArtifactRefs } from './update-graph-artifact-refs.js';
+import { updateGitRefs } from './update-git-refs.js';
+import { updatePromotedValues } from './update-promoted-values.js';
+import { PrefixingLogger } from './log.js';
 import { inspect } from 'util';
-import { PromotionsByTargetEnvironment } from './promotionInfo';
-import { LinkTemplateMap, readLinkTemplateMapFile } from './templates';
-import { formatPromotedCommits } from './format-promoted-commits';
-import { CleanupChange, formatCleanupChanges } from './format-cleanup-changes';
-import { cleanupClosedPrTracking } from './update-closed-prs';
-import { AnnotatedError } from './annotatedError';
+import { PromotionsByTargetEnvironment } from './promotionInfo.js';
+import { LinkTemplateMap, readLinkTemplateMapFile } from './templates.js';
+import { formatPromotedCommits } from './format-promoted-commits.js';
+import {
+  CleanupChange,
+  formatCleanupChanges,
+} from './format-cleanup-changes.js';
+import { cleanupClosedPrTracking } from './update-closed-prs.js';
+import { AnnotatedError } from './annotatedError.js';
 
 /**
  * The main function for the action.
@@ -80,13 +83,19 @@ async function main(): Promise<void> {
         githubToken,
         {
           throttle: {
-            onRateLimit: (retryAfter, options) => {
+            onRateLimit: (
+              retryAfter: number,
+              options: { method: string; url: string },
+            ) => {
               core.warning(
                 `[RATE LIMIT] Hit GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
               );
               return true;
             },
-            onSecondaryRateLimit: (retryAfter, options) => {
+            onSecondaryRateLimit: (
+              retryAfter: number,
+              options: { method: string; url: string },
+            ) => {
               core.warning(
                 `[RATE LIMIT] Hit secondary GH rate limit for request ${options.method} ${options.url}; retrying after ${retryAfter} seconds`,
               );
@@ -94,6 +103,7 @@ async function main(): Promise<void> {
             },
           },
         },
+        // @ts-expect-error - Type incompatibility between @actions/github's bundled @octokit/core v5 and throttling plugin's @octokit/core v7
         throttling,
       );
 

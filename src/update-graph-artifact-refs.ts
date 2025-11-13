@@ -1,13 +1,13 @@
 import * as yaml from 'yaml';
-import { DockerRegistryClient } from './artifactRegistry';
+import { DockerRegistryClient } from './artifactRegistry.js';
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml';
-import { PrefixingLogger } from './log';
-import { AnnotatedError } from './annotatedError';
+} from './yaml.js';
+import { PrefixingLogger } from './log.js';
+import { AnnotatedError } from './annotatedError.js';
 
 export interface TrackableGraphArtifact {
   imageName: string;

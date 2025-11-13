@@ -4,8 +4,8 @@ import {
   PromotionInfo,
   promotionInfoCommits,
   promotionInfoUnknown,
-} from './promotionInfo';
-import { PrefixingLogger } from './log';
+} from './promotionInfo.js';
+import { PrefixingLogger } from './log.js';
 
 export interface ResolveRefToSHAOptions {
   repoURL: string;

@@ -1,15 +1,15 @@
-import min from 'lodash/min';
+import { min } from 'lodash';
 import * as yaml from 'yaml';
-import { DockerRegistryClient } from './artifactRegistry';
+import { DockerRegistryClient } from './artifactRegistry.js';
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml';
-import { PrefixingLogger } from './log';
-import { AnnotatedError } from './annotatedError';
+} from './yaml.js';
+import { PrefixingLogger } from './log.js';
+import { AnnotatedError } from './annotatedError.js';
 
 interface Trackable {
   trackMutableTag: string;

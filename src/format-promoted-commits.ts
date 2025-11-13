@@ -1,5 +1,8 @@
 import { basename, dirname } from 'node:path';
-import { PromotionsByTargetEnvironment, PromotionSet } from './promotionInfo';
+import {
+  PromotionsByTargetEnvironment,
+  PromotionSet,
+} from './promotionInfo.js';
 
 interface App {
   appDirectory: string;
