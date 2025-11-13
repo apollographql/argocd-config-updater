@@ -1,7 +1,6 @@
 env:
   node: true
   es6: true
-  jest: true
 
 globals:
   Atomics: readonly
@@ -13,6 +12,7 @@ ignorePatterns:
   - '**/dist/.*'
   - '**/coverage/.*'
   - '*.json'
+  - 'vitest.config.mts'
 
 parser: '@typescript-eslint/parser'
 
@@ -24,15 +24,15 @@ parserOptions:
     - './tsconfig.json'
 
 plugins:
-  - jest
   - '@typescript-eslint'
+  - '@vitest'
 
 extends:
   - eslint:recommended
   - plugin:@typescript-eslint/eslint-recommended
   - plugin:@typescript-eslint/recommended
   - plugin:github/recommended
-  - plugin:jest/recommended
+  - plugin:@vitest/legacy-recommended
 
 rules:
   {

@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`formatCleanupChanges should format a single closed PR 1`] = `
+exports[`formatCleanupChanges > should format a single closed PR 1`] = `
 "## Found 1 closed PR
 
 ### dev
@@ -9,7 +9,7 @@ exports[`formatCleanupChanges should format a single closed PR 1`] = `
   - PR [#123](https://github.com/owner/repo/pull/123): Add new feature (closed Jan 15, 2024)"
 `;
 
-exports[`formatCleanupChanges should format multiple closed PRs under same app and environment 1`] = `
+exports[`formatCleanupChanges > should format multiple closed PRs under same app and environment 1`] = `
 "## Found 2 closed PRs
 
 ### dev
@@ -19,7 +19,7 @@ exports[`formatCleanupChanges should format multiple closed PRs under same app a
   - PR [#456](https://github.com/owner/repo/pull/456): Second PR (closed Jan 18, 2024)"
 `;
 
-exports[`formatCleanupChanges should handle multiple PRs across different apps and environments 1`] = `
+exports[`formatCleanupChanges > should handle multiple PRs across different apps and environments 1`] = `
 "## Found 3 closed PRs
 
 ### dev

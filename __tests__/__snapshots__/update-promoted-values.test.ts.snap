@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`action respects defaults and explicit specifications for yamlPaths 1`] = `
+exports[`action > respects defaults and explicit specifications for yamlPaths 1`] = `
 "source:
   gitConfig:
     path: foo/bar
@@ -52,7 +52,7 @@ completely-different-fields:
 "
 `;
 
-exports[`action updates git refs 1`] = `
+exports[`action > updates git refs 1`] = `
 "some-service-staging:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -78,7 +78,7 @@ some-service-not-selected:
 "
 `;
 
-exports[`action updates git refs 2`] = `
+exports[`action > updates git refs 2`] = `
 "some-service-staging:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git

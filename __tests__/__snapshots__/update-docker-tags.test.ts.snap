@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`action updates docker tags 1`] = `
+exports[`action > updates docker tags 1`] = `
 "some-service-dev0:
   dockerImage:
     repository: foo
@@ -40,7 +40,7 @@ some-service-top-level:
 "
 `;
 
-exports[`action updates docker tags 2`] = `
+exports[`action > updates docker tags 2`] = `
 "some-service-dev0:
   dockerImage:
     repository: foo

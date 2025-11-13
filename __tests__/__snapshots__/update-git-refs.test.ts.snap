@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`action handle docker tag 1`] = `
+exports[`action > handle docker tag 1`] = `
 "updated:
   track: main
   gitConfig:
@@ -30,7 +30,7 @@ diff-tree-sha:
     tag: main---0013323-2024.03-gd97b3a3240"
 `;
 
-exports[`action handle docker tag with unknown commit 1`] = `
+exports[`action > handle docker tag with unknown commit 1`] = `
 "updated:
   track: main
   gitConfig:
@@ -60,7 +60,7 @@ diff-tree-sha:
     tag: main---0013323-2024.03-gd97b3a3240"
 `;
 
-exports[`action handles unknown current ref 1`] = `
+exports[`action > handles unknown current ref 1`] = `
 "some-service-tree:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -70,7 +70,7 @@ exports[`action handles unknown current ref 1`] = `
 "
 `;
 
-exports[`action only changes ref when tree sha changes 1`] = `
+exports[`action > only changes ref when tree sha changes 1`] = `
 "some-service-tree:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -80,7 +80,7 @@ exports[`action only changes ref when tree sha changes 1`] = `
 "
 `;
 
-exports[`action only changes ref when tree sha changes 2`] = `
+exports[`action > only changes ref when tree sha changes 2`] = `
 "some-service-tree:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -90,7 +90,7 @@ exports[`action only changes ref when tree sha changes 2`] = `
 "
 `;
 
-exports[`action updates git ref when repoURL/path are in \`global\` 1`] = `
+exports[`action > updates git ref when repoURL/path are in \`global\` 1`] = `
 "global:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -103,7 +103,7 @@ some-service-dev1:
 "
 `;
 
-exports[`action updates git refs 1`] = `
+exports[`action > updates git refs 1`] = `
 "some-service-dev0:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git
@@ -148,7 +148,7 @@ some-service-top-level:
 "
 `;
 
-exports[`action updates git refs 2`] = `
+exports[`action > updates git refs 2`] = `
 "some-service-dev0:
   gitConfig:
     repoURL: https://github.com/apollographql/some-repo.git

@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { cleanupClosedPrTracking } from '../src/update-closed-prs';
 import { getWebURL, GitHubClient } from '../src/github';
 import { PrefixingLogger } from '../src/log';
