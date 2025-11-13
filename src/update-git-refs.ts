@@ -153,11 +153,12 @@ export function findTrackables(
 async function resolveRefToSHAOrNull(
   gitHubClient: GitHubClient,
   options: ResolveRefToSHAOptions,
+  logger: PrefixingLogger,
 ): Promise<string | null> {
   try {
     return await gitHubClient.resolveRefToSHA(options);
   } catch (e) {
-    console.warn(
+    logger.warning(
       `Ignoring error looking up ref ${options.ref} at ${options.repoURL}: ${e}`,
     );
     return null;
@@ -172,11 +173,12 @@ async function resolveRefToSHAOrNull(
 async function getTreeSHAForPathOrNull(
   gitHubClient: GitHubClient,
   options: GetTreeSHAForPathOptions,
+  logger: PrefixingLogger,
 ): Promise<string | null> {
   try {
     return await gitHubClient.getTreeSHAForPath(options);
   } catch (e) {
-    console.warn(
+    logger.warning(
       `Ignoring error getting tree SHA for ${options.path} at ${options.commitSHA} in ${options.repoURL}: ${e}`,
     );
     return null;
@@ -196,10 +198,14 @@ async function checkRefsAgainstGitHubAndModifyScalars(
 
     // Convert trackable.ref to SHA too, because getTreeSHAForPath requires you
     // to pass a commit SHA (due to the particular GitHub APIs it uses).
-    const currentRefCommitSHA = await resolveRefToSHAOrNull(gitHubClient, {
-      repoURL: trackable.repoURL,
-      ref: trackable.ref,
-    });
+    const currentRefCommitSHA = await resolveRefToSHAOrNull(
+      gitHubClient,
+      {
+        repoURL: trackable.repoURL,
+        ref: trackable.ref,
+      },
+      logger,
+    );
 
     // OK, we've got a SHA that we could overwrite the current ref
     // (`trackable.ref`) with in the config file. But we don't want to do this
@@ -208,11 +214,15 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // at the given path to see if it has changed between `trackable.ref` and
     // the SHA we're thinking about replacing it with.
     const currentTreeSHA = currentRefCommitSHA
-      ? await getTreeSHAForPathOrNull(gitHubClient, {
-          repoURL: trackable.repoURL,
-          commitSHA: currentRefCommitSHA,
-          path: trackable.path,
-        })
+      ? await getTreeSHAForPathOrNull(
+          gitHubClient,
+          {
+            repoURL: trackable.repoURL,
+            commitSHA: currentRefCommitSHA,
+            path: trackable.path,
+          },
+          logger,
+        )
       : null;
     const trackedTreeSHA = await gitHubClient.getTreeSHAForPath({
       repoURL: trackable.repoURL,
@@ -223,18 +233,26 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // The docker commit is usually a short sha, which we can't get the tree path for
     // This converts it to a full sha so we can get the tree sha later
     const dockerRefCommitSHA = trackable.maybeDockerCommit
-      ? await resolveRefToSHAOrNull(gitHubClient, {
-          repoURL: trackable.repoURL,
-          ref: trackable.maybeDockerCommit,
-        })
+      ? await resolveRefToSHAOrNull(
+          gitHubClient,
+          {
+            repoURL: trackable.repoURL,
+            ref: trackable.maybeDockerCommit,
+          },
+          logger,
+        )
       : null;
 
     const dockerTreeSHA = dockerRefCommitSHA
-      ? await getTreeSHAForPathOrNull(gitHubClient, {
-          repoURL: trackable.repoURL,
-          commitSHA: dockerRefCommitSHA,
-          path: trackable.path,
-        })
+      ? await getTreeSHAForPathOrNull(
+          gitHubClient,
+          {
+            repoURL: trackable.repoURL,
+            commitSHA: dockerRefCommitSHA,
+            path: trackable.path,
+          },
+          logger,
+        )
       : null;
 
     if (trackedTreeSHA === null) {
