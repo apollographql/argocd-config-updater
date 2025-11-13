@@ -49,7 +49,7 @@
     "@typescript-eslint/eslint-plugin": "7.18.0",
     "@typescript-eslint/parser": "7.18.0",
     "@vercel/ncc": "0.38.4",
-    "@vitest/eslint-plugin": "^1.1.17",
+    "@vitest/eslint-plugin": "1.4.2",
     "@vitest/ui": "2.1.8",
     "eslint": "8.57.1",
     "eslint-plugin-github": "4.10.2",
