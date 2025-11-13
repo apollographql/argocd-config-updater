@@ -6,6 +6,5 @@ export default defineConfig({
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
     exclude: ['node_modules', 'dist'],
-    reporters: 'verbose',
   },
 });

@@ -7,7 +7,7 @@ import {
   parseYAML,
 } from './yaml';
 import { PrefixingLogger } from './log';
-import { AnnotatedError } from './index';
+import { AnnotatedError } from './annotatedError';
 
 export interface TrackableGraphArtifact {
   imageName: string;

@@ -42,6 +42,19 @@ rules:
     'i18n-text/no-en': 'off',
     'import/no-namespace': 'off',
     'no-console': 'error',
+    'no-restricted-imports':
+      [
+        'error',
+        {
+          'paths':
+            [
+              {
+                'name': '@actions/core',
+                'message': 'Use of @actions/core is only allowed in index.ts and log.ts',
+              },
+            ],
+        },
+      ],
     'no-unused-vars': 'off',
     'prettier/prettier': 'error',
     'semi': 'off',
@@ -80,3 +93,29 @@ rules:
     '@typescript-eslint/type-annotation-spacing': 'error',
     '@typescript-eslint/unbound-method': 'error',
   }
+
+overrides:
+  - files:
+      - 'src/index.ts'
+      - 'src/log.ts'
+    rules:
+      no-restricted-imports: 'off'
+  - files:
+      - 'src/index.ts'
+    rules:
+      no-restricted-syntax:
+        [
+          'error',
+          {
+            'selector': 'ExportNamedDeclaration',
+            'message': 'Exports are not allowed in index.ts',
+          },
+          {
+            'selector': 'ExportDefaultDeclaration',
+            'message': 'Exports are not allowed in index.ts',
+          },
+          {
+            'selector': 'ExportAllDeclaration',
+            'message': 'Exports are not allowed in index.ts',
+          },
+        ]

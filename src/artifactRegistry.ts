@@ -1,10 +1,10 @@
-import * as core from '@actions/core';
 import {
   ArtifactRegistryClient,
   protos,
 } from '@google-cloud/artifact-registry';
 import { LRUCache } from 'lru-cache';
 import { PromotionInfo, promotionInfoUnknown } from './promotionInfo';
+import { PrefixingLogger } from './log';
 
 export interface GetAllEquivalentTagsOptions {
   /** The name of the specific Docker image in question (ie, a Docker
@@ -41,12 +41,15 @@ export class ArtifactRegistryDockerRegistryClient {
     location: string;
     repository: string;
   };
+  private logger: PrefixingLogger;
   constructor(
     /** A string of the form
      * `projects/PROJECT/locations/LOCATION/repositories/REPOSITORY`; this is an
      * Artifact Registry repository, which is a set of Docker repositories. */
     artifactRegistryRepository: string,
+    logger: PrefixingLogger,
   ) {
+    this.logger = logger;
     this.client = new ArtifactRegistryClient();
     const { project, location, repository } =
       this.client.pathTemplates.repositoryPathTemplate.match(
@@ -114,7 +117,7 @@ export class ArtifactRegistryDockerRegistryClient {
     nextTag: string;
     dockerImageRepository: string;
   }): Promise<PromotionInfo> {
-    core.info(
+    this.logger.info(
       `running diff docker tags ${prevTag} ${nextTag} ${dockerImageRepository}`,
     );
     // Note: we don't need `listTagsAsync` (which is recommended) because we
@@ -161,7 +164,7 @@ export class ArtifactRegistryDockerRegistryClient {
       tag,
     });
 
-    core.info(`[AR API] Fetching tag ${tagPath}`);
+    this.logger.info(`[AR API] Fetching tag ${tagPath}`);
     // Note: this throws if the repository or tag are not found.
     const { version } = (await this.client.getTag({ name: tagPath }))[0];
     if (!version) {
@@ -182,7 +185,7 @@ export class ArtifactRegistryDockerRegistryClient {
         docker_image: `${parsedVersion.package}@${parsedVersion.version}`,
       });
 
-    core.info(`[AR API] Fetching Docker image ${dockerImagePath}`);
+    this.logger.info(`[AR API] Fetching Docker image ${dockerImagePath}`);
     const { tags } = (
       await this.client.getDockerImage({ name: dockerImagePath })
     )[0];

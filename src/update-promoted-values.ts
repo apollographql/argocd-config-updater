@@ -16,7 +16,7 @@ import {
 import { GitHubClient, getGitConfigRefPromotionInfo } from './github';
 import { LinkTemplateMap, renderLinkTemplate } from './templates';
 import { createHash } from 'node:crypto';
-import { AnnotatedError } from './index';
+import { AnnotatedError } from './annotatedError';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -67,6 +67,7 @@ export async function updatePromotedValues(
     gitHubClient,
     linkTemplateMap,
     frozenEnvironments,
+    logger,
   );
 
   logger.info('Copying values');
@@ -85,6 +86,7 @@ async function findPromotes(
   gitHubClient: GitHubClient | null,
   linkTemplateMap: LinkTemplateMap | null,
   frozenEnvironments: Set<string>,
+  logger: PrefixingLogger,
 ): Promise<{
   promotes: Promote[];
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
@@ -293,6 +295,7 @@ async function findPromotes(
             repoURL,
             path,
             gitHubClient,
+            logger,
           });
         }
       }
