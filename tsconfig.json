@@ -16,5 +16,5 @@
     "newLine": "lf",
     "isolatedModules": true
   },
-  "exclude": ["./dist", "./node_modules", "./__tests__"]
+  "exclude": ["./dist", "./node_modules", "./__tests__", "./vitest.config.mts"]
 }

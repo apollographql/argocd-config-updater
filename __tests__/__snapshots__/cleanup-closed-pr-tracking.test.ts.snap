@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`cleanupClosedPrTracking should handle PR lookup errors by leaving PR references unchanged 1`] = `
+exports[`cleanupClosedPrTracking > should handle PR lookup errors by leaving PR references unchanged 1`] = `
 "
 global:
   gitConfig:
@@ -13,7 +13,7 @@ dev:
 "
 `;
 
-exports[`cleanupClosedPrTracking should not change pr references that are open 1`] = `
+exports[`cleanupClosedPrTracking > should not change pr references that are open 1`] = `
 "
 global:
   gitConfig:
@@ -33,7 +33,7 @@ prod:
 "
 `;
 
-exports[`cleanupClosedPrTracking should not modify YAML unnecessarily 1`] = `
+exports[`cleanupClosedPrTracking > should not modify YAML unnecessarily 1`] = `
 "# Top level comment
 global:
   gitConfig:
@@ -54,7 +54,7 @@ prod:
 "
 `;
 
-exports[`cleanupClosedPrTracking should replace closed PR references with main 1`] = `
+exports[`cleanupClosedPrTracking > should replace closed PR references with main 1`] = `
 "
 global:
   gitConfig:

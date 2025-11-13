@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { updateGraphArtifactRefs } from '../src/update-graph-artifact-refs';
