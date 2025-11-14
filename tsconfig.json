@@ -6,7 +6,6 @@
     "rootDir": "./src",
     "moduleResolution": "NodeNext",
     "baseUrl": "./",
-    "sourceMap": true,
     "outDir": "./dist",
     "noImplicitAny": true,
     "esModuleInterop": true,

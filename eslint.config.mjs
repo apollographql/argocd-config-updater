@@ -14,8 +14,7 @@ export default [
       '**/dist/**',
       '**/coverage/**',
       '**/*.json',
-      'vitest.config.mts',
-      'eslint.config.mjs',
+      '*.config.*s',
     ],
   },
 
