@@ -58,6 +58,6 @@ describe('action', () => {
     const contents = await fixture('default-fails.yaml');
     await expect(
       updatePromotedValues(contents, null, new Set<string>(), logger),
-    ).rejects.toThrow('none of the default promoted paths');
+    ).rejects.toThrow('none of the deult promoted paths');
   });
 });
