@@ -74,19 +74,19 @@ export async function readLinkTemplateMapFile(
     if (!('text' in parsedLinkTemplate)) {
       throw Error(`Template ${name} in ${filename} must contain a 'text' key`);
     }
-    const text = ensureTemplate(
-      parsedLinkTemplate.text,
-      `Template ${name}.text in ${filename}`,
-    );
-    const url =
-      'url' in parsedLinkTemplate
-        ? ensureTemplate(
-            parsedLinkTemplate.url,
-            `Template ${name}.url in ${filename}`,
-          )
-        : undefined;
-
-    templateMap.set(name, { text, url });
+    const linkTemplate: LinkTemplate = {
+      text: ensureTemplate(
+        parsedLinkTemplate.text,
+        `Template ${name}.text in ${filename}`,
+      ),
+    };
+    if ('url' in parsedLinkTemplate) {
+      linkTemplate.url = ensureTemplate(
+        parsedLinkTemplate.url,
+        `Template ${name}.url in ${filename}`,
+      );
+    }
+    templateMap.set(name, linkTemplate);
   }
   return templateMap;
 }

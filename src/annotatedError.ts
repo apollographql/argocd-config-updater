@@ -2,10 +2,10 @@
 import * as yaml from 'yaml';
 
 export class AnnotatedError extends Error {
-  startLine: number | undefined;
-  startColumn: number | undefined;
-  endLine: number | undefined;
-  endColumn: number | undefined;
+  startLine?: number;
+  startColumn?: number;
+  endLine?: number;
+  endColumn?: number;
 
   constructor(
     message: string,
