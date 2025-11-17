@@ -48,10 +48,10 @@
     "@types/async": "3.2.25",
     "@types/lodash": "4.17.20",
     "@types/node": "24.10.1",
-    "@typescript-eslint/eslint-plugin": "8.46.4",
-    "@typescript-eslint/parser": "8.46.4",
-    "@vitest/eslint-plugin": "1.4.2",
-    "@vitest/ui": "4.0.9",
+    "@typescript-eslint/eslint-plugin": "8.47.0",
+    "@typescript-eslint/parser": "8.47.0",
+    "@vitest/eslint-plugin": "1.4.3",
+    "@vitest/ui": "4.0.10",
     "eslint": "9.39.1",
     "eslint-plugin-github": "6.0.0",
     "eslint-plugin-jsonc": "2.21.0",
@@ -61,6 +61,6 @@
     "rollup": "4.53.2",
     "ts-node": "10.9.2",
     "typescript": "5.9.3",
-    "vitest": "4.0.9"
+    "vitest": "4.0.10"
   }
 }
