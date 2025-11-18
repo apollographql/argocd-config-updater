@@ -6,14 +6,15 @@
     "rootDir": "./src",
     "moduleResolution": "NodeNext",
     "baseUrl": "./",
-    "outDir": "./dist",
+    "noEmit": true,
     "noImplicitAny": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
     "newLine": "lf",
-    "isolatedModules": true
+    "isolatedModules": true,
+    "exactOptionalPropertyTypes": true
   },
   "exclude": ["./dist", "./node_modules", "./__tests__", "./vitest.config.mts"]
 }

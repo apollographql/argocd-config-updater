@@ -19,7 +19,7 @@
     "format:write": "prettier --write **/*.ts",
     "format:check": "prettier --check **/*.ts",
     "lint": "npx eslint .",
-    "package": "rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
+    "package": "rollup --config rollup.config.js --failAfterWarnings",
     "package:watch": "npm run package -- --watch",
     "test": "vitest run",
     "test-ui": "vitest run --ui",

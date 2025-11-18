@@ -29,9 +29,15 @@ export class ScalarTokenWriter {
       this.scalarToken.type === 'single-quoted-scalar' ||
       this.scalarToken.type === 'double-quoted-scalar' ||
       this.scalarToken.type === 'block-scalar';
-    yaml.CST.setScalarValue(this.scalarToken, value, {
-      type: needsQuote && !alreadyQuoted ? 'QUOTE_SINGLE' : undefined,
-    });
+    yaml.CST.setScalarValue(
+      this.scalarToken,
+      value,
+      needsQuote && !alreadyQuoted
+        ? {
+            type: 'QUOTE_SINGLE',
+          }
+        : undefined,
+    );
   }
 }
 
