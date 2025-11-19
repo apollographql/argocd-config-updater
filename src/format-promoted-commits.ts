@@ -175,6 +175,6 @@ export function formatPromotedCommits(
       return environmentHeader + forEnvironment.join('\n\n---\n\n');
     })
     .join('');
-  const footer = `<!-- prMetadata:${JSON.stringify(prMetadata)} -->`;
+  const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString('base64')} -->`;
   return `${body}\n\n${footer}\n`;
 }

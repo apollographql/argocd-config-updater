@@ -3,20 +3,20 @@
 exports[`formatPromotedCommits > handles empty appPromotions array 1`] = `
 "
 
-<!-- prMetadata:{"appPromotions":[]} -->
+<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbXX0= -->
 "
 `;
 
 exports[`formatPromotedCommits > handles multiple app promotions 1`] = `
 "
 
-<!-- prMetadata:{"appPromotions":[{"source":{"appName":"app1-staging"},"target":{"appName":"app1-prod"}},{"source":{"appName":"app2-dev"},"target":{"appName":"app2-staging"}}]} -->
+<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbeyJzb3VyY2UiOnsiYXBwTmFtZSI6ImFwcDEtc3RhZ2luZyJ9LCJ0YXJnZXQiOnsiYXBwTmFtZSI6ImFwcDEtcHJvZCJ9fSx7InNvdXJjZSI6eyJhcHBOYW1lIjoiYXBwMi1kZXYifSwidGFyZ2V0Ijp7ImFwcE5hbWUiOiJhcHAyLXN0YWdpbmcifX1dfQ== -->
 "
 `;
 
 exports[`formatPromotedCommits > includes prMetadata in output as HTML comment 1`] = `
 "
 
-<!-- prMetadata:{"appPromotions":[{"source":{"appName":"my-app-staging"},"target":{"appName":"my-app-prod"}}]} -->
+<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbeyJzb3VyY2UiOnsiYXBwTmFtZSI6Im15LWFwcC1zdGFnaW5nIn0sInRhcmdldCI6eyJhcHBOYW1lIjoibXktYXBwLXByb2QifX1dfQ== -->
 "
 `;
