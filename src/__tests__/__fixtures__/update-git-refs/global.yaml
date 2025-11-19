@@ -1,0 +1,9 @@
+global:
+  gitConfig:
+    repoURL: https://github.com/apollographql/some-repo.git
+    path: services/hello-world
+
+some-service-dev1:
+  gitConfig:
+    ref:      'abcdef'   # this should change but stay single-quoted!
+    trackMutableRef: pr-1234

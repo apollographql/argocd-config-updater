@@ -1,0 +1,75 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`cleanupClosedPrTracking > should handle PR lookup errors by leaving PR references unchanged 1`] = `
+"
+global:
+  gitConfig:
+    repoURL: https://github.com/owner/repo.git
+    path: some/path
+dev:
+  track: pr-999
+  gitConfig:
+    ref: c0ffee
+"
+`;
+
+exports[`cleanupClosedPrTracking > should not change pr references that are open 1`] = `
+"
+global:
+  gitConfig:
+    repoURL: https://github.com/owner/repo.git
+    path: some/path
+dev:
+  track: pr-100
+  gitConfig:
+    ref: c0ffee
+staging:
+  track: main
+  gitConfig:
+    ref: c0ffee
+prod:
+  promote:
+    from: staging
+"
+`;
+
+exports[`cleanupClosedPrTracking > should not modify YAML unnecessarily 1`] = `
+"# Top level comment
+global:
+  gitConfig:
+    repoURL: https://github.com/owner/repo.git
+    path: some/path
+# Development environment
+dev:
+  track: main  # Inline comment
+  gitConfig:
+    ref: c0ffee
+staging:
+  track: main  # Also tracking main
+  gitConfig:
+    ref: deadbeef
+prod:
+  promote:
+    from: staging  # Promote from staging
+"
+`;
+
+exports[`cleanupClosedPrTracking > should replace closed PR references with main 1`] = `
+"
+global:
+  gitConfig:
+    repoURL: https://github.com/owner/repo.git
+    path: some/path
+dev:
+  track: main
+  gitConfig:
+    ref: c0ffee
+staging:
+  track: main
+  gitConfig:
+    ref: c0ffee
+prod:
+  promote:
+    from: staging
+"
+`;

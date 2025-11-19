@@ -1,0 +1,12 @@
+link-one:
+  text:
+    - literal: 'Link to '
+    - variable: foo
+  url:
+    - literal: 'https://some-site.example/logs/query?foo='
+    - variable: 'foo'
+    - literal: '&bar=yay'
+
+link-two:
+  text:
+    - literal: "Don't forget to do the thing"

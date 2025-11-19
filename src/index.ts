@@ -34,6 +34,7 @@ import {
 } from './format-cleanup-changes.js';
 import { cleanupClosedPrTracking } from './update-closed-prs.js';
 import { AnnotatedError } from './annotatedError.js';
+import { PRMetadata, AppPromotion } from './promotion-metadata-types.js';
 
 /**
  * The main function for the action.
@@ -221,6 +222,7 @@ async function main(): Promise<void> {
         endColumn?: number;
       };
     }[] = [];
+    const prMetadata: PRMetadata = { appPromotions: [] };
     const promotionsByFileThenEnvironment = new Map<
       string,
       PromotionsByTargetEnvironment
@@ -228,7 +230,7 @@ async function main(): Promise<void> {
     const allCleanupChanges: CleanupChange[] = [];
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotionsByTargetEnvironment, cleanupChanges } =
+        const { promotionsByTargetEnvironment, cleanupChanges, appPromotions } =
           await processFile({
             filename,
             gitHubClient,
@@ -248,6 +250,7 @@ async function main(): Promise<void> {
             promotionsByTargetEnvironment,
           );
         }
+        prMetadata.appPromotions.push(...appPromotions);
         allCleanupChanges.push(...cleanupChanges);
       } catch (error) {
         if (error instanceof AnnotatedError) {
@@ -284,7 +287,7 @@ async function main(): Promise<void> {
     ) {
       core.setOutput(
         'promoted-commits-markdown',
-        formatPromotedCommits(promotionsByFileThenEnvironment),
+        formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata),
       );
     }
 
@@ -321,6 +324,7 @@ async function processFile(options: {
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
   cleanupChanges: CleanupChange[];
+  appPromotions: AppPromotion[];
 }> {
   const {
     filename,
@@ -338,7 +342,12 @@ async function processFile(options: {
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
     cleanupChanges: CleanupChange[];
-  } = { promotionsByTargetEnvironment: null, cleanupChanges: [] };
+    appPromotions: AppPromotion[];
+  } = {
+    promotionsByTargetEnvironment: null,
+    cleanupChanges: [],
+    appPromotions: [],
+  };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
   let contents = await readFile(filename, 'utf-8');
@@ -386,9 +395,10 @@ async function processFile(options: {
 
   if (core.getBooleanInput('update-promoted-values')) {
     const promotionTargetRegexp = core.getInput('promotion-target-regexp');
-    const { newContents, promotionsByTargetEnvironment } =
+    const { newContents, promotionsByTargetEnvironment, appPromotions } =
       await updatePromotedValues(
         contents,
+        filename,
         promotionTargetRegexp || null,
         frozenEnvironments,
         logger,
@@ -398,6 +408,7 @@ async function processFile(options: {
       );
     contents = newContents;
     ret.promotionsByTargetEnvironment = promotionsByTargetEnvironment;
+    ret.appPromotions = appPromotions;
   }
 
   await writeFile(filename, contents);

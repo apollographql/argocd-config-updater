@@ -1,0 +1,9 @@
+source:
+  foo:
+    bar: 'yay'
+
+target:
+  promote:
+    from: source
+  foo:
+    bar: 'nay'
