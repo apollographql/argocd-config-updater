@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { updateGraphArtifactRefs } from '../src/update-graph-artifact-refs';
-import { PrefixingLogger } from '../src/log';
+import { updateGraphArtifactRefs } from '../update-graph-artifact-refs.js';
+import { PrefixingLogger } from '../log.js';
 import {
   DockerRegistryClient,
   GetDigestForTagOptions,
-} from '../src/artifactRegistry';
+} from '../artifactRegistry.js';
 
 async function fixture(filename: string): Promise<string> {
   return await readFile(

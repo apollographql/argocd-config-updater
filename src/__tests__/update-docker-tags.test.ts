@@ -4,9 +4,9 @@ import { join } from 'path';
 import {
   DockerRegistryClient,
   GetAllEquivalentTagsOptions,
-} from '../src/artifactRegistry';
-import { updateDockerTags } from '../src/update-docker-tags';
-import { PrefixingLogger } from '../src/log';
+} from '../artifactRegistry.js';
+import { updateDockerTags } from '../update-docker-tags.js';
+import { PrefixingLogger } from '../log.js';
 
 async function fixture(filename: string): Promise<string> {
   return await readFile(

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { faker } from '@faker-js/faker';
-import { DockerTag, getRelevantCommits } from '../src/artifactRegistry';
-import { promotionInfoCommits } from '../src/promotionInfo';
+import { DockerTag, getRelevantCommits } from '../artifactRegistry.js';
+import { promotionInfoCommits } from '../promotionInfo.js';
 
 /**
  * Example tags from our registry:

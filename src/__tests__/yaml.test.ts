@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseYAML } from '../src/yaml';
+import { parseYAML } from '../yaml.js';
 
 describe('yaml', () => {
   describe('parseYAML', () => {

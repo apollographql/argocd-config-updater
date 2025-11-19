@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { GitHubClient } from '../src/github';
-import { updateGitRefs } from '../src/update-git-refs';
-import { PrefixingLogger } from '../src/log';
+import { GitHubClient } from '../github.js';
+import { updateGitRefs } from '../update-git-refs.js';
+import { PrefixingLogger } from '../log.js';
 
 const mockGitHubClient: GitHubClient = {
   async resolveRefToSHA({ ref }) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { setImmediate } from 'timers/promises';
-import { CachingDockerRegistryClient } from '../src/artifactRegistry';
-import { CachingGitHubClient } from '../src/github';
+import { CachingDockerRegistryClient } from '../artifactRegistry.js';
+import { CachingGitHubClient } from '../github.js';
 
 describe('CachingDockerRegistryClient caches', () => {
   it('getAllEquivalentTags caches', async () => {

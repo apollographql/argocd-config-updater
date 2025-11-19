@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatCleanupChanges,
   CleanupChange,
-} from '../src/format-cleanup-changes';
+} from '../format-cleanup-changes.js';
 
 describe('formatCleanupChanges', () => {
   it('should return empty string for no changes', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { cleanupClosedPrTracking } from '../src/update-closed-prs';
-import { getWebURL, GitHubClient } from '../src/github';
-import { PrefixingLogger } from '../src/log';
+import { cleanupClosedPrTracking } from '../update-closed-prs.js';
+import { getWebURL, GitHubClient } from '../github.js';
+import { PrefixingLogger } from '../log.js';
 
 const logger = PrefixingLogger.silent();
 

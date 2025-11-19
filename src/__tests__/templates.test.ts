@@ -4,7 +4,7 @@ import {
   LinkTemplateMap,
   readLinkTemplateMapFile,
   renderLinkTemplate,
-} from '../src/templates';
+} from '../templates.js';
 
 function fixtureFilename(filename: string): string {
   return join(__dirname, '__fixtures__', 'templates', filename);

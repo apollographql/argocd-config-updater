@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { updatePromotedValues } from '../src/update-promoted-values';
-import { PrefixingLogger } from '../src/log';
+import { updatePromotedValues } from '../update-promoted-values.js';
+import { PrefixingLogger } from '../log.js';
 
 async function fixture(filename: string): Promise<string> {
   return await readFile(
