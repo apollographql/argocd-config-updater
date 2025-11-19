@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatPromotedCommits > handles empty appPromotions array 1`] = `
+"
+
+<!-- prMetadata:{"appPromotions":[]} -->
+"
+`;
+
+exports[`formatPromotedCommits > handles multiple app promotions 1`] = `
+"
+
+<!-- prMetadata:{"appPromotions":[{"source":{"appName":"app1-staging"},"target":{"appName":"app1-prod"}},{"source":{"appName":"app2-dev"},"target":{"appName":"app2-staging"}}]} -->
+"
+`;
+
+exports[`formatPromotedCommits > includes prMetadata in output as HTML comment 1`] = `
+"
+
+<!-- prMetadata:{"appPromotions":[{"source":{"appName":"my-app-staging"},"target":{"appName":"my-app-prod"}}]} -->
+"
+`;

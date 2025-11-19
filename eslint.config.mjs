@@ -61,6 +61,13 @@ export default [
         },
       ],
       'no-unused-vars': 'off',
+
+      // As per its docs, this is unnecessary for TS users who avoid using `var`
+      // (which we also turn on here). And leaving it on makes common ArkType
+      // patterns errors.
+      'no-redeclare': 'off',
+      'no-var': 'error',
+
       semi: 'off',
       '@typescript-eslint/array-type': 'error',
       '@typescript-eslint/await-thenable': 'error',

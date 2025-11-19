@@ -17,6 +17,8 @@ import { GitHubClient, getGitConfigRefPromotionInfo } from './github.js';
 import { LinkTemplateMap, renderLinkTemplate } from './templates.js';
 import { createHash } from 'node:crypto';
 import { AnnotatedError } from './annotatedError.js';
+import { AppPromotion } from './promotion-metadata-types.js';
+import { basename, dirname } from 'node:path';
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -30,6 +32,7 @@ const DEFAULT_YAML_PATHS = [
 
 export async function updatePromotedValues(
   contents: string,
+  filename: string,
   promotionTargetRegexp: string | null,
   frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
@@ -39,6 +42,7 @@ export async function updatePromotedValues(
 ): Promise<{
   newContents: string;
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
+  appPromotions: AppPromotion[];
 }> {
   const logger = _logger.withExtendedPrefix('[promote] ');
 
@@ -53,33 +57,44 @@ export async function updatePromotedValues(
   // If the file is empty (or just whitespace or whatever), that's fine; we
   // can just leave it alone.
   if (!document) {
-    return { newContents: contents, promotionsByTargetEnvironment: null };
+    return {
+      newContents: contents,
+      promotionsByTargetEnvironment: null,
+      appPromotions: [],
+    };
   }
 
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
   logger.info('Looking for promote');
-  const { promotes, promotionsByTargetEnvironment } = await findPromotes(
-    document,
-    lineCounter,
-    promotionTargetRE2,
-    dockerRegistryClient,
-    gitHubClient,
-    linkTemplateMap,
-    frozenEnvironments,
-    logger,
-  );
+  const { promotes, promotionsByTargetEnvironment, appPromotions } =
+    await findPromotes(
+      document,
+      filename,
+      lineCounter,
+      promotionTargetRE2,
+      dockerRegistryClient,
+      gitHubClient,
+      linkTemplateMap,
+      frozenEnvironments,
+      logger,
+    );
 
   logger.info('Copying values');
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
   }
 
-  return { newContents: stringify(), promotionsByTargetEnvironment };
+  return {
+    newContents: stringify(),
+    promotionsByTargetEnvironment,
+    appPromotions,
+  };
 }
 
 async function findPromotes(
   document: yaml.Document.Parsed,
+  filename: string,
   lineCounter: yaml.LineCounter,
   promotionTargetRE2: RE2 | null,
   dockerRegistryClient: DockerRegistryClient | null,
@@ -90,9 +105,11 @@ async function findPromotes(
 ): Promise<{
   promotes: Promote[];
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
+  appPromotions: AppPromotion[];
 }> {
   const { blocks, globalBlock } = getTopLevelBlocks(document);
   const promotes: Promote[] = [];
+  const appPromotions: AppPromotion[] = [];
 
   const promotionsByTargetEnvironment = new Map<
     string,
@@ -130,6 +147,8 @@ async function findPromotes(
     );
     globalDockerImageTag = getStringValue(dockerImageBlock, 'tag');
   }
+
+  const applicationBaseName = basename(dirname(filename));
 
   for (const [myName, me] of blocks) {
     if (frozenEnvironments.has(myName)) {
@@ -241,6 +260,8 @@ async function findPromotes(
       (dockerImageBlock && getStringValue(dockerImageBlock, 'tag')) ??
       globalDockerImageTag;
 
+    let promotionAffectsBlock = false;
+
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
       if (typeof sourceValue !== 'string') {
@@ -268,6 +289,8 @@ async function findPromotes(
         typeof targetNode.value === 'string' &&
         targetNode.value !== sourceValue
       ) {
+        promotionAffectsBlock = true;
+
         if (
           collectionPath.join('.') === 'dockerImage.tag' &&
           dockerImageRepository &&
@@ -303,6 +326,18 @@ async function findPromotes(
       promotes.push({
         scalarTokenWriter: new ScalarTokenWriter(scalarToken, document.schema),
         value: sourceValue,
+      });
+    }
+
+    if (promotionAffectsBlock) {
+      // only push if there is an actual change
+      appPromotions.push({
+        source: {
+          appName: `${applicationBaseName}-${from}`,
+        },
+        target: {
+          appName: `${applicationBaseName}-${myName}`,
+        },
       });
     }
 
@@ -378,6 +413,7 @@ async function findPromotes(
     promotionsByTargetEnvironment: promotionsByTargetEnvironment.size
       ? promotionsByTargetEnvironment
       : null,
+    appPromotions,
   };
 }
 

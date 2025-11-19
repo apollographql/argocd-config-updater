@@ -3,6 +3,8 @@ import {
   PromotionsByTargetEnvironment,
   PromotionSet,
 } from './promotionInfo.js';
+import { PRMetadata } from './promotion-metadata-types.js';
+import { type } from 'arktype';
 
 interface App {
   appDirectory: string;
@@ -67,10 +69,15 @@ function reorganizePromotionInfoForMessage(
 
 export function formatPromotedCommits(
   promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
+  prMetadata: PRMetadata,
 ): string {
+  const validatedPrMetadata = PRMetadata(prMetadata);
+  if (validatedPrMetadata instanceof type.errors) {
+    validatedPrMetadata.throw();
+  }
   const organizedPromotionsByTargetEnvironment =
     reorganizePromotionInfoForMessage(promotionsByFileThenEnvironment);
-  return [...organizedPromotionsByTargetEnvironment.entries()]
+  const body = [...organizedPromotionsByTargetEnvironment.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([targetEnvironment, organizedPromotionsByPromotionSetJSON]) => {
       const environmentHeader = `### Promoting to ${targetEnvironment}\n`;
@@ -168,4 +175,6 @@ export function formatPromotedCommits(
       return environmentHeader + forEnvironment.join('\n\n---\n\n');
     })
     .join('');
+  const footer = `<!-- prMetadata:${JSON.stringify(prMetadata)} -->`;
+  return `${body}\n\n${footer}\n`;
 }
