@@ -1,5 +1,6 @@
 source:
   gitConfig:
+    repoURL: https://github.com/example/repo.git
     path: foo/bar
     ref: source-ref
   dockerImage:
@@ -7,6 +8,8 @@ source:
 
 source-just-git-config:
   gitConfig:
+    repoURL: https://github.com/example/repo.git
+    path: foo/bar-just
     ref: source-ref-just
 
 target-both:

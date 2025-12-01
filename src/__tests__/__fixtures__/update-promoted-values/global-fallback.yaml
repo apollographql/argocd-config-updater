@@ -1,0 +1,22 @@
+global:
+  gitConfig:
+    repoURL: https://github.com/example/global-repo.git
+    path: global/path
+  dockerImage:
+    repository: gcr.io/example/global-image
+    setValue: [global, dockerImage, tag]
+
+source-env:
+  gitConfig:
+    ref: source-ref-123
+  dockerImage:
+    tag: source-tag-v1
+
+target-env:
+  promote:
+    from: source-env
+  gitConfig:
+    ref: old-ref
+  dockerImage:
+    tag: old-tag
+

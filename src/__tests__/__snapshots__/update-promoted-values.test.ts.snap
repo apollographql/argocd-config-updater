@@ -3,6 +3,7 @@
 exports[`action > respects defaults and explicit specifications for yamlPaths 1`] = `
 "source:
   gitConfig:
+    repoURL: https://github.com/example/repo.git
     path: foo/bar
     ref: source-ref
   dockerImage:
@@ -10,6 +11,8 @@ exports[`action > respects defaults and explicit specifications for yamlPaths 1`
 
 source-just-git-config:
   gitConfig:
+    repoURL: https://github.com/example/repo.git
+    path: foo/bar-just
     ref: source-ref-just
 
 target-both:
@@ -101,5 +104,31 @@ some-service-not-selected:
     repoURL: https://github.com/apollographql/some-repo.git
     path: services/hello-world
     ref:    abcdef1234567      # this will not be updated because of the regexp
+"
+`;
+
+exports[`action > uses global block values for gitConfig and dockerImage fallback 1`] = `
+"global:
+  gitConfig:
+    repoURL: https://github.com/example/global-repo.git
+    path: global/path
+  dockerImage:
+    repository: gcr.io/example/global-image
+    setValue: [global, dockerImage, tag]
+
+source-env:
+  gitConfig:
+    ref: source-ref-123
+  dockerImage:
+    tag: source-tag-v1
+
+target-env:
+  promote:
+    from: source-env
+  gitConfig:
+    ref: source-ref-123
+  dockerImage:
+    tag: source-tag-v1
+
 "
 `;
