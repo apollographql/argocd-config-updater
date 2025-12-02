@@ -18,7 +18,10 @@ import { LinkTemplateMap, renderLinkTemplate } from './templates.js';
 import { createHash } from 'node:crypto';
 import { AnnotatedError } from './annotatedError.js';
 import { AppPromotion } from './promotion-metadata-types.js';
+import { type } from 'arktype';
 import { basename, dirname } from 'node:path';
+
+const stringArray = type('string[]');
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -121,6 +124,7 @@ async function findPromotes(
   let globalPath: string | null = null;
   let globalDockerImageRepository: string | null = null;
   let globalDockerImageTag: string | null = null;
+  let globalDockerImageSetValue: string[] | null = null;
 
   if (globalBlock?.has('gitConfig')) {
     const gitConfigBlock = globalBlock.get('gitConfig');
@@ -146,6 +150,13 @@ async function findPromotes(
       'repository',
     );
     globalDockerImageTag = getStringValue(dockerImageBlock, 'tag');
+    const setValueNode = dockerImageBlock.get('setValue');
+    if (setValueNode && yaml.isSeq(setValueNode)) {
+      const parsed = stringArray(setValueNode.toJSON());
+      if (!(parsed instanceof type.errors)) {
+        globalDockerImageSetValue = parsed;
+      }
+    }
   }
 
   const applicationBaseName = basename(dirname(filename));
@@ -331,14 +342,70 @@ async function findPromotes(
 
     if (promotionAffectsBlock) {
       // only push if there is an actual change
-      appPromotions.push({
+
+      // Extract source gitConfig values from fromBlock (required)
+      const sourceGitConfigBlock = fromBlock.get('gitConfig');
+      const sourceGitConfigMap =
+        sourceGitConfigBlock && yaml.isMap(sourceGitConfigBlock)
+          ? sourceGitConfigBlock
+          : null;
+      const sourceRepoURL =
+        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'repoURL')) ||
+        globalRepoURL;
+      const sourcePath =
+        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'path')) ||
+        globalPath;
+      const sourceRef =
+        sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'ref');
+
+      if (!sourceRepoURL || !sourcePath || !sourceRef) {
+        throw new AnnotatedError(
+          `Cannot determine gitConfig for source block ${from}`,
+          { range: fromBlock.range, lineCounter },
+        );
+      }
+
+      const appPromotion: AppPromotion = {
         source: {
           appName: `${applicationBaseName}-${from}`,
+          gitConfig: {
+            repoURL: sourceRepoURL,
+            path: sourcePath,
+            ref: sourceRef,
+          },
         },
         target: {
           appName: `${applicationBaseName}-${myName}`,
         },
-      });
+      };
+
+      // Extract source dockerImage values from fromBlock (optional, but all fields required if present)
+      const sourceDockerImageBlock = fromBlock.get('dockerImage');
+      if (sourceDockerImageBlock && yaml.isMap(sourceDockerImageBlock)) {
+        const sourceTag =
+          getStringValue(sourceDockerImageBlock, 'tag') ?? globalDockerImageTag;
+        const sourceSetValueNode = sourceDockerImageBlock.get('setValue');
+        let sourceSetValue: string[] | null = null;
+        if (sourceSetValueNode && yaml.isSeq(sourceSetValueNode)) {
+          const parsed = stringArray(sourceSetValueNode.toJSON());
+          if (!(parsed instanceof type.errors)) {
+            sourceSetValue = parsed;
+          }
+        }
+        sourceSetValue ??= globalDockerImageSetValue;
+        const sourceRepository =
+          getStringValue(sourceDockerImageBlock, 'repository') ??
+          globalDockerImageRepository;
+        if (sourceTag && sourceSetValue && sourceRepository) {
+          appPromotion.source.dockerImage = {
+            tag: sourceTag,
+            setValue: sourceSetValue,
+            repository: sourceRepository,
+          };
+        }
+      }
+
+      appPromotions.push(appPromotion);
     }
 
     const linksSeq = promote.get('links');

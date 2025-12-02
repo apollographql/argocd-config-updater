@@ -26,7 +26,14 @@ describe('action', () => {
     expect(newContents).toMatchSnapshot();
     expect(appPromotions).toEqual([
       {
-        source: { appName: 'some-app-some-service-staging' },
+        source: {
+          appName: 'some-app-some-service-staging',
+          gitConfig: {
+            repoURL: 'https://github.com/apollographql/some-repo.git',
+            path: 'services/hello-world',
+            ref: 'abcdef1234567',
+          },
+        },
         target: { appName: 'some-app-some-service-prod' },
       },
     ]);
@@ -57,7 +64,14 @@ describe('action', () => {
     // some-service-prod is frozen, but some-service-not-selected is not
     expect(frozenPromotions).toEqual([
       {
-        source: { appName: 'some-app-some-service-staging' },
+        source: {
+          appName: 'some-app-some-service-staging',
+          gitConfig: {
+            repoURL: 'https://github.com/apollographql/some-repo.git',
+            path: 'services/hello-world',
+            ref: 'abcdef1234567',
+          },
+        },
         target: { appName: 'some-app-some-service-not-selected' },
       },
     ]);
@@ -86,5 +100,35 @@ describe('action', () => {
         logger,
       ),
     ).rejects.toThrow('none of the default promoted paths');
+  });
+
+  it('uses global block values for gitConfig and dockerImage fallback', async () => {
+    const contents = await fixture('global-fallback.yaml');
+    const { newContents, appPromotions } = await updatePromotedValues(
+      contents,
+      'my-app/values.yaml',
+      null,
+      new Set<string>(),
+      logger,
+    );
+    expect(newContents).toMatchSnapshot();
+    expect(appPromotions).toEqual([
+      {
+        source: {
+          appName: 'my-app-source-env',
+          gitConfig: {
+            repoURL: 'https://github.com/example/global-repo.git',
+            path: 'global/path',
+            ref: 'source-ref-123',
+          },
+          dockerImage: {
+            tag: 'source-tag-v1',
+            setValue: ['global', 'dockerImage', 'tag'],
+            repository: 'gcr.io/example/global-image',
+          },
+        },
+        target: { appName: 'my-app-target-env' },
+      },
+    ]);
   });
 });

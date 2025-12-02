@@ -3,13 +3,19 @@ import { describe, it, expect } from 'vitest';
 import { formatPromotedCommits } from '../format-promoted-commits.js';
 import { PRMetadata } from '../promotion-metadata-types.js';
 
+const sampleGitConfig = {
+  repoURL: 'https://github.com/example/repo.git',
+  path: 'services/my-app',
+  ref: 'abc123',
+};
+
 describe('formatPromotedCommits', () => {
   it('includes prMetadata in output as HTML comment', () => {
     const promotions = new Map();
     const prMetadata: PRMetadata = {
       appPromotions: [
         {
-          source: { appName: 'my-app-staging' },
+          source: { appName: 'my-app-staging', gitConfig: sampleGitConfig },
           target: { appName: 'my-app-prod' },
         },
       ],
@@ -50,11 +56,14 @@ describe('formatPromotedCommits', () => {
     const prMetadata: PRMetadata = {
       appPromotions: [
         {
-          source: { appName: 'app1-staging' },
+          source: { appName: 'app1-staging', gitConfig: sampleGitConfig },
           target: { appName: 'app1-prod' },
         },
         {
-          source: { appName: 'app2-dev' },
+          source: {
+            appName: 'app2-dev',
+            gitConfig: { ...sampleGitConfig, ref: 'def456' },
+          },
           target: { appName: 'app2-staging' },
         },
       ],
