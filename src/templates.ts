@@ -1,5 +1,5 @@
-import * as yaml from 'yaml';
-import { readFile } from 'fs/promises';
+import * as yaml from "yaml";
+import { readFile } from "fs/promises";
 
 export interface TemplateLiteral {
   literal: string;
@@ -29,7 +29,7 @@ function renderTemplate(
 ): string {
   return template
     .map((part: TemplatePart) => {
-      if ('literal' in part) {
+      if ("literal" in part) {
         return part.literal;
       }
       const variableValue = variables.get(part.variable);
@@ -38,7 +38,7 @@ function renderTemplate(
       }
       return variableValue;
     })
-    .join('');
+    .join("");
 }
 
 export function renderLinkTemplate(
@@ -60,18 +60,18 @@ export function renderLinkTemplate(
 export async function readLinkTemplateMapFile(
   filename: string,
 ): Promise<LinkTemplateMap> {
-  const contents = await readFile(filename, 'utf-8');
+  const contents = await readFile(filename, "utf-8");
   const templateMap = new Map<string, LinkTemplate>();
   const parsed = yaml.parse(contents) as unknown;
-  if (typeof parsed !== 'object' || parsed === null) {
+  if (typeof parsed !== "object" || parsed === null) {
     throw Error(`Template map file ${filename} must be a map at the top level`);
   }
   for (const [name, parsedLinkTemplateAny] of Object.entries(parsed)) {
     const parsedLinkTemplate = parsedLinkTemplateAny as unknown;
-    if (typeof parsedLinkTemplate !== 'object' || parsedLinkTemplate === null) {
+    if (typeof parsedLinkTemplate !== "object" || parsedLinkTemplate === null) {
       throw Error(`Template ${name} in ${filename} must be a map`);
     }
-    if (!('text' in parsedLinkTemplate)) {
+    if (!("text" in parsedLinkTemplate)) {
       throw Error(`Template ${name} in ${filename} must contain a 'text' key`);
     }
     const linkTemplate: LinkTemplate = {
@@ -80,7 +80,7 @@ export async function readLinkTemplateMapFile(
         `Template ${name}.text in ${filename}`,
       ),
     };
-    if ('url' in parsedLinkTemplate) {
+    if ("url" in parsedLinkTemplate) {
       linkTemplate.url = ensureTemplate(
         parsedLinkTemplate.url,
         `Template ${name}.url in ${filename}`,
@@ -101,12 +101,12 @@ function ensureTemplate(
   const template: TemplatePart[] = [];
   for (const partAny of parsedTemplate) {
     const part = partAny as unknown;
-    if (typeof part !== 'object' || part === null) {
+    if (typeof part !== "object" || part === null) {
       throw Error(`${errorPrefix} contains a non-map part`);
     }
-    if ('literal' in part && typeof part.literal === 'string') {
+    if ("literal" in part && typeof part.literal === "string") {
       template.push({ literal: part.literal });
-    } else if ('variable' in part && typeof part.variable === 'string') {
+    } else if ("variable" in part && typeof part.variable === "string") {
       template.push({ variable: part.variable });
     } else {
       throw Error(`${errorPrefix} contains a part without literal or variable`);

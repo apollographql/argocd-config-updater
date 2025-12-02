@@ -1,36 +1,36 @@
-import { Link } from './templates.js';
+import { Link } from "./templates.js";
 
 export interface PromotionInfoCommits {
-  type: 'commits';
+  type: "commits";
   commitSHAs: string[]; // non-empty
 }
 
 export function promotionInfoCommits(
   commitSHAs: string[],
 ): PromotionInfoCommits {
-  return { type: 'commits', commitSHAs };
+  return { type: "commits", commitSHAs };
 }
 
 /** Used when the value is being changed but there are no commits between the two
  *  values (ie, no-op change). */
 export interface PromotionInfoNoCommits {
-  type: 'no-commits';
+  type: "no-commits";
 }
 
 /** Used when the tag/ref value isn't changed at all. */
 export interface PromotionInfoNoChange {
-  type: 'no-change';
+  type: "no-change";
 }
 
 // If we're unable to tell what happened with a promotion, the message will
 // explain that.
 export interface PromotionInfoUnknown {
-  type: 'unknown';
+  type: "unknown";
   message: string;
 }
 
 export function promotionInfoUnknown(message: string): PromotionInfoUnknown {
-  return { type: 'unknown', message };
+  return { type: "unknown", message };
 }
 
 export type PromotionInfo =

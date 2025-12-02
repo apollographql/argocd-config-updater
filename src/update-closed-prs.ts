@@ -1,8 +1,8 @@
-import { getWebURL, GitHubClient } from './github.js';
-import { PrefixingLogger } from './log.js';
-import { parseYAML } from './yaml.js';
-import { findTrackables } from './update-git-refs.js';
-import { CleanupChange } from './format-cleanup-changes.js';
+import { getWebURL, GitHubClient } from "./github.js";
+import { PrefixingLogger } from "./log.js";
+import { parseYAML } from "./yaml.js";
+import { findTrackables } from "./update-git-refs.js";
+import { CleanupChange } from "./format-cleanup-changes.js";
 
 /**
  * Updates closed PR tracking references to point to 'main' branch.
@@ -45,8 +45,8 @@ export async function cleanupClosedPrTracking(options: {
           prNumber,
         });
 
-        if (pr.state === 'closed') {
-          trackable.trackScalarTokenWriter.write('main');
+        if (pr.state === "closed") {
+          trackable.trackScalarTokenWriter.write("main");
           logger.info(`PR #${prNumber} is closed, updated to main`);
 
           const environment = trackable.environment;

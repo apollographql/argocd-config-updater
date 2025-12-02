@@ -1,9 +1,9 @@
-import * as core from '@actions/core';
+import * as core from "@actions/core";
 
 export class PrefixingLogger {
   private silent = false;
 
-  constructor(private prefix = '') {}
+  constructor(private prefix = "") {}
 
   static silent(): PrefixingLogger {
     const logger = new PrefixingLogger();

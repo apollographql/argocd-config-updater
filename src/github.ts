@@ -1,11 +1,11 @@
-import { getOctokit } from '@actions/github';
-import { LRUCache } from 'lru-cache';
+import { getOctokit } from "@actions/github";
+import { LRUCache } from "lru-cache";
 import {
   PromotionInfo,
   promotionInfoCommits,
   promotionInfoUnknown,
-} from './promotionInfo.js';
-import { PrefixingLogger } from './log.js';
+} from "./promotionInfo.js";
+import { PrefixingLogger } from "./log.js";
 
 export interface ResolveRefToSHAOptions {
   repoURL: string;
@@ -29,7 +29,7 @@ export interface GetPullRequestForNumberOptions {
   prNumber: number;
 }
 
-export type PullRequestState = 'open' | 'closed';
+export type PullRequestState = "open" | "closed";
 
 export interface PullRequest {
   state: PullRequestState;
@@ -101,7 +101,7 @@ export class OctokitGitHubClient {
     fetchMethod: async (_key, _staleValue, { context }) => {
       const { repoURL, commitSHA } = context;
       const { owner, repo } = parseRepoURL(repoURL);
-      this.logAPICall('git.getCommit', `${owner} / ${repo} ${commitSHA}`);
+      this.logAPICall("git.getCommit", `${owner} / ${repo} ${commitSHA}`);
       const rootTreeSHA = (
         await this.octokit.rest.git.getCommit({
           owner,
@@ -109,13 +109,13 @@ export class OctokitGitHubClient {
           commit_sha: commitSHA,
         })
       ).data.tree.sha;
-      this.logAPICall('git.getTree', `${owner} / ${repo} ${rootTreeSHA}`);
+      this.logAPICall("git.getTree", `${owner} / ${repo} ${rootTreeSHA}`);
       const { tree, truncated } = (
         await this.octokit.rest.git.getTree({
           owner,
           repo,
           tree_sha: rootTreeSHA,
-          recursive: 'true',
+          recursive: "true",
         })
       ).data;
       const allTreesForCommit: AllTreesForCommit = {
@@ -124,16 +124,16 @@ export class OctokitGitHubClient {
       };
       for (const { path, type, sha } of tree) {
         if (
-          type === 'tree' &&
-          typeof path === 'string' &&
-          typeof sha === 'string'
+          type === "tree" &&
+          typeof path === "string" &&
+          typeof sha === "string"
         ) {
           allTreesForCommit.pathToTreeSHA.set(path, sha);
         }
       }
       // Also set the root itself in case we're tracking the root of a repo for
       // some reason.
-      allTreesForCommit.pathToTreeSHA.set('', rootTreeSHA);
+      allTreesForCommit.pathToTreeSHA.set("", rootTreeSHA);
       return allTreesForCommit;
     },
   });
@@ -152,22 +152,22 @@ export class OctokitGitHubClient {
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
     const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
-    this.logAPICall('repos.getCommit', `${owner}/${repo} ${refParameter}`);
+    this.logAPICall("repos.getCommit", `${owner}/${repo} ${refParameter}`);
     const sha = (
       await this.octokit.rest.repos.getCommit({
         owner,
         repo,
         ref: refParameter,
         mediaType: {
-          format: 'sha',
+          format: "sha",
         },
       })
     ).data as unknown;
     // The TS types don't understand that `mediaType: { format: 'sha' }` turns
     // `.data` into a string, so we have to cast to `unknown` and check
     // ourselves.
-    if (typeof sha !== 'string') {
-      throw Error('Expected string response');
+    if (typeof sha !== "string") {
+      throw Error("Expected string response");
     }
     return sha;
   }
@@ -209,7 +209,7 @@ export class OctokitGitHubClient {
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall('repos.getContent', `${owner} / ${repo} ${commitSHA}`);
+    this.logAPICall("repos.getContent", `${owner} / ${repo} ${commitSHA}`);
     let data;
     try {
       data = (
@@ -219,13 +219,13 @@ export class OctokitGitHubClient {
           ref: commitSHA,
           path,
           mediaType: {
-            format: 'object',
+            format: "object",
           },
         })
       ).data as unknown;
     } catch (e: unknown) {
       // If it looks like "not found" just return null.
-      if (typeof e === 'object' && e && 'status' in e && e.status === 404) {
+      if (typeof e === "object" && e && "status" in e && e.status === 404) {
         return null;
       }
       throw e;
@@ -233,15 +233,15 @@ export class OctokitGitHubClient {
     // TS types seem confused here too; this works in practice.
     if (
       !(
-        typeof data === 'object' &&
+        typeof data === "object" &&
         data !== null &&
-        'type' in data &&
-        data.type === 'dir' &&
-        'sha' in data &&
-        typeof data.sha === 'string'
+        "type" in data &&
+        data.type === "dir" &&
+        "sha" in data &&
+        typeof data.sha === "string"
       )
     ) {
-      throw Error('response does not appear to be a tree');
+      throw Error("response does not appear to be a tree");
     }
     return data.sha;
   }
@@ -252,7 +252,7 @@ export class OctokitGitHubClient {
     path,
   }: GetCommitSHAsForPathOptions): Promise<string[]> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall('repos.listCommits', `${owner}/${repo}@${ref} ${path}`);
+    this.logAPICall("repos.listCommits", `${owner}/${repo}@${ref} ${path}`);
     return (
       await this.octokit.rest.repos.listCommits({
         owner,
@@ -271,7 +271,7 @@ export class OctokitGitHubClient {
     prNumber,
   }: GetPullRequestForNumberOptions): Promise<PullRequest> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall('pulls.get', `${owner}/${repo} #${prNumber}`);
+    this.logAPICall("pulls.get", `${owner}/${repo} #${prNumber}`);
     const response = await this.octokit.rest.pulls.get({
       owner,
       repo,
@@ -353,7 +353,7 @@ export class CachingGitHubClient {
     });
     if (!sha) {
       throw Error(
-        'resolveRefToSHACache.fetch should never resolve without a real SHA',
+        "resolveRefToSHACache.fetch should never resolve without a real SHA",
       );
     }
     return sha;
@@ -370,7 +370,7 @@ export class CachingGitHubClient {
     );
     if (!cached) {
       throw Error(
-        'getTreeSHAForPathCache.fetch should never resolve without a boxed value',
+        "getTreeSHAForPathCache.fetch should never resolve without a boxed value",
       );
     }
     return cached.boxed;
@@ -381,14 +381,14 @@ export class CachingGitHubClient {
   ): Promise<string[]> {
     const shas = await this.getCommitSHAsForPathCache.fetch(
       // Make it trivial to tell if a cache key corresponds to a SHA.
-      (isSHA(options.ref) ? 'SHA!' : '') + JSON.stringify(options),
+      (isSHA(options.ref) ? "SHA!" : "") + JSON.stringify(options),
       {
         context: options,
       },
     );
     if (!shas) {
       throw Error(
-        'getCommitSHAsForPathCache.fetch should never resolve without a real SHA list',
+        "getCommitSHAsForPathCache.fetch should never resolve without a real SHA list",
       );
     }
     return shas;
@@ -405,7 +405,7 @@ export class CachingGitHubClient {
       // the immutable case where the ref is a SHA.
       commitSHAs: this.getCommitSHAsForPathCache
         .dump()
-        .filter(([key]) => key.startsWith('SHA!')),
+        .filter(([key]) => key.startsWith("SHA!")),
     };
   }
 
@@ -417,7 +417,7 @@ export class CachingGitHubClient {
     });
     if (!pr) {
       throw Error(
-        'getPullRequestCache.fetch should never resolve without a real PullRequest',
+        "getPullRequestCache.fetch should never resolve without a real PullRequest",
       );
     }
     return pr;
@@ -437,10 +437,10 @@ export interface CachingGitHubClientDump {
 export function isCachingGitHubClientDump(
   dump: unknown,
 ): dump is CachingGitHubClientDump {
-  if (!dump || typeof dump !== 'object') {
+  if (!dump || typeof dump !== "object") {
     return false;
   }
-  if (!('treeSHAs' in dump)) {
+  if (!("treeSHAs" in dump)) {
     return false;
   }
   const { treeSHAs } = dump;
@@ -448,7 +448,7 @@ export function isCachingGitHubClientDump(
     return false;
   }
 
-  if ('commitSHAs' in dump) {
+  if ("commitSHAs" in dump) {
     const { commitSHAs } = dump;
     if (!Array.isArray(commitSHAs)) {
       return false;
@@ -514,7 +514,7 @@ export async function getGitConfigRefPromotionInfo(options: {
     );
   }
   if (oldIndexInNew + 1 === newCommitSHAs.length) {
-    return { type: 'no-commits' };
+    return { type: "no-commits" };
   }
   // Return the commits later than the old ones.
   return promotionInfoCommits(newCommitSHAs.slice(oldIndexInNew + 1));

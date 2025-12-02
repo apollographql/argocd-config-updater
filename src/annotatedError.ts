@@ -1,5 +1,5 @@
 // Error class that can annotate line/column information from YAML
-import * as yaml from 'yaml';
+import * as yaml from "yaml";
 
 export class AnnotatedError extends Error {
   startLine?: number;

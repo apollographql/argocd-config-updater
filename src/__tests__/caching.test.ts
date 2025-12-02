@@ -1,20 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { setImmediate } from 'timers/promises';
-import { CachingDockerRegistryClient } from '../artifactRegistry.js';
-import { CachingGitHubClient } from '../github.js';
+import { describe, it, expect } from "vitest";
+import { setImmediate } from "timers/promises";
+import { CachingDockerRegistryClient } from "../artifactRegistry.js";
+import { CachingGitHubClient } from "../github.js";
 
-describe('CachingDockerRegistryClient caches', () => {
-  it('getAllEquivalentTags caches', async () => {
+describe("CachingDockerRegistryClient caches", () => {
+  it("getAllEquivalentTags caches", async () => {
     let call = 0;
     const client = new CachingDockerRegistryClient({
       async getDigestForTag(): Promise<string> {
-        return 'mock-digest';
+        return "mock-digest";
       },
       async getAllEquivalentTags() {
         return [(++call).toString()];
       },
       async getGitCommitsBetweenTags() {
-        return { type: 'no-commits' };
+        return { type: "no-commits" };
       },
     });
 
@@ -28,16 +28,16 @@ describe('CachingDockerRegistryClient caches', () => {
       ).toStrictEqual([ret]);
     }
 
-    await exp('x', 'y', '1');
-    await exp('x', 'y', '1');
-    await exp('x', 'z', '2');
-    await exp('w', 'y', '3');
-    await exp('x', 'y', '1');
+    await exp("x", "y", "1");
+    await exp("x", "y", "1");
+    await exp("x", "z", "2");
+    await exp("w", "y", "3");
+    await exp("x", "y", "1");
   });
 });
 
-describe('CachingGitHubClient caches', () => {
-  it('resolveRefToSHA caches', async () => {
+describe("CachingGitHubClient caches", () => {
+  it("resolveRefToSHA caches", async () => {
     let call = 0;
     const client = new CachingGitHubClient({
       async resolveRefToSHA() {
@@ -46,13 +46,13 @@ describe('CachingGitHubClient caches', () => {
         return (++call).toString();
       },
       async getTreeSHAForPath() {
-        return '';
+        return "";
       },
       async getCommitSHAsForPath() {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open', title: 'Test PR', closedAt: null };
+        return { state: "open", title: "Test PR", closedAt: null };
       },
     });
 
@@ -64,23 +64,23 @@ describe('CachingGitHubClient caches', () => {
       expect(await client.resolveRefToSHA({ repoURL, ref })).toBe(ret);
     }
 
-    await exp('x', 'y', '1');
-    await exp('x', 'y', '1');
-    await exp('x', 'z', '2');
-    await exp('w', 'y', '3');
-    await exp('x', 'y', '1');
+    await exp("x", "y", "1");
+    await exp("x", "y", "1");
+    await exp("x", "z", "2");
+    await exp("w", "y", "3");
+    await exp("x", "y", "1");
 
     // Now try fetching two in parallel. We should only do one underlying fetch.
-    const p1 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
-    const p2 = client.resolveRefToSHA({ repoURL: 'a', ref: 'b' });
-    expect(await p1).toBe('4');
-    expect(await p2).toBe('4');
+    const p1 = client.resolveRefToSHA({ repoURL: "a", ref: "b" });
+    const p2 = client.resolveRefToSHA({ repoURL: "a", ref: "b" });
+    expect(await p1).toBe("4");
+    expect(await p2).toBe("4");
   });
-  it('getTreeSHAForPath caches', async () => {
+  it("getTreeSHAForPath caches", async () => {
     let call = 0;
     const client = new CachingGitHubClient({
       async resolveRefToSHA() {
-        return '';
+        return "";
       },
       async getTreeSHAForPath() {
         return (++call).toString();
@@ -89,7 +89,7 @@ describe('CachingGitHubClient caches', () => {
         return [];
       },
       async getPullRequest() {
-        return { state: 'open', title: 'Test PR', closedAt: null };
+        return { state: "open", title: "Test PR", closedAt: null };
       },
     });
 
@@ -104,11 +104,11 @@ describe('CachingGitHubClient caches', () => {
       );
     }
 
-    await exp('x', 'y', 'p', '1');
-    await exp('x', 'y', 'p', '1');
-    await exp('x', 'z', 'p', '2');
-    await exp('w', 'y', 'p', '3');
-    await exp('x', 'y', 'p', '1');
-    await exp('x', 'y', 'pp', '4');
+    await exp("x", "y", "p", "1");
+    await exp("x", "y", "p", "1");
+    await exp("x", "z", "p", "2");
+    await exp("w", "y", "p", "3");
+    await exp("x", "y", "p", "1");
+    await exp("x", "y", "pp", "4");
   });
 });

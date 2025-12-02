@@ -1,15 +1,15 @@
-import { min } from 'lodash';
-import * as yaml from 'yaml';
-import { DockerRegistryClient } from './artifactRegistry.js';
+import { min } from "lodash";
+import * as yaml from "yaml";
+import { DockerRegistryClient } from "./artifactRegistry.js";
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml.js';
-import { PrefixingLogger } from './log.js';
-import { AnnotatedError } from './annotatedError.js';
+} from "./yaml.js";
+import { PrefixingLogger } from "./log.js";
+import { AnnotatedError } from "./annotatedError.js";
 
 interface Trackable {
   trackMutableTag: string;
@@ -25,7 +25,7 @@ export async function updateDockerTags(
   frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
 ): Promise<string> {
-  const logger = _logger.withExtendedPrefix('[trackMutableTag] ');
+  const logger = _logger.withExtendedPrefix("[trackMutableTag] ");
   const { document, lineCounter, stringify } = parseYAML(contents);
 
   // If the file is empty (or just whitespace or whatever), that's fine; we
@@ -34,10 +34,10 @@ export async function updateDockerTags(
     return contents;
   }
 
-  logger.info('Looking for trackMutableTag');
+  logger.info("Looking for trackMutableTag");
   const trackables = findTrackables(document, frozenEnvironments, lineCounter);
 
-  logger.info('Checking tags against Artifact Registry');
+  logger.info("Checking tags against Artifact Registry");
   await checkTagsAgainstArtifactRegistryAndModifyScalars(
     trackables,
     lineCounter,
@@ -58,11 +58,11 @@ function findTrackables(
 
   let globalDockerImageRepository: string | null = null;
 
-  if (globalBlock?.has('dockerImage')) {
-    const dockerImageBlock = globalBlock.get('dockerImage');
+  if (globalBlock?.has("dockerImage")) {
+    const dockerImageBlock = globalBlock.get("dockerImage");
     if (!yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
-        'Document has `global.dockerImageBlock` that is not a map',
+        "Document has `global.dockerImageBlock` that is not a map",
         {
           range: dockerImageBlock?.range,
           lineCounter,
@@ -73,7 +73,7 @@ function findTrackables(
     // there, though throwing if it's there as non-strings).
     globalDockerImageRepository = getStringValue(
       dockerImageBlock,
-      'repository',
+      "repository",
     );
   }
 
@@ -82,10 +82,10 @@ function findTrackables(
       continue;
     }
 
-    if (!value.has('dockerImage')) {
+    if (!value.has("dockerImage")) {
       continue;
     }
-    const dockerImageBlock = value.get('dockerImage');
+    const dockerImageBlock = value.get("dockerImage");
     if (!yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
         `Document has \`${key}.dockerImage\` that is not a map`,
@@ -97,16 +97,16 @@ function findTrackables(
     }
 
     const dockerImageRepository =
-      getStringValue(dockerImageBlock, 'repository') ??
+      getStringValue(dockerImageBlock, "repository") ??
       globalDockerImageRepository;
     // Tracking can be specified at `dockerImage.trackMutableTag` or just at
     // `track`.
     const trackMutableTag =
-      getStringAndScalarTokenFromMap(dockerImageBlock, 'trackMutableTag') ??
-      getStringAndScalarTokenFromMap(value, 'track');
+      getStringAndScalarTokenFromMap(dockerImageBlock, "trackMutableTag") ??
+      getStringAndScalarTokenFromMap(value, "track");
     const tagScalarTokenAndValue = getStringAndScalarTokenFromMap(
       dockerImageBlock,
-      'tag',
+      "tag",
     );
 
     if (
@@ -154,12 +154,12 @@ async function checkTagsAgainstArtifactRegistryAndModifyScalars(
               message = `The tag '${trackable.trackMutableTag}' on the Docker image '${
                 trackable.dockerImageRepository
               }' does not exist. Check that both the image and tag are spelled correctly.`;
-              if (trackable.trackMutableTag.startsWith('pr-')) {
+              if (trackable.trackMutableTag.startsWith("pr-")) {
                 message +=
-                  ' Check that the Docker image has been successfully built ' +
-                  'at least once after the PR was created. (CircleCI workflows ' +
-                  'that started before the PR was created do not count! Push ' +
-                  'another change to trigger a build that knows the PR number.)';
+                  " Check that the Docker image has been successfully built " +
+                  "at least once after the PR was created. (CircleCI workflows " +
+                  "that started before the PR was created do not count! Push " +
+                  "another change to trigger a build that knows the PR number.)";
               }
             }
             throw new AnnotatedError(message, {
