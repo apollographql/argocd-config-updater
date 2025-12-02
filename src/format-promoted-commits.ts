@@ -1,10 +1,10 @@
-import { basename, dirname } from 'node:path';
+import { basename, dirname } from "node:path";
 import {
   PromotionsByTargetEnvironment,
   PromotionSet,
-} from './promotionInfo.js';
-import { PRMetadata } from './promotion-metadata-types.js';
-import { type } from 'arktype';
+} from "./promotionInfo.js";
+import { PRMetadata } from "./promotion-metadata-types.js";
+import { type } from "arktype";
 
 interface App {
   appDirectory: string;
@@ -104,7 +104,7 @@ export function formatPromotedCommits(
                   ? `- ${appDirectory} (image \`${dockerImageRepository}\`)\n`
                   : `- ${appDirectory}\n`,
               )
-              .join('')}\n`,
+              .join("")}\n`,
           ];
           if (links.length) {
             text.push(`Links:\n`);
@@ -120,19 +120,19 @@ export function formatPromotedCommits(
           let alreadyMentionedGitNoCommits = false;
           if (
             dockerImagePromotionInfo &&
-            dockerImagePromotionInfo.type !== 'no-change'
+            dockerImagePromotionInfo.type !== "no-change"
           ) {
-            let maybeGitConfigNoCommits = '';
-            if (gitConfigPromotionInfo.type === 'no-commits') {
+            let maybeGitConfigNoCommits = "";
+            if (gitConfigPromotionInfo.type === "no-commits") {
               alreadyMentionedGitNoCommits = true;
               maybeGitConfigNoCommits =
-                ' (matching Helm chart update is a no-op)';
+                " (matching Helm chart update is a no-op)";
             }
             text.push(
               `Changes to Docker images${maybeGitConfigNoCommits}:\n`,
-              ...(dockerImagePromotionInfo.type === 'no-commits'
-                ? ['No changes affect the built Docker image.']
-                : dockerImagePromotionInfo.type === 'unknown'
+              ...(dockerImagePromotionInfo.type === "no-commits"
+                ? ["No changes affect the built Docker image."]
+                : dockerImagePromotionInfo.type === "unknown"
                   ? [
                       `Cannot determine set of changes to the Docker image: ${dockerImagePromotionInfo.message}`,
                     ]
@@ -141,15 +141,15 @@ export function formatPromotedCommits(
                     )
               ).map((line) => `- ${line}\n`),
             );
-            text.push('\n');
+            text.push("\n");
           }
           if (
-            gitConfigPromotionInfo.type !== 'no-change' &&
+            gitConfigPromotionInfo.type !== "no-change" &&
             !alreadyMentionedGitNoCommits
           ) {
             text.push(
               `Changes to Helm chart:\n`,
-              ...(gitConfigPromotionInfo.type === 'no-commits'
+              ...(gitConfigPromotionInfo.type === "no-commits"
                 ? // This one shows up when the ref changes even though there are no
 
                   // new commits. This is something we do to try to make the ref
@@ -158,9 +158,9 @@ export function formatPromotedCommits(
                   // substantive change) so this message might end up being a bit
                   // spammy; we can remove it if it's not helpful.
                   [
-                    'The git ref for the Helm chart has changed, but there are no new commits in the range.',
+                    "The git ref for the Helm chart has changed, but there are no new commits in the range.",
                   ]
-                : gitConfigPromotionInfo.type === 'unknown'
+                : gitConfigPromotionInfo.type === "unknown"
                   ? [
                       `Cannot determine set of changes to the Helm chart: ${gitConfigPromotionInfo.message}`,
                     ]
@@ -170,11 +170,11 @@ export function formatPromotedCommits(
               ).map((line) => `- ${line}\n`),
             );
           }
-          return text.join('');
+          return text.join("");
         });
-      return environmentHeader + forEnvironment.join('\n\n---\n\n');
+      return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
-    .join('');
-  const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString('base64')} -->`;
+    .join("");
+  const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
   return `${body}\n\n${footer}\n`;
 }

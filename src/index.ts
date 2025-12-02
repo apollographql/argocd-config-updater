@@ -1,40 +1,40 @@
-import * as core from '@actions/core';
-import * as github from '@actions/github';
-import * as glob from '@actions/glob';
-import * as yaml from 'yaml';
-import { throttling } from '@octokit/plugin-throttling';
-import { eachLimit } from 'async';
-import { readFile, writeFile } from 'fs/promises';
+import * as core from "@actions/core";
+import * as github from "@actions/github";
+import * as glob from "@actions/glob";
+import * as yaml from "yaml";
+import { throttling } from "@octokit/plugin-throttling";
+import { eachLimit } from "async";
+import { readFile, writeFile } from "fs/promises";
 import {
   ArtifactRegistryDockerRegistryClient,
   CachingDockerRegistryClient,
   CachingDockerRegistryClientDump,
   DockerRegistryClient,
   isCachingDockerRegistryClientDump,
-} from './artifactRegistry.js';
+} from "./artifactRegistry.js";
 import {
   CachingGitHubClient,
   CachingGitHubClientDump,
   GitHubClient,
   OctokitGitHubClient,
   isCachingGitHubClientDump,
-} from './github.js';
-import { updateDockerTags } from './update-docker-tags.js';
-import { updateGraphArtifactRefs } from './update-graph-artifact-refs.js';
-import { updateGitRefs } from './update-git-refs.js';
-import { updatePromotedValues } from './update-promoted-values.js';
-import { PrefixingLogger } from './log.js';
-import { inspect } from 'util';
-import { PromotionsByTargetEnvironment } from './promotionInfo.js';
-import { LinkTemplateMap, readLinkTemplateMapFile } from './templates.js';
-import { formatPromotedCommits } from './format-promoted-commits.js';
+} from "./github.js";
+import { updateDockerTags } from "./update-docker-tags.js";
+import { updateGraphArtifactRefs } from "./update-graph-artifact-refs.js";
+import { updateGitRefs } from "./update-git-refs.js";
+import { updatePromotedValues } from "./update-promoted-values.js";
+import { PrefixingLogger } from "./log.js";
+import { inspect } from "util";
+import { PromotionsByTargetEnvironment } from "./promotionInfo.js";
+import { LinkTemplateMap, readLinkTemplateMapFile } from "./templates.js";
+import { formatPromotedCommits } from "./format-promoted-commits.js";
 import {
   CleanupChange,
   formatCleanupChanges,
-} from './format-cleanup-changes.js';
-import { cleanupClosedPrTracking } from './update-closed-prs.js';
-import { AnnotatedError } from './annotatedError.js';
-import { PRMetadata, AppPromotion } from './promotion-metadata-types.js';
+} from "./format-cleanup-changes.js";
+import { cleanupClosedPrTracking } from "./update-closed-prs.js";
+import { AnnotatedError } from "./annotatedError.js";
+import { PRMetadata, AppPromotion } from "./promotion-metadata-types.js";
 
 /**
  * The main function for the action.
@@ -42,19 +42,19 @@ import { PRMetadata, AppPromotion } from './promotion-metadata-types.js';
  */
 async function main(): Promise<void> {
   try {
-    const files = core.getInput('files');
+    const files = core.getInput("files");
     const globber = await glob.create(files);
     const filenames = await globber.glob();
 
     core.setOutput(
-      'suggested-promotion-branch-name',
-      `${core.getInput('promotion-target-regexp')}_${core.getInput('files')}`.replaceAll(
+      "suggested-promotion-branch-name",
+      `${core.getInput("promotion-target-regexp")}_${core.getInput("files")}`.replaceAll(
         /[^-a-zA-Z0-9._]/g,
-        '_',
+        "_",
       ),
     );
 
-    const apiCacheFileName = core.getInput('api-cache');
+    const apiCacheFileName = core.getInput("api-cache");
     let initialAPICache: APICache | null = null;
     if (apiCacheFileName) {
       initialAPICache = await maybeReadAPICache(apiCacheFileName);
@@ -68,18 +68,18 @@ async function main(): Promise<void> {
     let gitHubClient: GitHubClient | null = null;
     let finalizeGitHubClient: (() => Promise<void>) | null = null;
     const generatePromotedCommitsMarkdown = core.getBooleanInput(
-      'generate-promoted-commits-markdown',
+      "generate-promoted-commits-markdown",
     );
-    const doUpdateGitRefs = core.getBooleanInput('update-git-refs');
+    const doUpdateGitRefs = core.getBooleanInput("update-git-refs");
     const doCleanupClosedPrTracking = core.getBooleanInput(
-      'cleanup-closed-pr-tracking',
+      "cleanup-closed-pr-tracking",
     );
     if (
       doUpdateGitRefs ||
       generatePromotedCommitsMarkdown ||
       doCleanupClosedPrTracking
     ) {
-      const githubToken = core.getInput('github-token');
+      const githubToken = core.getInput("github-token");
       const octokit = github.getOctokit(
         githubToken,
         {
@@ -110,8 +110,8 @@ async function main(): Promise<void> {
 
       // Log GH rate limit response headers after each response and at the end.
       let lastRateLimitHeaderInfo: string | null = null;
-      octokit.hook.after('request', async (response) => {
-        const prefix = 'x-ratelimit-';
+      octokit.hook.after("request", async (response) => {
+        const prefix = "x-ratelimit-";
         const rateLimitHeaders: string[] = [];
         for (const [name, value] of Object.entries(response.headers)) {
           if (name.startsWith(prefix)) {
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
         }
 
         if (rateLimitHeaders.length) {
-          const rateLimitHeaderInfo = rateLimitHeaders.join(', ');
+          const rateLimitHeaderInfo = rateLimitHeaders.join(", ");
           lastRateLimitHeaderInfo = rateLimitHeaderInfo;
           core.info(`[GH Rate Limit Info] ${rateLimitHeaderInfo}`);
         }
@@ -152,13 +152,13 @@ async function main(): Promise<void> {
     let dockerRegistryClient: DockerRegistryClient | null = null;
     let finalizeDockerRegistryClient: (() => Promise<void>) | null = null;
     const artifactRegistryRepository =
-      core.getInput('artifact-registry-repository') ||
-      core.getInput('update-docker-tags-for-artifact-registry-repository');
+      core.getInput("artifact-registry-repository") ||
+      core.getInput("update-docker-tags-for-artifact-registry-repository");
     if (artifactRegistryRepository) {
       const artifactRegistryDockerRegistryClient =
         new ArtifactRegistryDockerRegistryClient(
           artifactRegistryRepository,
-          new PrefixingLogger('[docker-registry] '),
+          new PrefixingLogger("[docker-registry] "),
         );
       const cachingDockerRegistryClient = new CachingDockerRegistryClient(
         artifactRegistryDockerRegistryClient,
@@ -171,47 +171,47 @@ async function main(): Promise<void> {
     }
     let graphArtifactRegistryClient: DockerRegistryClient | null = null;
     const graphArtifactRegistryRepository = core.getInput(
-      'graph-artifact-repository',
+      "graph-artifact-repository",
     );
     if (graphArtifactRegistryRepository) {
       graphArtifactRegistryClient = new ArtifactRegistryDockerRegistryClient(
         graphArtifactRegistryRepository,
-        new PrefixingLogger('[graph-artifact-registry] '),
+        new PrefixingLogger("[graph-artifact-registry] "),
       );
     }
 
     const doUpdateGraphArtifactRefs = core.getBooleanInput(
-      'update-graph-artifact-refs',
+      "update-graph-artifact-refs",
     );
     if (doUpdateGraphArtifactRefs && !graphArtifactRegistryRepository) {
       throw new Error(
-        'Must set graph-artifact-repository with update-graph-artifact-refs',
+        "Must set graph-artifact-repository with update-graph-artifact-refs",
       );
     }
     const doUpdateDockerTags =
-      core.getBooleanInput('update-docker-tags') ||
-      !!core.getInput('update-docker-tags-for-artifact-registry-repository');
+      core.getBooleanInput("update-docker-tags") ||
+      !!core.getInput("update-docker-tags-for-artifact-registry-repository");
     if (doUpdateDockerTags && !artifactRegistryRepository) {
       throw new Error(
-        'Must set artifact-registry-repository with update-docker-tags',
+        "Must set artifact-registry-repository with update-docker-tags",
       );
     }
     if (generatePromotedCommitsMarkdown && !artifactRegistryRepository) {
       throw new Error(
-        'Must set artifact-registry-repository with generate-promoted-commits-markdown',
+        "Must set artifact-registry-repository with generate-promoted-commits-markdown",
       );
     }
-    const linkTemplateFile = core.getInput('link-template-file');
+    const linkTemplateFile = core.getInput("link-template-file");
     const linkTemplateMap: LinkTemplateMap | null = linkTemplateFile
       ? await readLinkTemplateMapFile(linkTemplateFile)
       : null;
 
-    const frozenEnvironmentsFile = core.getInput('frozen-environments-file');
+    const frozenEnvironmentsFile = core.getInput("frozen-environments-file");
     const frozenEnvironments = frozenEnvironmentsFile
       ? await readFrozenEnvironmentsFile(frozenEnvironmentsFile)
       : new Set<string>();
 
-    const parallelism = +core.getInput('parallelism');
+    const parallelism = +core.getInput("parallelism");
     const errors: {
       error: string;
       annotation: {
@@ -268,7 +268,7 @@ async function main(): Promise<void> {
     });
     if (errors.length) {
       core.setFailed(
-        `Errors occurred while processing ${errors.length} file${errors.length > 1 ? 's' : ''}`,
+        `Errors occurred while processing ${errors.length} file${errors.length > 1 ? "s" : ""}`,
       );
       for (const { error, annotation } of errors) {
         core.error(error, annotation);
@@ -283,17 +283,17 @@ async function main(): Promise<void> {
 
     if (
       generatePromotedCommitsMarkdown &&
-      core.getBooleanInput('update-promoted-values')
+      core.getBooleanInput("update-promoted-values")
     ) {
       core.setOutput(
-        'promoted-commits-markdown',
+        "promoted-commits-markdown",
         formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata),
       );
     }
 
     if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
       core.setOutput(
-        'cleanup-changes-markdown',
+        "cleanup-changes-markdown",
         formatCleanupChanges(allCleanupChanges),
       );
     }
@@ -350,7 +350,7 @@ async function processFile(options: {
   };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
-  let contents = await readFile(filename, 'utf-8');
+  let contents = await readFile(filename, "utf-8");
 
   if (doCleanupClosedPrTracking && gitHubClient) {
     const result = await cleanupClosedPrTracking({
@@ -393,8 +393,8 @@ async function processFile(options: {
     );
   }
 
-  if (core.getBooleanInput('update-promoted-values')) {
-    const promotionTargetRegexp = core.getInput('promotion-target-regexp');
+  if (core.getBooleanInput("update-promoted-values")) {
+    const promotionTargetRegexp = core.getInput("promotion-target-regexp");
     const { newContents, promotionsByTargetEnvironment, appPromotions } =
       await updatePromotedValues(
         contents,
@@ -426,7 +426,7 @@ async function maybeReadAPICache(
 ): Promise<APICache | null> {
   let apiCacheText: string;
   try {
-    apiCacheText = await readFile(apiCacheFileName, 'utf8');
+    apiCacheText = await readFile(apiCacheFileName, "utf8");
   } catch (e) {
     core.error(`Error reading cache file ${apiCacheFileName}, ignoring: ${e}`);
     return null;
@@ -442,10 +442,10 @@ async function maybeReadAPICache(
 
   if (
     !parsed ||
-    typeof parsed !== 'object' ||
-    !('gitHub' in parsed) ||
-    !('dockerRegistry' in parsed) ||
-    !('version' in parsed) ||
+    typeof parsed !== "object" ||
+    !("gitHub" in parsed) ||
+    !("dockerRegistry" in parsed) ||
+    !("version" in parsed) ||
     parsed.version !== 2
   ) {
     core.error(
@@ -480,7 +480,7 @@ async function maybeReadAPICache(
 async function readFrozenEnvironmentsFile(
   filename: string,
 ): Promise<Set<string>> {
-  const contents = await readFile(filename, 'utf-8');
+  const contents = await readFile(filename, "utf-8");
   const parsed = yaml.parse(contents) as unknown;
   if (!Array.isArray(parsed)) {
     throw Error(
@@ -489,7 +489,7 @@ async function readFrozenEnvironmentsFile(
   }
   const ret = new Set<string>();
   for (const element of parsed) {
-    if (typeof element !== 'string') {
+    if (typeof element !== "string") {
       throw Error(
         `All elements of top-level list in frozen environments file ${filename} must be strings`,
       );

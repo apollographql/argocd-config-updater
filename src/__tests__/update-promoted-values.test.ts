@@ -1,25 +1,25 @@
-import { describe, it, expect } from 'vitest';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import { updatePromotedValues } from '../update-promoted-values.js';
-import { PrefixingLogger } from '../log.js';
+import { describe, it, expect } from "vitest";
+import { readFile } from "fs/promises";
+import { join } from "path";
+import { updatePromotedValues } from "../update-promoted-values.js";
+import { PrefixingLogger } from "../log.js";
 
 async function fixture(filename: string): Promise<string> {
   return await readFile(
-    join(__dirname, '__fixtures__', 'update-promoted-values', filename),
-    'utf-8',
+    join(__dirname, "__fixtures__", "update-promoted-values", filename),
+    "utf-8",
   );
 }
 
 const logger = PrefixingLogger.silent();
 
-describe('action', () => {
-  it('updates git refs', async () => {
-    const contents = await fixture('sample.yaml');
+describe("action", () => {
+  it("updates git refs", async () => {
+    const contents = await fixture("sample.yaml");
     const { newContents, appPromotions } = await updatePromotedValues(
       contents,
-      'some-app/values.yaml',
-      'prod',
+      "some-app/values.yaml",
+      "prod",
       new Set<string>(),
       logger,
     );
@@ -27,14 +27,14 @@ describe('action', () => {
     expect(appPromotions).toEqual([
       {
         source: {
-          appName: 'some-app-some-service-staging',
+          appName: "some-app-some-service-staging",
           gitConfig: {
-            repoURL: 'https://github.com/apollographql/some-repo.git',
-            path: 'services/hello-world',
-            ref: 'abcdef1234567',
+            repoURL: "https://github.com/apollographql/some-repo.git",
+            path: "services/hello-world",
+            ref: "abcdef1234567",
           },
         },
-        target: { appName: 'some-app-some-service-prod' },
+        target: { appName: "some-app-some-service-prod" },
       },
     ]);
 
@@ -42,8 +42,8 @@ describe('action', () => {
     const { newContents: actual, appPromotions: idempotentPromotions } =
       await updatePromotedValues(
         newContents,
-        'some-app/values.yaml',
-        'prod',
+        "some-app/values.yaml",
+        "prod",
         new Set<string>(),
         logger,
       );
@@ -55,9 +55,9 @@ describe('action', () => {
     const { newContents: frozenContents, appPromotions: frozenPromotions } =
       await updatePromotedValues(
         contents,
-        'some-app/values.yaml',
+        "some-app/values.yaml",
         null,
-        new Set<string>(['some-service-prod']),
+        new Set<string>(["some-service-prod"]),
         logger,
       );
     expect(frozenContents).toMatchSnapshot();
@@ -65,22 +65,22 @@ describe('action', () => {
     expect(frozenPromotions).toEqual([
       {
         source: {
-          appName: 'some-app-some-service-staging',
+          appName: "some-app-some-service-staging",
           gitConfig: {
-            repoURL: 'https://github.com/apollographql/some-repo.git',
-            path: 'services/hello-world',
-            ref: 'abcdef1234567',
+            repoURL: "https://github.com/apollographql/some-repo.git",
+            path: "services/hello-world",
+            ref: "abcdef1234567",
           },
         },
-        target: { appName: 'some-app-some-service-not-selected' },
+        target: { appName: "some-app-some-service-not-selected" },
       },
     ]);
   });
 
-  it('respects defaults and explicit specifications for yamlPaths', async () => {
+  it("respects defaults and explicit specifications for yamlPaths", async () => {
     const { newContents } = await updatePromotedValues(
-      await fixture('yaml-paths-defaults.yaml'),
-      'some-app/values.yaml',
+      await fixture("yaml-paths-defaults.yaml"),
+      "some-app/values.yaml",
       null,
       new Set<string>(),
       logger,
@@ -89,24 +89,24 @@ describe('action', () => {
     expect(newContents).toMatchSnapshot();
   });
 
-  it('throws if no default yamlPaths entry works', async () => {
-    const contents = await fixture('default-fails.yaml');
+  it("throws if no default yamlPaths entry works", async () => {
+    const contents = await fixture("default-fails.yaml");
     await expect(
       updatePromotedValues(
         contents,
-        'some-app/values.yaml',
+        "some-app/values.yaml",
         null,
         new Set<string>(),
         logger,
       ),
-    ).rejects.toThrow('none of the default promoted paths');
+    ).rejects.toThrow("none of the default promoted paths");
   });
 
-  it('uses global block values for gitConfig and dockerImage fallback', async () => {
-    const contents = await fixture('global-fallback.yaml');
+  it("uses global block values for gitConfig and dockerImage fallback", async () => {
+    const contents = await fixture("global-fallback.yaml");
     const { newContents, appPromotions } = await updatePromotedValues(
       contents,
-      'my-app/values.yaml',
+      "my-app/values.yaml",
       null,
       new Set<string>(),
       logger,
@@ -115,19 +115,19 @@ describe('action', () => {
     expect(appPromotions).toEqual([
       {
         source: {
-          appName: 'my-app-source-env',
+          appName: "my-app-source-env",
           gitConfig: {
-            repoURL: 'https://github.com/example/global-repo.git',
-            path: 'global/path',
-            ref: 'source-ref-123',
+            repoURL: "https://github.com/example/global-repo.git",
+            path: "global/path",
+            ref: "source-ref-123",
           },
           dockerImage: {
-            tag: 'source-tag-v1',
-            setValue: ['global', 'dockerImage', 'tag'],
-            repository: 'gcr.io/example/global-image',
+            tag: "source-tag-v1",
+            setValue: ["global", "dockerImage", "tag"],
+            repository: "gcr.io/example/global-image",
           },
         },
-        target: { appName: 'my-app-target-env' },
+        target: { appName: "my-app-target-env" },
       },
     ]);
   });

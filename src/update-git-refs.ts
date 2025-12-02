@@ -1,17 +1,17 @@
-import * as yaml from 'yaml';
+import * as yaml from "yaml";
 import {
   GetTreeSHAForPathOptions,
   GitHubClient,
   ResolveRefToSHAOptions,
-} from './github.js';
+} from "./github.js";
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml.js';
-import { PrefixingLogger } from './log.js';
+} from "./yaml.js";
+import { PrefixingLogger } from "./log.js";
 
 export interface Trackable {
   trackMutableRef: string;
@@ -30,7 +30,7 @@ export async function updateGitRefs(
   frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
 ): Promise<string> {
-  const logger = _logger.withExtendedPrefix('[trackMutableRef] ');
+  const logger = _logger.withExtendedPrefix("[trackMutableRef] ");
 
   const { document, stringify } = parseYAML(contents);
 
@@ -40,10 +40,10 @@ export async function updateGitRefs(
     return contents;
   }
 
-  logger.info('Looking for trackMutableRef');
+  logger.info("Looking for trackMutableRef");
   const trackables = findTrackables(document, frozenEnvironments);
 
-  logger.info('Checking refs against GitHub');
+  logger.info("Checking refs against GitHub");
   await checkRefsAgainstGitHubAndModifyScalars(
     trackables,
     gitHubClient,
@@ -63,15 +63,15 @@ export function findTrackables(
   let globalRepoURL: string | null = null;
   let globalPath: string | null = null;
 
-  if (globalBlock?.has('gitConfig')) {
-    const gitConfigBlock = globalBlock.get('gitConfig');
+  if (globalBlock?.has("gitConfig")) {
+    const gitConfigBlock = globalBlock.get("gitConfig");
     if (!yaml.isMap(gitConfigBlock)) {
-      throw Error('Document has `global.gitConfig` that is not a map');
+      throw Error("Document has `global.gitConfig` that is not a map");
     }
     // Read repoURL and path from 'global' (keeping them null if they're not
     // there, though throwing if they're there as non-strings).
-    globalRepoURL = getStringValue(gitConfigBlock, 'repoURL');
-    globalPath = getStringValue(gitConfigBlock, 'path');
+    globalRepoURL = getStringValue(gitConfigBlock, "repoURL");
+    globalPath = getStringValue(gitConfigBlock, "path");
   }
 
   for (const [key, value] of blocks) {
@@ -79,40 +79,40 @@ export function findTrackables(
       continue;
     }
 
-    if (!value.has('gitConfig')) {
+    if (!value.has("gitConfig")) {
       continue;
     }
-    const gitConfigBlock = value.get('gitConfig');
+    const gitConfigBlock = value.get("gitConfig");
     if (!yaml.isMap(gitConfigBlock)) {
       throw Error(`Document has \`${key}.gitConfig\` that is not a map`);
     }
 
-    const repoURL = getStringValue(gitConfigBlock, 'repoURL') ?? globalRepoURL;
-    const path = getStringValue(gitConfigBlock, 'path') ?? globalPath;
+    const repoURL = getStringValue(gitConfigBlock, "repoURL") ?? globalRepoURL;
+    const path = getStringValue(gitConfigBlock, "path") ?? globalPath;
     // Tracking can be specified at `gitConfig.trackMutableRef` or just at
     // `track`.
     const trackMutableRef =
-      getStringValue(gitConfigBlock, 'trackMutableRef') ??
-      getStringValue(value, 'track');
+      getStringValue(gitConfigBlock, "trackMutableRef") ??
+      getStringValue(value, "track");
     const refScalarTokenAndValue = getStringAndScalarTokenFromMap(
       gitConfigBlock,
-      'ref',
+      "ref",
     );
 
     // Get token writer for the top level track field
-    const trackScalarTokenAndValue = getStringValue(value, 'track')
-      ? getStringAndScalarTokenFromMap(value, 'track')
+    const trackScalarTokenAndValue = getStringValue(value, "track")
+      ? getStringAndScalarTokenFromMap(value, "track")
       : null;
 
     let maybeDockerCommit: string | null = null;
 
-    if (value.has('dockerImage')) {
-      const dockerImageBlock = value.get('dockerImage');
+    if (value.has("dockerImage")) {
+      const dockerImageBlock = value.get("dockerImage");
       if (!yaml.isMap(dockerImageBlock)) {
         throw Error(`Document has \`${key}.dockerImage\` that is not a map`);
       }
 
-      const tag = getStringValue(dockerImageBlock, 'tag');
+      const tag = getStringValue(dockerImageBlock, "tag");
 
       const gitCommitMatches = tag?.match(/-g([0-9a-fA-F]+)$/);
       if (gitCommitMatches) {
@@ -273,23 +273,23 @@ async function checkRefsAgainstGitHubAndModifyScalars(
     // defined if dockerRefCommitSha is defined, but TypeScript doesn't know
     if (dockerTreeSHA === trackedTreeSHA && dockerRefCommitSHA) {
       if (dockerRefCommitSHA !== trackable.ref) {
-        logger.info('(using docker sha)');
+        logger.info("(using docker sha)");
         trackable.refScalarTokenWriter.write(dockerRefCommitSHA);
       } else {
         // Commit sha is already whats written so no changes
-        logger.info('(matches docker, unchanged)');
+        logger.info("(matches docker, unchanged)");
       }
     } else if (currentRefCommitSHA && currentTreeSHA === trackedTreeSHA) {
       if (currentRefCommitSHA !== trackable.ref) {
         // This will freeze the current ref if it is a mutable ref.
-        logger.info('(freezing current ref)');
+        logger.info("(freezing current ref)");
         trackable.refScalarTokenWriter.write(currentRefCommitSHA);
       } else {
         // Commit sha is already whats written so no changes
-        logger.info('(unchanged)');
+        logger.info("(unchanged)");
       }
     } else {
-      logger.info('(updated to latest from ref!)');
+      logger.info("(updated to latest from ref!)");
       trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     }
   }

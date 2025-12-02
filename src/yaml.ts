@@ -1,4 +1,4 @@
-import * as yaml from 'yaml';
+import * as yaml from "yaml";
 
 export type CSTScalarToken = yaml.CST.FlowScalar | yaml.CST.BlockScalar;
 
@@ -20,21 +20,21 @@ export class ScalarTokenWriter {
     const test = (tag: yaml.CollectionTag | yaml.ScalarTag): boolean =>
       !!(
         tag.default &&
-        tag.tag !== 'tag:yaml.org,2002:str' &&
+        tag.tag !== "tag:yaml.org,2002:str" &&
         tag.test?.test(value)
       );
     const needsQuote =
       this.schema.tags.some(test) || !!this.schema.compat?.some(test);
     const alreadyQuoted =
-      this.scalarToken.type === 'single-quoted-scalar' ||
-      this.scalarToken.type === 'double-quoted-scalar' ||
-      this.scalarToken.type === 'block-scalar';
+      this.scalarToken.type === "single-quoted-scalar" ||
+      this.scalarToken.type === "double-quoted-scalar" ||
+      this.scalarToken.type === "block-scalar";
     yaml.CST.setScalarValue(
       this.scalarToken,
       value,
       needsQuote && !alreadyQuoted
         ? {
-            type: 'QUOTE_SINGLE',
+            type: "QUOTE_SINGLE",
           }
         : undefined,
     );
@@ -51,14 +51,14 @@ export function getTopLevelBlocks(doc: yaml.Document.Parsed): {
   const topLevel = doc.contents;
 
   if (!yaml.isMap(topLevel)) {
-    throw Error('Expected the top level of the document to be a map');
+    throw Error("Expected the top level of the document to be a map");
   }
 
-  if (topLevel.has('global')) {
-    const gb = topLevel.get('global');
+  if (topLevel.has("global")) {
+    const gb = topLevel.get("global");
     if (!yaml.isMap(gb)) {
       throw Error(
-        'Document has a top-level `global` key whose value is not a map',
+        "Document has a top-level `global` key whose value is not a map",
       );
     }
     globalBlock = gb;
@@ -68,14 +68,14 @@ export function getTopLevelBlocks(doc: yaml.Document.Parsed): {
     if (!yaml.isScalar(key)) {
       continue;
     }
-    if (typeof key.value !== 'string') {
+    if (typeof key.value !== "string") {
       continue;
     }
     // The `global` block was already handled specially above.
-    if (key.value === 'global') {
+    if (key.value === "global") {
       if (!yaml.isMap(value)) {
         throw Error(
-          'Document has a top-level `global` key whose value is not a map',
+          "Document has a top-level `global` key whose value is not a map",
         );
       }
       globalBlock = value;
@@ -115,7 +115,7 @@ export function getStringAndScalarTokenFromMap(
     // this probably can't happen, but let's make the types happy
     throw Error(`${key} value must come from a scalar token`);
   }
-  if (typeof scalar.value !== 'string') {
+  if (typeof scalar.value !== "string") {
     throw Error(`${key} value must be a string`);
   }
   return { scalarToken, value: scalar.value, range: scalar.range };
@@ -159,7 +159,7 @@ export function parseYAML(contents: string): {
   // ignores any documents after the first, so there's no point in allowing
   // folks to put them in our codebase.
   if (documents.length > 1) {
-    throw new Error('Multiple documents in YAML file');
+    throw new Error("Multiple documents in YAML file");
   }
 
   // If the file is empty (or just whitespace or whatever), that's fine; we
@@ -169,7 +169,7 @@ export function parseYAML(contents: string): {
       document: null,
       lineCounter,
       stringify() {
-        return '';
+        return "";
       },
     };
   }
@@ -186,7 +186,7 @@ export function parseYAML(contents: string): {
     stringify() {
       return topLevelTokens
         .map((topLevelToken) => yaml.CST.stringify(topLevelToken))
-        .join('');
+        .join("");
     },
   };
 }

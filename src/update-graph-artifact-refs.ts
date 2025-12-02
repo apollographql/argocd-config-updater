@@ -1,13 +1,13 @@
-import * as yaml from 'yaml';
-import { DockerRegistryClient } from './artifactRegistry.js';
+import * as yaml from "yaml";
+import { DockerRegistryClient } from "./artifactRegistry.js";
 import {
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml.js';
-import { PrefixingLogger } from './log.js';
-import { AnnotatedError } from './annotatedError.js';
+} from "./yaml.js";
+import { PrefixingLogger } from "./log.js";
+import { AnnotatedError } from "./annotatedError.js";
 
 export interface TrackableGraphArtifact {
   imageName: string;
@@ -22,7 +22,7 @@ export async function updateGraphArtifactRefs(
   frozenEnvironments: Set<string>,
   _logger: PrefixingLogger,
 ): Promise<string> {
-  const logger = _logger.withExtendedPrefix('[graphArtifacts] ');
+  const logger = _logger.withExtendedPrefix("[graphArtifacts] ");
 
   const { document, lineCounter, stringify } = parseYAML(contents);
 
@@ -32,10 +32,10 @@ export async function updateGraphArtifactRefs(
     return contents;
   }
 
-  logger.info('Looking for trackable graph artifact refs');
+  logger.info("Looking for trackable graph artifact refs");
   const trackables = findTrackables(document, frozenEnvironments);
 
-  logger.info('Checking refs against OCI registry');
+  logger.info("Checking refs against OCI registry");
   await checkTagsAgainstArtifactRegistryAndModifyScalars(
     trackables,
     lineCounter,
@@ -58,7 +58,7 @@ export function findTrackables(
     return trackables;
   }
 
-  const supergraphConfig = globalBlock.get('supergraph');
+  const supergraphConfig = globalBlock.get("supergraph");
   if (!supergraphConfig) {
     // No supergraph configuration in global, skip processing
     return trackables;
@@ -72,11 +72,11 @@ export function findTrackables(
 
   const artifactURL = getStringAndScalarTokenFromMap(
     supergraphConfig,
-    'artifactURL',
+    "artifactURL",
   );
   const imageName = getStringAndScalarTokenFromMap(
     supergraphConfig,
-    'imageName',
+    "imageName",
   );
 
   if (!artifactURL?.value || !imageName?.value) {
@@ -87,23 +87,23 @@ export function findTrackables(
 
   // Now process each block to find supergraph entries with digest that need updating
   for (const [key, value] of blocks) {
-    if (key === 'global' || frozenEnvironments.has(key)) {
+    if (key === "global" || frozenEnvironments.has(key)) {
       continue;
     }
 
-    if (!value?.has('supergraph')) {
+    if (!value?.has("supergraph")) {
       // Skip blocks without supergraph
       continue;
     }
 
-    const supergraphBlock = value.get('supergraph');
+    const supergraphBlock = value.get("supergraph");
     if (!yaml.isMap(supergraphBlock)) {
       throw Error(`\`${key}.supergraph\` must be a map`);
     }
 
     const digestToken = getStringAndScalarTokenFromMap(
       supergraphBlock,
-      'digest',
+      "digest",
     );
 
     if (!digestToken) {
@@ -113,7 +113,7 @@ export function findTrackables(
     // Extract tag from trackMutableTag if available
     const trackMutableTag = getStringAndScalarTokenFromMap(
       supergraphBlock,
-      'trackMutableTag',
+      "trackMutableTag",
     );
 
     if (!trackMutableTag?.value) {

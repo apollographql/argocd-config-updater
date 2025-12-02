@@ -1,27 +1,27 @@
-import { RE2 } from 're2-wasm';
-import * as yaml from 'yaml';
+import { RE2 } from "re2-wasm";
+import * as yaml from "yaml";
 import {
   ScalarTokenWriter,
   getStringValue,
   getTopLevelBlocks,
   parseYAML,
-} from './yaml.js';
-import { PrefixingLogger } from './log.js';
-import { DockerRegistryClient } from './artifactRegistry.js';
+} from "./yaml.js";
+import { PrefixingLogger } from "./log.js";
+import { DockerRegistryClient } from "./artifactRegistry.js";
 import {
   PromotionInfo,
   PromotionsByTargetEnvironment,
   PromotionSetWithDockerImage,
-} from './promotionInfo.js';
-import { GitHubClient, getGitConfigRefPromotionInfo } from './github.js';
-import { LinkTemplateMap, renderLinkTemplate } from './templates.js';
-import { createHash } from 'node:crypto';
-import { AnnotatedError } from './annotatedError.js';
-import { AppPromotion } from './promotion-metadata-types.js';
-import { type } from 'arktype';
-import { basename, dirname } from 'node:path';
+} from "./promotionInfo.js";
+import { GitHubClient, getGitConfigRefPromotionInfo } from "./github.js";
+import { LinkTemplateMap, renderLinkTemplate } from "./templates.js";
+import { createHash } from "node:crypto";
+import { AnnotatedError } from "./annotatedError.js";
+import { AppPromotion } from "./promotion-metadata-types.js";
+import { type } from "arktype";
+import { basename, dirname } from "node:path";
 
-const stringArray = type('string[]');
+const stringArray = type("string[]");
 
 interface Promote {
   scalarTokenWriter: ScalarTokenWriter;
@@ -29,8 +29,8 @@ interface Promote {
 }
 
 const DEFAULT_YAML_PATHS = [
-  ['gitConfig', 'ref'],
-  ['dockerImage', 'tag'],
+  ["gitConfig", "ref"],
+  ["dockerImage", "tag"],
 ];
 
 export async function updatePromotedValues(
@@ -47,12 +47,12 @@ export async function updatePromotedValues(
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null; // Null if empty
   appPromotions: AppPromotion[];
 }> {
-  const logger = _logger.withExtendedPrefix('[promote] ');
+  const logger = _logger.withExtendedPrefix("[promote] ");
 
   // We use re2-wasm instead of built-in RegExp so we don't have to worry about
   // REDOS attacks.
   const promotionTargetRE2 = promotionTargetRegexp
-    ? new RE2(promotionTargetRegexp, 'u')
+    ? new RE2(promotionTargetRegexp, "u")
     : null;
 
   const { document, stringify, lineCounter } = parseYAML(contents);
@@ -69,7 +69,7 @@ export async function updatePromotedValues(
 
   // We decide what to do and then we do it, just in case there are any
   // overlaps between our reads and writes.
-  logger.info('Looking for promote');
+  logger.info("Looking for promote");
   const { promotes, promotionsByTargetEnvironment, appPromotions } =
     await findPromotes(
       document,
@@ -83,7 +83,7 @@ export async function updatePromotedValues(
       logger,
     );
 
-  logger.info('Copying values');
+  logger.info("Copying values");
   for (const { scalarTokenWriter, value } of promotes) {
     scalarTokenWriter.write(value);
   }
@@ -126,31 +126,31 @@ async function findPromotes(
   let globalDockerImageTag: string | null = null;
   let globalDockerImageSetValue: string[] | null = null;
 
-  if (globalBlock?.has('gitConfig')) {
-    const gitConfigBlock = globalBlock.get('gitConfig');
+  if (globalBlock?.has("gitConfig")) {
+    const gitConfigBlock = globalBlock.get("gitConfig");
     if (!yaml.isMap(gitConfigBlock)) {
       throw new AnnotatedError(
-        'Document has `global.gitConfig` that is not a map',
+        "Document has `global.gitConfig` that is not a map",
         { range: gitConfigBlock?.range, lineCounter },
       );
     }
-    globalRepoURL = getStringValue(gitConfigBlock, 'repoURL');
-    globalPath = getStringValue(gitConfigBlock, 'path');
+    globalRepoURL = getStringValue(gitConfigBlock, "repoURL");
+    globalPath = getStringValue(gitConfigBlock, "path");
   }
-  if (globalBlock?.has('dockerImage')) {
-    const dockerImageBlock = globalBlock.get('dockerImage');
+  if (globalBlock?.has("dockerImage")) {
+    const dockerImageBlock = globalBlock.get("dockerImage");
     if (!yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
-        'Document has `global.dockerImageBlock` that is not a map',
+        "Document has `global.dockerImageBlock` that is not a map",
         { range: dockerImageBlock?.range, lineCounter },
       );
     }
     globalDockerImageRepository = getStringValue(
       dockerImageBlock,
-      'repository',
+      "repository",
     );
-    globalDockerImageTag = getStringValue(dockerImageBlock, 'tag');
-    const setValueNode = dockerImageBlock.get('setValue');
+    globalDockerImageTag = getStringValue(dockerImageBlock, "tag");
+    const setValueNode = dockerImageBlock.get("setValue");
     if (setValueNode && yaml.isSeq(setValueNode)) {
       const parsed = stringArray(setValueNode.toJSON());
       if (!(parsed instanceof type.errors)) {
@@ -168,18 +168,18 @@ async function findPromotes(
     if (promotionTargetRE2 && !promotionTargetRE2.test(myName)) {
       continue;
     }
-    if (!me.has('promote')) {
+    if (!me.has("promote")) {
       continue;
     }
-    const promote = me.get('promote');
+    const promote = me.get("promote");
     if (!yaml.isMap(promote)) {
       throw new AnnotatedError(`The value at ${myName}.promote must be a map`, {
         range: promote?.range,
         lineCounter,
       });
     }
-    const from = promote.get('from');
-    if (typeof from !== 'string') {
+    const from = promote.get("from");
+    if (typeof from !== "string") {
       throw new AnnotatedError(
         `The value at ${myName}.promote.from must be a string`,
         { range: from?.range, lineCounter },
@@ -193,7 +193,7 @@ async function findPromotes(
       );
     }
 
-    const gitConfigBlock = me.get('gitConfig');
+    const gitConfigBlock = me.get("gitConfig");
     if (gitConfigBlock && !yaml.isMap(gitConfigBlock)) {
       throw new AnnotatedError(
         `Document has \`${myName}.gitConfig\` that is not a map`,
@@ -201,13 +201,13 @@ async function findPromotes(
       );
     }
     const repoURL =
-      (gitConfigBlock && getStringValue(gitConfigBlock, 'repoURL')) ??
+      (gitConfigBlock && getStringValue(gitConfigBlock, "repoURL")) ??
       globalRepoURL;
     const path =
-      (gitConfigBlock && getStringValue(gitConfigBlock, 'path')) ?? globalPath;
-    const trimmedRepoURL = repoURL?.replace(/(?:\.git)?\/*$/, '');
+      (gitConfigBlock && getStringValue(gitConfigBlock, "path")) ?? globalPath;
+    const trimmedRepoURL = repoURL?.replace(/(?:\.git)?\/*$/, "");
 
-    const dockerImageBlock = me.get('dockerImage');
+    const dockerImageBlock = me.get("dockerImage");
     if (dockerImageBlock && !yaml.isMap(dockerImageBlock)) {
       throw new AnnotatedError(
         `Document has \`${myName}.dockerImage\` that is not a map`,
@@ -215,12 +215,12 @@ async function findPromotes(
       );
     }
     const dockerImageRepository =
-      (dockerImageBlock && getStringValue(dockerImageBlock, 'repository')) ??
+      (dockerImageBlock && getStringValue(dockerImageBlock, "repository")) ??
       globalDockerImageRepository;
 
     const yamlPaths: CollectionPath[] = [];
-    if (promote.has('yamlPaths')) {
-      const yamlPathsSeq = promote.get('yamlPaths');
+    if (promote.has("yamlPaths")) {
+      const yamlPathsSeq = promote.get("yamlPaths");
       if (!yaml.isSeq(yamlPathsSeq)) {
         throw new AnnotatedError(
           `The value at ${myName}.promote.yamlPaths must be an array`,
@@ -230,7 +230,7 @@ async function findPromotes(
       const explicitYamlPaths = yamlPathsSeq.toJSON();
       if (!Array.isArray(explicitYamlPaths)) {
         throw new AnnotatedError(
-          'YAMLSeq.toJSON surprisingly did not return an array',
+          "YAMLSeq.toJSON surprisingly did not return an array",
           { range: yamlPathsSeq?.range, lineCounter },
         );
       }
@@ -257,25 +257,25 @@ async function findPromotes(
       if (yamlPaths.length === 0) {
         throw Error(
           `${myName}.promote does not specify 'yamlPaths' and none of the default promoted paths (${DEFAULT_YAML_PATHS.map(
-            (p) => p.join('.'),
-          ).join(', ')}) exist in both the source and the target.`,
+            (p) => p.join("."),
+          ).join(", ")}) exist in both the source and the target.`,
         );
       }
     }
 
-    let gitConfigPromotionInfo: PromotionInfo = { type: 'no-change' };
-    let dockerImagePromotionInfo: PromotionInfo = { type: 'no-change' };
+    let gitConfigPromotionInfo: PromotionInfo = { type: "no-change" };
+    let dockerImagePromotionInfo: PromotionInfo = { type: "no-change" };
 
     // Will be updated if promoted.
     let dockerImageTag =
-      (dockerImageBlock && getStringValue(dockerImageBlock, 'tag')) ??
+      (dockerImageBlock && getStringValue(dockerImageBlock, "tag")) ??
       globalDockerImageTag;
 
     let promotionAffectsBlock = false;
 
     for (const collectionPath of yamlPaths) {
       const sourceValue = fromBlock.getIn(collectionPath);
-      if (typeof sourceValue !== 'string') {
+      if (typeof sourceValue !== "string") {
         throw Error(`Could not promote from ${[from, ...collectionPath]}`);
       }
       // true means keepScalar, ie get the scalar node to write.
@@ -292,18 +292,18 @@ async function findPromotes(
         );
       }
 
-      if (collectionPath.join('.') === 'dockerImage.tag') {
+      if (collectionPath.join(".") === "dockerImage.tag") {
         dockerImageTag = sourceValue;
       }
 
       if (
-        typeof targetNode.value === 'string' &&
+        typeof targetNode.value === "string" &&
         targetNode.value !== sourceValue
       ) {
         promotionAffectsBlock = true;
 
         if (
-          collectionPath.join('.') === 'dockerImage.tag' &&
+          collectionPath.join(".") === "dockerImage.tag" &&
           dockerImageRepository &&
           dockerRegistryClient
         ) {
@@ -318,7 +318,7 @@ async function findPromotes(
         }
 
         if (
-          collectionPath.join('.') === 'gitConfig.ref' &&
+          collectionPath.join(".") === "gitConfig.ref" &&
           repoURL &&
           path &&
           gitHubClient
@@ -344,19 +344,19 @@ async function findPromotes(
       // only push if there is an actual change
 
       // Extract source gitConfig values from fromBlock (required)
-      const sourceGitConfigBlock = fromBlock.get('gitConfig');
+      const sourceGitConfigBlock = fromBlock.get("gitConfig");
       const sourceGitConfigMap =
         sourceGitConfigBlock && yaml.isMap(sourceGitConfigBlock)
           ? sourceGitConfigBlock
           : null;
       const sourceRepoURL =
-        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'repoURL')) ||
+        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, "repoURL")) ||
         globalRepoURL;
       const sourcePath =
-        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'path')) ||
+        (sourceGitConfigMap && getStringValue(sourceGitConfigMap, "path")) ||
         globalPath;
       const sourceRef =
-        sourceGitConfigMap && getStringValue(sourceGitConfigMap, 'ref');
+        sourceGitConfigMap && getStringValue(sourceGitConfigMap, "ref");
 
       if (!sourceRepoURL || !sourcePath || !sourceRef) {
         throw new AnnotatedError(
@@ -380,11 +380,11 @@ async function findPromotes(
       };
 
       // Extract source dockerImage values from fromBlock (optional, but all fields required if present)
-      const sourceDockerImageBlock = fromBlock.get('dockerImage');
+      const sourceDockerImageBlock = fromBlock.get("dockerImage");
       if (sourceDockerImageBlock && yaml.isMap(sourceDockerImageBlock)) {
         const sourceTag =
-          getStringValue(sourceDockerImageBlock, 'tag') ?? globalDockerImageTag;
-        const sourceSetValueNode = sourceDockerImageBlock.get('setValue');
+          getStringValue(sourceDockerImageBlock, "tag") ?? globalDockerImageTag;
+        const sourceSetValueNode = sourceDockerImageBlock.get("setValue");
         let sourceSetValue: string[] | null = null;
         if (sourceSetValueNode && yaml.isSeq(sourceSetValueNode)) {
           const parsed = stringArray(sourceSetValueNode.toJSON());
@@ -394,7 +394,7 @@ async function findPromotes(
         }
         sourceSetValue ??= globalDockerImageSetValue;
         const sourceRepository =
-          getStringValue(sourceDockerImageBlock, 'repository') ??
+          getStringValue(sourceDockerImageBlock, "repository") ??
           globalDockerImageRepository;
         if (sourceTag && sourceSetValue && sourceRepository) {
           appPromotion.source.dockerImage = {
@@ -408,7 +408,7 @@ async function findPromotes(
       appPromotions.push(appPromotion);
     }
 
-    const linksSeq = promote.get('links');
+    const linksSeq = promote.get("links");
     const linkNames: string[] = [];
     if (linksSeq) {
       if (!yaml.isSeq(linksSeq)) {
@@ -418,7 +418,7 @@ async function findPromotes(
       }
       const links = linksSeq.toJSON();
       if (!Array.isArray(links)) {
-        throw Error('YAMLSeq.toJSON surprisingly did not return an array');
+        throw Error("YAMLSeq.toJSON surprisingly did not return an array");
       }
       if (!links.every(isString)) {
         throw Error(
@@ -430,8 +430,8 @@ async function findPromotes(
 
     if (
       trimmedRepoURL &&
-      (dockerImagePromotionInfo.type !== 'no-change' ||
-        gitConfigPromotionInfo.type !== 'no-change')
+      (dockerImagePromotionInfo.type !== "no-change" ||
+        gitConfigPromotionInfo.type !== "no-change")
     ) {
       const templateVariables = new Map<string, string>();
       if (linkTemplateMap && linkNames.length) {
@@ -441,14 +441,14 @@ async function findPromotes(
           // a max length of 63; it's also something that can be calculated in a
           // Helm chart via built-in functions printf, sha256sum, and trunc.
           templateVariables.set(
-            'docker-image-sha256-63',
-            createHash('sha256')
+            "docker-image-sha256-63",
+            createHash("sha256")
               .update(`${dockerImageRepository}:${dockerImageTag}`)
-              .digest('hex')
+              .digest("hex")
               .slice(0, 63),
           );
         } else {
-          templateVariables.set('docker-image-sha256-63', 'unknown');
+          templateVariables.set("docker-image-sha256-63", "unknown");
         }
       }
       promotionsByTargetEnvironment.set(myName, {
@@ -492,9 +492,9 @@ function isCollectionPath(value: unknown): value is CollectionPath {
 }
 
 function isCollectionIndex(value: unknown): value is CollectionIndex {
-  return typeof value === 'string' || typeof value === 'number';
+  return typeof value === "string" || typeof value === "number";
 }
 
 function isString(value: unknown): value is string {
-  return typeof value === 'string';
+  return typeof value === "string";
 }

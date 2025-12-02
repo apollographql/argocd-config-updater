@@ -1,10 +1,10 @@
 import {
   ArtifactRegistryClient,
   protos,
-} from '@google-cloud/artifact-registry';
-import { LRUCache } from 'lru-cache';
-import { PromotionInfo, promotionInfoUnknown } from './promotionInfo.js';
-import { PrefixingLogger } from './log.js';
+} from "@google-cloud/artifact-registry";
+import { LRUCache } from "lru-cache";
+import { PromotionInfo, promotionInfoUnknown } from "./promotionInfo.js";
+import { PrefixingLogger } from "./log.js";
 
 export interface GetAllEquivalentTagsOptions {
   /** The name of the specific Docker image in question (ie, a Docker
@@ -56,13 +56,13 @@ export class ArtifactRegistryDockerRegistryClient {
         artifactRegistryRepository,
       );
 
-    if (typeof project !== 'string') {
+    if (typeof project !== "string") {
       throw Error(`String expected for 'project'`);
     }
-    if (typeof location !== 'string') {
+    if (typeof location !== "string") {
       throw Error(`String expected for 'location'`);
     }
-    if (typeof repository !== 'string') {
+    if (typeof repository !== "string") {
       throw Error(`String expected for 'repository'`);
     }
 
@@ -154,8 +154,8 @@ export class ArtifactRegistryDockerRegistryClient {
     dockerImageRepository,
     tag,
   }: GetAllEquivalentTagsOptions): Promise<string[]> {
-    if (tag.includes('/')) {
-      throw Error('tag cannot contain a slash');
+    if (tag.includes("/")) {
+      throw Error("tag cannot contain a slash");
     }
 
     const tagPath = this.client.pathTemplates.tagPathTemplate.render({
@@ -218,7 +218,7 @@ export class CachingDockerRegistryClient {
 
   async getDigestForTag(): Promise<string> {
     throw Error(
-      'getDigestForTag is not implemented for CachingDockerRegistryClient',
+      "getDigestForTag is not implemented for CachingDockerRegistryClient",
     );
   }
 
@@ -231,7 +231,7 @@ export class CachingDockerRegistryClient {
     );
     if (!tags) {
       throw Error(
-        'getAllEquivalentTagsCache.fetch should never resolve without a list of tags',
+        "getAllEquivalentTagsCache.fetch should never resolve without a list of tags",
       );
     }
     return tags;
@@ -257,7 +257,7 @@ export class CachingDockerRegistryClient {
     );
     if (!cached) {
       throw Error(
-        'getGitCommitsBetweenTagsCache.fetch should never resolve without a return value',
+        "getGitCommitsBetweenTagsCache.fetch should never resolve without a return value",
       );
     }
     return cached;
@@ -280,10 +280,10 @@ export interface CachingDockerRegistryClientDump {
 export function isCachingDockerRegistryClientDump(
   dump: unknown,
 ): dump is CachingDockerRegistryClientDump {
-  if (!dump || typeof dump !== 'object') {
+  if (!dump || typeof dump !== "object") {
     return false;
   }
-  if (!('promotionsBetweenTags' in dump)) {
+  if (!("promotionsBetweenTags" in dump)) {
     return false;
   }
   const { promotionsBetweenTags } = dump;
@@ -365,7 +365,7 @@ export function getRelevantCommits(
   // special-case not including this version or special-case deduped being
   // empty; we slice it off before we return it.
   const deduped: { commit: string; version: string }[] = [
-    { commit: '', version: prevTagVersion },
+    { commit: "", version: prevTagVersion },
   ];
   for (const { tag, version } of dockerTags) {
     if (!isMainTag(tag)) continue;
@@ -388,12 +388,12 @@ export function getRelevantCommits(
 
   return commitSHAs.length
     ? {
-        type: 'commits',
+        type: "commits",
         commitSHAs,
       }
-    : { type: 'no-commits' };
+    : { type: "no-commits" };
 }
 
 function isMainTag(tag: string): boolean {
-  return tag.startsWith('main---');
+  return tag.startsWith("main---");
 }

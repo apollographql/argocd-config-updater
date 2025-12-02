@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname } from "node:path";
 
 export interface CleanupChange {
   prNumber: number;
@@ -10,7 +10,7 @@ export interface CleanupChange {
 }
 
 export function formatCleanupChanges(changes: CleanupChange[]): string {
-  if (!changes.length) return '';
+  if (!changes.length) return "";
 
   // Group by environment, then by app directory
   const grouped = new Map<string, Map<string, CleanupChange[]>>();
@@ -41,7 +41,7 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
 
   for (const [environment, appGroups] of sortedEnvs) {
     lines.push(`### ${environment}`);
-    lines.push('');
+    lines.push("");
 
     const sortedApps = [...appGroups.entries()].sort(([a], [b]) =>
       a.localeCompare(b),
@@ -53,21 +53,21 @@ export function formatCleanupChanges(changes: CleanupChange[]): string {
       const sortedChanges = appChanges.sort((a, b) => a.prNumber - b.prNumber);
       for (const change of sortedChanges) {
         const closedDateStr = change.closedAt
-          ? ` (closed ${new Date(change.closedAt).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
+          ? ` (closed ${new Date(change.closedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
             })})`
-          : '';
+          : "";
 
         lines.push(
           `  - PR [#${change.prNumber}](${change.prURL}): ${change.prTitle}${closedDateStr}`,
         );
       }
-      lines.push('');
+      lines.push("");
     }
   }
 
-  const header = `## Found ${changes.length} closed PR${changes.length === 1 ? '' : 's'}\n\n`;
-  return header + lines.join('\n').trim();
+  const header = `## Found ${changes.length} closed PR${changes.length === 1 ? "" : "s"}\n\n`;
+  return header + lines.join("\n").trim();
 }

@@ -2,32 +2,32 @@
 // bodies) and argo-lookout (an internal Apollo tool which runs GitHub checks
 // against promotion PRs).
 
-import { type } from 'arktype';
+import { type } from "arktype";
 
 export const GitConfig = type({
-  repoURL: 'string',
-  path: 'string',
-  ref: 'string',
+  repoURL: "string",
+  path: "string",
+  ref: "string",
 });
 
 export type GitConfig = typeof GitConfig.infer;
 
 export const DockerImage = type({
-  tag: 'string',
-  setValue: 'string[]',
-  repository: 'string',
+  tag: "string",
+  setValue: "string[]",
+  repository: "string",
 });
 
 export type DockerImage = typeof DockerImage.infer;
 
 export const AppPromotion = type({
   source: {
-    appName: 'string',
+    appName: "string",
     gitConfig: GitConfig,
-    'dockerImage?': DockerImage,
+    "dockerImage?": DockerImage,
   },
   target: {
-    appName: 'string',
+    appName: "string",
   },
 });
 
