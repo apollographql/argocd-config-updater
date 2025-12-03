@@ -33,7 +33,7 @@
     "@actions/glob": "^0.5.0",
     "@google-cloud/artifact-registry": "^4.0.0",
     "@octokit/plugin-throttling": "^11.0.0",
-    "arktype": "2.1.27",
+    "arktype": "2.1.28",
     "async": "^3.2.5",
     "lodash": "^4.17.21",
     "lru-cache": "^11.0.0",
@@ -52,16 +52,16 @@
     "@typescript-eslint/eslint-plugin": "8.48.1",
     "@typescript-eslint/parser": "8.48.1",
     "@vitest/eslint-plugin": "1.5.1",
-    "@vitest/ui": "4.0.14",
+    "@vitest/ui": "4.0.15",
     "eslint": "9.39.1",
     "eslint-plugin-github": "6.0.0",
     "eslint-plugin-jsonc": "2.21.0",
     "eslint-plugin-prettier": "5.5.4",
-    "prettier": "3.7.3",
+    "prettier": "3.7.4",
     "prettier-eslint": "16.4.2",
     "rollup": "4.53.3",
     "ts-node": "10.9.2",
     "typescript": "5.9.3",
-    "vitest": "4.0.14"
+    "vitest": "4.0.15"
   }
 }
