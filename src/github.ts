@@ -1,5 +1,6 @@
 import { getOctokit } from "@actions/github";
 import { LRUCache } from "lru-cache";
+import { posix as posixPath } from "path";
 import {
   PromotionInfo,
   promotionInfoCommits,
@@ -68,6 +69,8 @@ export function getWebURL(repoURL: string): string {
 
 interface AllTreesForCommit {
   pathToTreeSHA: Map<string, string>;
+  // Maps symlink paths to their target paths (the content of the symlink blob).
+  pathToSymlinkTarget: Map<string, string>;
   // If true, GitHub's response to the recursive tree fetch was truncated, so on
   // cache miss we fall back to the getContent API.
   truncated: boolean;
@@ -75,6 +78,32 @@ interface AllTreesForCommit {
 
 function isSHA(s: string): boolean {
   return !!s.match(/^[0-9a-f]{40}$/);
+}
+
+// Resolves a symlink target relative to the symlink's path.
+// For example, if the symlink is at "apps/linter/chart" and points to
+// "../../shared/chart", this returns "shared/chart".
+// Throws if the target escapes the repository root or is absolute.
+export function resolveSymlinkTarget(
+  symlinkPath: string,
+  target: string,
+): string {
+  if (target.startsWith("/")) {
+    throw new Error(
+      `Symlink at ${symlinkPath} has absolute target ${target}, which is not supported`,
+    );
+  }
+  // Get the parent directory of the symlink and join with the target.
+  const parentDir = posixPath.dirname(symlinkPath);
+  const resolved = posixPath.join(parentDir, target);
+  // If the resolved path escapes the repo root, posixPath.join will return
+  // a path starting with ".."
+  if (resolved.startsWith("..")) {
+    throw new Error(
+      `Symlink at ${symlinkPath} points to ${target}, which escapes the repository root`,
+    );
+  }
+  return resolved;
 }
 
 export class OctokitGitHubClient {
@@ -120,16 +149,34 @@ export class OctokitGitHubClient {
       ).data;
       const allTreesForCommit: AllTreesForCommit = {
         pathToTreeSHA: new Map(),
+        pathToSymlinkTarget: new Map(),
         truncated,
       };
-      for (const { path, type, sha } of tree) {
-        if (
-          type === "tree" &&
-          typeof path === "string" &&
-          typeof sha === "string"
-        ) {
-          allTreesForCommit.pathToTreeSHA.set(path, sha);
+      const symlinkSHAs: { path: string; sha: string }[] = [];
+      for (const { path, type, sha, mode } of tree) {
+        if (typeof path === "string" && typeof sha === "string") {
+          if (type === "tree") {
+            allTreesForCommit.pathToTreeSHA.set(path, sha);
+          } else if (type === "blob" && mode === "120000") {
+            // Symlinks have mode 120000. In the recursive tree API they show up
+            // as type "blob" rather than "symlink", so we detect them by mode.
+            symlinkSHAs.push({ path, sha });
+          }
         }
+      }
+      // Fetch the content of each symlink blob to get its target path.
+      for (const { path, sha } of symlinkSHAs) {
+        this.logAPICall("git.getBlob", `${owner} / ${repo} ${sha}`);
+        const blobData = await this.octokit.rest.git.getBlob({
+          owner,
+          repo,
+          file_sha: sha,
+        });
+        // Symlink target is stored as base64-encoded content.
+        const target = Buffer.from(blobData.data.content, "base64").toString(
+          "utf-8",
+        );
+        allTreesForCommit.pathToSymlinkTarget.set(path, target);
       }
       // Also set the root itself in case we're tracking the root of a repo for
       // some reason.
@@ -190,6 +237,17 @@ export class OctokitGitHubClient {
     if (shaFromCache) {
       return shaFromCache;
     }
+    // Check if the path is a symlink and follow it (one level only).
+    const symlinkTarget = allTreesForCommit.pathToSymlinkTarget.get(path);
+    if (symlinkTarget) {
+      const resolvedPath = resolveSymlinkTarget(path, symlinkTarget);
+      const resolvedSHA = allTreesForCommit.pathToTreeSHA.get(resolvedPath);
+      if (resolvedSHA) {
+        return resolvedSHA;
+      }
+      // If the resolved path wasn't in the cache, fall through to the truncated
+      // check below.
+    }
     if (!allTreesForCommit.truncated) {
       // The recursive listing we got from GitHub is complete, so if it doesn't
       // have the tree in question, then the path just doesn't exist (as a tree)
@@ -232,18 +290,32 @@ export class OctokitGitHubClient {
     }
     // TS types seem confused here too; this works in practice.
     if (
-      !(
-        typeof data === "object" &&
-        data !== null &&
-        "type" in data &&
-        data.type === "dir" &&
-        "sha" in data &&
-        typeof data.sha === "string"
-      )
+      typeof data === "object" &&
+      data !== null &&
+      "type" in data &&
+      data.type === "dir" &&
+      "sha" in data &&
+      typeof data.sha === "string"
     ) {
-      throw Error("response does not appear to be a tree");
+      return data.sha;
     }
-    return data.sha;
+    // If it's a symlink, follow it (one level only).
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      "type" in data &&
+      data.type === "symlink" &&
+      "target" in data &&
+      typeof data.target === "string"
+    ) {
+      const resolvedPath = resolveSymlinkTarget(path, data.target);
+      return this.getTreeSHAForPathViaGetContent({
+        repoURL,
+        commitSHA,
+        path: resolvedPath,
+      });
+    }
+    throw Error("response does not appear to be a tree or symlink");
   }
 
   async getCommitSHAsForPath({
