@@ -15,6 +15,9 @@ function createMockGitHubClient(
     async getTreeSHAForPath() {
       return "mock-tree-sha";
     },
+    async getSymlinkTarget() {
+      return null;
+    },
     async getCommitSHAsForPath() {
       return [];
     },
