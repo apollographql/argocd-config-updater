@@ -41,6 +41,8 @@ export interface PullRequest {
 export interface GitHubClient {
   resolveRefToSHA(options: ResolveRefToSHAOptions): Promise<string>;
   getTreeSHAForPath(options: GetTreeSHAForPathOptions): Promise<string | null>;
+  // Returns the symlink target if the path is a symlink, or null if it's not.
+  getSymlinkTarget(options: GetTreeSHAForPathOptions): Promise<string | null>;
   getCommitSHAsForPath(options: GetCommitSHAsForPathOptions): Promise<string[]>;
   getPullRequest(options: GetPullRequestForNumberOptions): Promise<PullRequest>;
 }
@@ -259,6 +261,21 @@ export class OctokitGitHubClient {
     return this.getTreeSHAForPathViaGetContent({ repoURL, commitSHA, path });
   }
 
+  async getSymlinkTarget({
+    repoURL,
+    commitSHA,
+    path,
+  }: GetTreeSHAForPathOptions): Promise<string | null> {
+    const allTreesForCommit = await this.allTreesForCommitCache.fetch(
+      JSON.stringify({ repoURL, commitSHA }),
+      { context: { repoURL, commitSHA } },
+    );
+    if (!allTreesForCommit) {
+      throw Error(`Unexpected missing entry in allTreesForCommitCache`);
+    }
+    return allTreesForCommit.pathToSymlinkTarget.get(path) ?? null;
+  }
+
   // Fall back to asking the GitHub API for the tree hash directly if our cache
   // was truncated.
   private async getTreeSHAForPathViaGetContent({
@@ -466,6 +483,14 @@ export class CachingGitHubClient {
     return shas;
   }
 
+  async getSymlinkTarget(
+    options: GetTreeSHAForPathOptions,
+  ): Promise<string | null> {
+    // No caching for symlink targets - they're already cached in the wrapped
+    // client's allTreesForCommitCache.
+    return this.wrapped.getSymlinkTarget(options);
+  }
+
   dump(): CachingGitHubClientDump {
     // We don't dump resolveRefToSHACache because it is not immutable (it tracks
     // the current commits on main, etc).
@@ -540,6 +565,32 @@ export async function getGitConfigRefPromotionInfo(options: {
   logger: PrefixingLogger;
 }): Promise<PromotionInfo> {
   const { oldRef, newRef, repoURL, path, gitHubClient, logger } = options;
+
+  // Check if the path is a symlink at the new ref. If so, we can't reliably
+  // determine which commits affected it, so return a message encouraging the
+  // user to convert the symlink to a real directory.
+  let newRefCommitSHA;
+  try {
+    newRefCommitSHA = await gitHubClient.resolveRefToSHA({
+      repoURL,
+      ref: newRef,
+    });
+  } catch (e) {
+    logger.error(`Error resolving ref ${newRef} in ${repoURL}: ${e}`);
+    return promotionInfoUnknown(`Error resolving ref ${newRef}`);
+  }
+  const symlinkTarget = await gitHubClient.getSymlinkTarget({
+    repoURL,
+    commitSHA: newRefCommitSHA,
+    path,
+  });
+  if (symlinkTarget) {
+    const resolvedPath = resolveSymlinkTarget(path, symlinkTarget);
+    return promotionInfoUnknown(
+      `Path \`${path}\` is a symlink to \`${resolvedPath}\`. ` +
+        `Symlinks are useful during migrations but should be converted to regular directories.`,
+    );
+  }
 
   // Figure out what commits affect the path in the new version.
   let newCommitSHAs;

@@ -48,6 +48,9 @@ describe("CachingGitHubClient caches", () => {
       async getTreeSHAForPath() {
         return "";
       },
+      async getSymlinkTarget() {
+        return null;
+      },
       async getCommitSHAsForPath() {
         return [];
       },
@@ -84,6 +87,9 @@ describe("CachingGitHubClient caches", () => {
       },
       async getTreeSHAForPath() {
         return (++call).toString();
+      },
+      async getSymlinkTarget() {
+        return null;
       },
       async getCommitSHAsForPath() {
         return [];
