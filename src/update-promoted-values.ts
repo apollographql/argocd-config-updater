@@ -390,6 +390,7 @@ async function findPromotes(
               (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
             )
           : []
+        )
       };
 
       // Extract source dockerImage values from fromBlock (optional, but all fields required if present)
