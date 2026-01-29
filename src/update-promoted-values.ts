@@ -377,6 +377,19 @@ async function findPromotes(
         target: {
           appName: `${applicationBaseName}-${myName}`,
         },
+        includedImageSHAs: (
+          dockerImagePromotionInfo.type === "commits"
+          ? dockerImagePromotionInfo.commitSHAs.map(
+            (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+          )
+          : []
+        ),
+        includedConfigSHAs: (
+          gitConfigPromotionInfo.type === "commits"
+          ? gitConfigPromotionInfo.commitSHAs.map(
+              (commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`,
+            )
+          : []
       };
 
       // Extract source dockerImage values from fromBlock (optional, but all fields required if present)

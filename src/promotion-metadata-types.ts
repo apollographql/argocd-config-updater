@@ -29,6 +29,8 @@ export const AppPromotion = type({
   target: {
     appName: "string",
   },
+  includedImageSHAs: "string[]",
+  includedConfigSHAs: "string[]"
 });
 
 export type AppPromotion = typeof AppPromotion.infer;
