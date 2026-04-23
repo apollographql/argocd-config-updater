@@ -36,6 +36,11 @@ import {
 import { cleanupClosedPrTracking } from "./update-closed-prs.js";
 import { AnnotatedError } from "./annotatedError.js";
 import { PRMetadata, AppPromotion } from "./promotion-metadata-types.js";
+import {
+  rollback,
+  ChildProcessGitHistoryReader,
+  AppRollback,
+} from "./rollback.js";
 
 /**
  * The main function for the action.
@@ -233,22 +238,37 @@ async function main(): Promise<void> {
       PromotionsByTargetEnvironment
     >();
     const allCleanupChanges: CleanupChange[] = [];
+    const allRollbacks: AppRollback[] = [];
+    const doRollback = core.getBooleanInput("rollback");
+    const rollbackTargetEnv = core.getInput("rollback-target-env") || "prod";
+    const rollbackGitSha = core.getInput("rollback-git-sha") || "";
+    const gitHistoryReader = doRollback
+      ? new ChildProcessGitHistoryReader()
+      : null;
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotionsByTargetEnvironment, cleanupChanges, appPromotions } =
-          await processFile({
-            filename,
-            gitHubClient,
-            dockerRegistryClient,
-            graphArtifactRegistryClient,
-            generatePromotedCommitsMarkdown,
-            doUpdateDockerTags,
-            doUpdateGraphArtifactRefs,
-            doUpdateGitRefs,
-            doCleanupClosedPrTracking,
-            linkTemplateMap,
-            frozenEnvironments,
-          });
+        const {
+          promotionsByTargetEnvironment,
+          cleanupChanges,
+          appPromotions,
+          appRollbacks,
+        } = await processFile({
+          filename,
+          gitHubClient,
+          dockerRegistryClient,
+          graphArtifactRegistryClient,
+          generatePromotedCommitsMarkdown,
+          doUpdateDockerTags,
+          doUpdateGraphArtifactRefs,
+          doUpdateGitRefs,
+          doCleanupClosedPrTracking,
+          linkTemplateMap,
+          frozenEnvironments,
+          doRollback,
+          rollbackTargetEnv,
+          rollbackGitSha,
+          gitHistoryReader,
+        });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
             shortFilename(filename),
@@ -257,6 +277,7 @@ async function main(): Promise<void> {
         }
         prMetadata.appPromotions.push(...appPromotions);
         allCleanupChanges.push(...cleanupChanges);
+        allRollbacks.push(...appRollbacks);
       } catch (error) {
         if (error instanceof AnnotatedError) {
           errors.push({
@@ -302,6 +323,13 @@ async function main(): Promise<void> {
         formatCleanupChanges(allCleanupChanges),
       );
     }
+
+    if (doRollback && allRollbacks.length > 0) {
+      core.setOutput(
+        "rollback-summary-markdown",
+        formatRollbacks(allRollbacks),
+      );
+    }
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -326,10 +354,15 @@ async function processFile(options: {
   doCleanupClosedPrTracking: boolean;
   linkTemplateMap: LinkTemplateMap | null;
   frozenEnvironments: Set<string>;
+  doRollback: boolean;
+  rollbackTargetEnv: string;
+  rollbackGitSha: string;
+  gitHistoryReader: ChildProcessGitHistoryReader | null;
 }): Promise<{
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
   cleanupChanges: CleanupChange[];
   appPromotions: AppPromotion[];
+  appRollbacks: AppRollback[];
 }> {
   const {
     filename,
@@ -343,15 +376,21 @@ async function processFile(options: {
     doCleanupClosedPrTracking,
     linkTemplateMap,
     frozenEnvironments,
+    doRollback,
+    rollbackTargetEnv,
+    rollbackGitSha,
+    gitHistoryReader,
   } = options;
   const ret: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
     cleanupChanges: CleanupChange[];
     appPromotions: AppPromotion[];
+    appRollbacks: AppRollback[];
   } = {
     promotionsByTargetEnvironment: null,
     cleanupChanges: [],
     appPromotions: [],
+    appRollbacks: [],
   };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
@@ -396,6 +435,20 @@ async function processFile(options: {
       frozenEnvironments,
       logger,
     );
+  }
+
+  if (doRollback && gitHistoryReader) {
+    const { newContents, rollbacks } = await rollback({
+      contents,
+      filename: shortFilename(filename),
+      targetEnv: rollbackTargetEnv,
+      gitSha: rollbackGitSha,
+      frozenEnvironments,
+      gitHistoryReader,
+      _logger: logger,
+    });
+    contents = newContents;
+    ret.appRollbacks = rollbacks;
   }
 
   if (core.getBooleanInput("update-promoted-values")) {
@@ -480,6 +533,16 @@ async function maybeReadAPICache(
     gitHub: parsed.gitHub,
     dockerRegistry: parsed.dockerRegistry,
   };
+}
+
+function formatRollbacks(rollbacks: AppRollback[]): string {
+  const lines: string[] = ["## Rolled back"];
+  for (const r of rollbacks) {
+    lines.push(
+      `- **${r.appName}**: \`${r.previousRef.slice(0, 12)}\` → \`${r.newRef.slice(0, 12)}\` (resolved from commit \`${r.resolvedFromCommit.slice(0, 12)}\`)`,
+    );
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 async function readFrozenEnvironmentsFile(

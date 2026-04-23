@@ -60,6 +60,17 @@ inputs:
     description: 'Clean up track: pr-N patterns where PR N is closed'
     default: 'false'
 
+  rollback:
+    description: 'Roll back a promoted environment to a previous `gitConfig.ref` (and matching `dockerImage.tag`). Only applies to environments with a `promote.from` block. Reads prior values from the git history of the file.'
+    default: 'false'
+
+  rollback-target-env:
+    description: 'Which top-level environment block to roll back (e.g. `prod`, `staging`). Must be the name of an env that has a `promote.from` block.'
+    default: 'prod'
+
+  rollback-git-sha:
+    description: 'apollo-argo commit SHA to roll back to (the value of `gitConfig.ref`). NOT the Docker image content digest. If blank, rolls back to the most recent commit where the target env''s `gitConfig.ref` differed from its current value. If set, the SHA must have appeared as that env''s `gitConfig.ref` in the file''s history.'
+
 outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
@@ -69,6 +80,9 @@ outputs:
 
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
+
+  rollback-summary-markdown:
+    description: 'Markdown describing rollbacks that were applied, if `rollback` is set.'
 
 runs:
   using: node24
