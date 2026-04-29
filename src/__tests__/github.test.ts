@@ -68,7 +68,7 @@ describe("getGitConfigRefPromotionInfo", () => {
       async getSymlinkTarget() {
         return "../shared/chart";
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
@@ -106,8 +106,8 @@ describe("getGitConfigRefPromotionInfo", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
-        return ["commit1"];
+      async getCommitsForPath() {
+        return [{ sha: "commit1", authorLogin: "alice" }];
       },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
@@ -125,5 +125,49 @@ describe("getGitConfigRefPromotionInfo", () => {
 
     // Should not return unknown/symlink message - normal processing occurred
     expect(result.type).toBe("no-commits");
+  });
+
+  it("filters bot accounts and null authors out of authorLogins", async () => {
+    const mockGitHubClient: GitHubClient = {
+      async resolveRefToSHA() {
+        return "abc123";
+      },
+      async getTreeSHAForPath() {
+        return "tree-sha";
+      },
+      async getSymlinkTarget() {
+        return null;
+      },
+      async getCommitsForPath({ ref }) {
+        if (ref === "old-ref") {
+          return [{ sha: "old", authorLogin: "alice" }];
+        }
+        return [
+          { sha: "old", authorLogin: "alice" },
+          { sha: "new1", authorLogin: "dependabot[bot]" },
+          { sha: "new2", authorLogin: "bob" },
+          { sha: "new3", authorLogin: null },
+          { sha: "new4", authorLogin: "alice" },
+        ];
+      },
+      async getPullRequest() {
+        return { state: "open", title: "Test PR", closedAt: null };
+      },
+    };
+
+    const result = await getGitConfigRefPromotionInfo({
+      oldRef: "old-ref",
+      newRef: "new-ref",
+      repoURL: "https://github.com/example/repo.git",
+      path: "apps/linter/chart",
+      gitHubClient: mockGitHubClient,
+      logger,
+    });
+
+    expect(result.type).toBe("commits");
+    if (result.type === "commits") {
+      expect(result.commitSHAs).toEqual(["new1", "new2", "new3", "new4"]);
+      expect(result.authorLogins).toEqual(["bob", "alice"]);
+    }
   });
 });

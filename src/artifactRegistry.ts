@@ -390,6 +390,7 @@ export function getRelevantCommits(
     ? {
         type: "commits",
         commitSHAs,
+        authorLogins: [],
       }
     : { type: "no-commits" };
 }

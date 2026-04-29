@@ -14,6 +14,23 @@ exports[`formatPromotedCommits > handles multiple app promotions 1`] = `
 "
 `;
 
+exports[`formatPromotedCommits > includes participants section from promotion commit authors 1`] = `
+"### Promoting to prod
+Apps:
+- teams/myteam/myapp
+
+Changes to Helm chart:
+- https://github.com/example/repo/commit/abc123
+- https://github.com/example/repo/commit/def456
+
+
+---
+**Participants:** @alice, @bob
+
+<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbXX0= -->
+"
+`;
+
 exports[`formatPromotedCommits > includes prMetadata in output as HTML comment 1`] = `
 "
 

@@ -18,7 +18,7 @@ const mockGitHubClient: GitHubClient = {
   async getSymlinkTarget() {
     return null;
   },
-  async getCommitSHAsForPath() {
+  async getCommitsForPath() {
     return [];
   },
   async getPullRequest() {
@@ -91,7 +91,7 @@ describe("action", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
@@ -137,7 +137,7 @@ describe("action", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
@@ -168,7 +168,7 @@ describe("action", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
@@ -202,7 +202,7 @@ describe("action", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
