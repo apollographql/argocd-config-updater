@@ -51,7 +51,7 @@ describe("CachingGitHubClient caches", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {
@@ -91,7 +91,7 @@ describe("CachingGitHubClient caches", () => {
       async getSymlinkTarget() {
         return null;
       },
-      async getCommitSHAsForPath() {
+      async getCommitsForPath() {
         return [];
       },
       async getPullRequest() {

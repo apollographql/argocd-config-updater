@@ -77,6 +77,7 @@ export function formatPromotedCommits(
   }
   const organizedPromotionsByTargetEnvironment =
     reorganizePromotionInfoForMessage(promotionsByFileThenEnvironment);
+  const allAuthorLogins = new Set<string>();
   const body = [...organizedPromotionsByTargetEnvironment.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([targetEnvironment, organizedPromotionsByPromotionSetJSON]) => {
@@ -95,6 +96,10 @@ export function formatPromotedCommits(
             dockerImagePromotionInfo,
             links,
           } = promotionSet;
+          if (gitConfigPromotionInfo.type === "commits") {
+            for (const login of gitConfigPromotionInfo.authorLogins)
+              allAuthorLogins.add(login);
+          }
           const text = [
             `Apps:\n${apps
               .sort((a, b) => a.appDirectory.localeCompare(b.appDirectory))
@@ -175,6 +180,15 @@ export function formatPromotedCommits(
       return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
     .join("");
+
+  let participantsSection = "";
+  if (allAuthorLogins.size > 0) {
+    const mentions = [...allAuthorLogins]
+      .sort()
+      .map((login) => `@${login}`)
+      .join(", ");
+    participantsSection = `\n---\n**Participants:** ${mentions}\n`;
+  }
   const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
-  return `${body}\n\n${footer}\n`;
+  return `${body}\n${participantsSection}\n${footer}\n`;
 }

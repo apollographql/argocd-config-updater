@@ -1,14 +1,33 @@
 import { Link } from "./templates.js";
 
+export interface CommitWithAuthor {
+  sha: string;
+  authorLogin: string | null;
+}
+
 export interface PromotionInfoCommits {
   type: "commits";
   commitSHAs: string[]; // non-empty
+  authorLogins: string[];
 }
 
 export function promotionInfoCommits(
-  commitSHAs: string[],
+  commits: CommitWithAuthor[],
 ): PromotionInfoCommits {
-  return { type: "commits", commitSHAs };
+  return {
+    type: "commits",
+    commitSHAs: commits.map((c) => c.sha),
+    authorLogins: [
+      ...new Set(
+        commits
+          .map((c) => c.authorLogin)
+          .filter(
+            (login): login is string =>
+              login !== null && !login.endsWith("[bot]"),
+          ),
+      ),
+    ],
+  };
 }
 
 /** Used when the value is being changed but there are no commits between the two

@@ -2,6 +2,7 @@ import { getOctokit } from "@actions/github";
 import { LRUCache } from "lru-cache";
 import { posix as posixPath } from "path";
 import {
+  CommitWithAuthor,
   PromotionInfo,
   promotionInfoCommits,
   promotionInfoUnknown,
@@ -19,7 +20,7 @@ export interface GetTreeSHAForPathOptions {
   path: string;
 }
 
-export interface GetCommitSHAsForPathOptions {
+export interface GetCommitsForPathOptions {
   repoURL: string;
   ref: string;
   path: string;
@@ -43,7 +44,9 @@ export interface GitHubClient {
   getTreeSHAForPath(options: GetTreeSHAForPathOptions): Promise<string | null>;
   // Returns the symlink target if the path is a symlink, or null if it's not.
   getSymlinkTarget(options: GetTreeSHAForPathOptions): Promise<string | null>;
-  getCommitSHAsForPath(options: GetCommitSHAsForPathOptions): Promise<string[]>;
+  getCommitsForPath(
+    options: GetCommitsForPathOptions,
+  ): Promise<CommitWithAuthor[]>;
   getPullRequest(options: GetPullRequestForNumberOptions): Promise<PullRequest>;
 }
 
@@ -335,11 +338,11 @@ export class OctokitGitHubClient {
     throw Error("response does not appear to be a tree or symlink");
   }
 
-  async getCommitSHAsForPath({
+  async getCommitsForPath({
     repoURL,
     ref,
     path,
-  }: GetCommitSHAsForPathOptions): Promise<string[]> {
+  }: GetCommitsForPathOptions): Promise<CommitWithAuthor[]> {
     const { owner, repo } = parseRepoURL(repoURL);
     this.logAPICall("repos.listCommits", `${owner}/${repo}@${ref} ${path}`);
     return (
@@ -351,7 +354,10 @@ export class OctokitGitHubClient {
         per_page: 100, // max allowed
       })
     ).data
-      .map(({ sha }) => sha)
+      .map(({ sha, author }) => ({
+        sha,
+        authorLogin: author?.login ?? null,
+      }))
       .reverse(); // Chronological order
   }
 
@@ -381,9 +387,9 @@ export class CachingGitHubClient {
   ) {
     if (dump) {
       this.getTreeSHAForPathCache.load(dump.treeSHAs);
-      // Support old cache files that don't have commitSHAs.
-      if (dump.commitSHAs) {
-        this.getCommitSHAsForPathCache.load(dump.commitSHAs);
+      // Old caches (either pre-feature or with the previous `commitSHAs` shape) are silently dropped.
+      if (dump.commits) {
+        this.getCommitsForPathCache.load(dump.commits);
       }
     }
   }
@@ -411,14 +417,14 @@ export class CachingGitHubClient {
     },
   });
 
-  private getCommitSHAsForPathCache = new LRUCache<
+  private getCommitsForPathCache = new LRUCache<
     string,
-    string[],
-    GetCommitSHAsForPathOptions
+    CommitWithAuthor[],
+    GetCommitsForPathOptions
   >({
     max: 1024,
     fetchMethod: async (_key, _staleValue, { context }) => {
-      return await this.wrapped.getCommitSHAsForPath(context);
+      return await this.wrapped.getCommitsForPath(context);
     },
   });
 
@@ -465,22 +471,22 @@ export class CachingGitHubClient {
     return cached.boxed;
   }
 
-  async getCommitSHAsForPath(
-    options: GetCommitSHAsForPathOptions,
-  ): Promise<string[]> {
-    const shas = await this.getCommitSHAsForPathCache.fetch(
+  async getCommitsForPath(
+    options: GetCommitsForPathOptions,
+  ): Promise<CommitWithAuthor[]> {
+    const commits = await this.getCommitsForPathCache.fetch(
       // Make it trivial to tell if a cache key corresponds to a SHA.
       (isSHA(options.ref) ? "SHA!" : "") + JSON.stringify(options),
       {
         context: options,
       },
     );
-    if (!shas) {
+    if (!commits) {
       throw Error(
-        "getCommitSHAsForPathCache.fetch should never resolve without a real SHA list",
+        "getCommitsForPathCache.fetch should never resolve without a result",
       );
     }
-    return shas;
+    return commits;
   }
 
   async getSymlinkTarget(
@@ -496,11 +502,11 @@ export class CachingGitHubClient {
     // the current commits on main, etc).
     return {
       treeSHAs: this.getTreeSHAForPathCache.dump(),
-      // While it's fine for us to cache the result of getCommitSHAsForPath
+      // While it's fine for us to cache the result of getCommitsForPath
       // in-memory for mutable refs to reduce duplicate API calls within a
       // single execution, we only want to save the cache across executions for
       // the immutable case where the ref is a SHA.
-      commitSHAs: this.getCommitSHAsForPathCache
+      commits: this.getCommitsForPathCache
         .dump()
         .filter(([key]) => key.startsWith("SHA!")),
     };
@@ -528,7 +534,7 @@ export interface CachingGitHubClientDump {
       boxed: string | null;
     }>,
   ][];
-  commitSHAs?: [string, LRUCache.Entry<string[]>][];
+  commits?: [string, LRUCache.Entry<CommitWithAuthor[]>][];
 }
 
 export function isCachingGitHubClientDump(
@@ -545,9 +551,9 @@ export function isCachingGitHubClientDump(
     return false;
   }
 
-  if ("commitSHAs" in dump) {
-    const { commitSHAs } = dump;
-    if (!Array.isArray(commitSHAs)) {
+  if ("commits" in dump) {
+    const { commits } = dump;
+    if (!Array.isArray(commits)) {
       return false;
     }
   }
@@ -593,18 +599,18 @@ export async function getGitConfigRefPromotionInfo(options: {
   }
 
   // Figure out what commits affect the path in the new version.
-  let newCommitSHAs;
+  let newCommits;
   try {
-    newCommitSHAs = await gitHubClient.getCommitSHAsForPath({
+    newCommits = await gitHubClient.getCommitsForPath({
       repoURL,
       path,
       ref: newRef,
     });
   } catch (e) {
     logger.error(
-      `Error loading commit SHAs for path ${repoURL}@${newRef} ${path}: ${e}`,
+      `Error loading commits for path ${repoURL}@${newRef} ${path}: ${e}`,
     );
-    return promotionInfoUnknown(`Error loading commit SHAs for ${newRef}`);
+    return promotionInfoUnknown(`Error loading commits for ${newRef}`);
   }
 
   // Figure out what commits affect the path previously. We're only going to
@@ -612,33 +618,34 @@ export async function getGitConfigRefPromotionInfo(options: {
   // last call. We don't just want to look for `ref` itself in the list for two
   // reasons: first, ref might not be a SHA, but more importantly, ref might not
   // itself be a commit corresponding to a change in `path`.
-  let oldCommitSHAs;
+  let oldCommits;
   try {
-    oldCommitSHAs = await gitHubClient.getCommitSHAsForPath({
+    oldCommits = await gitHubClient.getCommitsForPath({
       repoURL,
       path,
       ref: oldRef,
     });
   } catch (e) {
     logger.error(
-      `Error loading commit SHAs for path ${repoURL}@${oldRef} ${path}: ${e}`,
+      `Error loading commits for path ${repoURL}@${oldRef} ${path}: ${e}`,
     );
-    return promotionInfoUnknown(`Error loading commit SHAs for ${oldRef}`);
+    return promotionInfoUnknown(`Error loading commits for ${oldRef}`);
   }
 
-  if (oldCommitSHAs.length === 0) {
+  if (oldCommits.length === 0) {
     return promotionInfoUnknown(`No commits found under ${path} at ${oldRef}.`);
   }
-  const oldCommitSHAAtPath = oldCommitSHAs[oldCommitSHAs.length - 1];
-  const oldIndexInNew = newCommitSHAs.indexOf(oldCommitSHAAtPath);
+  const oldCommitSHAAtPath = oldCommits[oldCommits.length - 1].sha;
+  const oldIndexInNew = newCommits.findIndex(
+    (c) => c.sha === oldCommitSHAAtPath,
+  );
   if (oldIndexInNew === -1) {
     return promotionInfoUnknown(
       `Old commit ${oldCommitSHAAtPath} not found in recent history of ${newRef} at ${path}.`,
     );
   }
-  if (oldIndexInNew + 1 === newCommitSHAs.length) {
+  if (oldIndexInNew + 1 === newCommits.length) {
     return { type: "no-commits" };
   }
-  // Return the commits later than the old ones.
-  return promotionInfoCommits(newCommitSHAs.slice(oldIndexInNew + 1));
+  return promotionInfoCommits(newCommits.slice(oldIndexInNew + 1));
 }

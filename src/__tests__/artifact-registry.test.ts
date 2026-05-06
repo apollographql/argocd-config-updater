@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { faker } from "@faker-js/faker";
 import { DockerTag, getRelevantCommits } from "../artifactRegistry.js";
-import { promotionInfoCommits } from "../promotionInfo.js";
 
 /**
  * Example tags from our registry:
@@ -91,7 +90,11 @@ describe("ArtifactRegistry.getRelevantCommits", () => {
         "main---0000010-2024.04-gabcd",
         tags,
       ),
-    ).toStrictEqual(promotionInfoCommits(["def1"]));
+    ).toStrictEqual({
+      type: "commits",
+      commitSHAs: ["def1"],
+      authorLogins: [],
+    });
   });
 
   it("should filter commits after next (exclusive)", async () => {
@@ -122,9 +125,11 @@ describe("ArtifactRegistry.getRelevantCommits", () => {
         version: "d",
       },
     ];
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual(
-      promotionInfoCommits([nextCommitSHA]),
-    );
+    expect(getRelevantCommits(prev, next, tags)).toStrictEqual({
+      type: "commits",
+      commitSHAs: [nextCommitSHA],
+      authorLogins: [],
+    });
   });
 
   it("should include commits between prev and next (in sorted order) -- next is inclusive", async () => {
@@ -152,9 +157,11 @@ describe("ArtifactRegistry.getRelevantCommits", () => {
       },
     ];
 
-    expect(getRelevantCommits(prev, next, tags)).toStrictEqual(
-      promotionInfoCommits(getAllHashes([tags[3], tags[2], nextDockerTag])),
-    );
+    expect(getRelevantCommits(prev, next, tags)).toStrictEqual({
+      type: "commits",
+      commitSHAs: getAllHashes([tags[3], tags[2], nextDockerTag]),
+      authorLogins: [],
+    });
   });
 
   it("should return an empty list if left bound is not for `main---`", async () => {
@@ -275,9 +282,11 @@ describe("ArtifactRegistry.getRelevantCommits", () => {
     // We expect consecutive duplicate commit hashes to be deduped
     // However if it returns later, this could imply a revert or rollback.
     // At the moment, we just keep that in, but later we should explicitly flag as a rollback.
-    const expected = promotionInfoCommits(
-      getAllHashes([tags[2], tags[4], tags[5], tags[7], tags[1]]),
-    );
+    const expected = {
+      type: "commits",
+      commitSHAs: getAllHashes([tags[2], tags[4], tags[5], tags[7], tags[1]]),
+      authorLogins: [],
+    };
     expect(getRelevantCommits(prev, next, tags)).toStrictEqual(expected);
   });
 });
