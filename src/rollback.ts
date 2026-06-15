@@ -249,16 +249,11 @@ async function resolveRollbackTarget(options: {
       readEnvRefAndTag(historical, envName) ?? {};
     if (!historicalRef) continue;
 
-    if (gitSha) {
-      // Explicit-SHA mode: find the commit where this env held exactly that SHA.
-      if (historicalRef === gitSha) {
-        return { ref: historicalRef, tag: historicalTag ?? null, commit };
-      }
-    } else {
-      // Blank-SHA mode: first commit where this env differs from the current ref.
-      if (historicalRef !== currentRef) {
-        return { ref: historicalRef, tag: historicalTag ?? null, commit };
-      }
+    // Explicit-SHA mode: find the commit where this env held exactly that SHA.
+    // Blank-SHA mode: first commit where this env's ref differs from current.
+    const isTarget = gitSha ? historicalRef === gitSha : historicalRef !== currentRef;
+    if (isTarget) {
+      return { ref: historicalRef, tag: historicalTag ?? null, commit };
     }
   }
 
