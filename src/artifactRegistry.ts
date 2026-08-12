@@ -26,6 +26,47 @@ export interface GetDigestForTagOptions {
   tagName: string;
 }
 
+/**
+ * The generated client config maps every read method we use -- ListTags,
+ * GetTag, GetDockerImage -- to the "non_idempotent" retry group, and that
+ * group is an EMPTY list of codes, so by default they retry nothing, not even
+ * UNAVAILABLE:
+ *
+ *   "ListTags": { "retry_codes_name": "non_idempotent", ... }
+ *   "retry_codes": { "non_idempotent": [], "idempotent": [DEADLINE_EXCEEDED, UNAVAILABLE] }
+ *
+ * Because listTags auto-paginates, one transient 503 on any single page
+ * rejects the entire listing. Packages with many tags list over hundreds of
+ * sequential requests, so this fails intermittently in practice.
+ *
+ * These are the numeric gRPC status codes; spelled out rather than imported so
+ * google-gax doesn't become a direct dependency.
+ */
+const AR_RETRY_OPTIONS = {
+  retryCodes: [
+    14, // UNAVAILABLE
+    4, // DEADLINE_EXCEEDED
+    13, // INTERNAL
+    8, // RESOURCE_EXHAUSTED
+  ],
+  backoffSettings: {
+    initialRetryDelayMillis: 200,
+    retryDelayMultiplier: 1.5,
+    maxRetryDelayMillis: 20_000,
+    initialRpcTimeoutMillis: 60_000,
+    rpcTimeoutMultiplier: 1,
+    maxRpcTimeoutMillis: 60_000,
+    totalTimeoutMillis: 600_000,
+  },
+};
+
+/**
+ * The API defaults to 30 tags per page and caps a request at 1000. Asking for
+ * the cap cuts a 13k-tag listing from ~435 requests down to 14: far fewer
+ * chances to hit a transient failure, and far faster (measured: ~70s -> ~5s).
+ */
+const MAX_PAGE_SIZE = 1000;
+
 export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getGitCommitsBetweenTags(
@@ -83,7 +124,10 @@ export class ArtifactRegistryDockerRegistryClient {
     });
 
     // Fetch the tag object
-    const [tag] = await this.client.getTag({ name: tagPath });
+    const [tag] = await this.client.getTag(
+      { name: tagPath },
+      { retry: AR_RETRY_OPTIONS },
+    );
 
     if (!tag || !tag.version) {
       throw new Error(
@@ -129,12 +173,18 @@ export class ArtifactRegistryDockerRegistryClient {
     //   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
     // }
     const dockerTags = (
-      await this.client.listTags({
-        parent: this.client.pathTemplates.packagePathTemplate.render({
-          ...this.repositoryFields,
-          package: encodeURIComponent(dockerImageRepository),
-        }),
-      })
+      await this.client.listTags(
+        {
+          parent: this.client.pathTemplates.packagePathTemplate.render({
+            ...this.repositoryFields,
+            package: encodeURIComponent(dockerImageRepository),
+          }),
+          // Still returns every tag; this only sets how many come back per
+          // request. See MAX_PAGE_SIZE.
+          pageSize: MAX_PAGE_SIZE,
+        },
+        { retry: AR_RETRY_OPTIONS },
+      )
     )[0].map((iTag) => {
       const tag = new protos.google.devtools.artifactregistry.v1.Tag(iTag);
       return {
@@ -166,7 +216,9 @@ export class ArtifactRegistryDockerRegistryClient {
 
     this.logger.info(`[AR API] Fetching tag ${tagPath}`);
     // Note: this throws if the repository or tag are not found.
-    const { version } = (await this.client.getTag({ name: tagPath }))[0];
+    const { version } = (
+      await this.client.getTag({ name: tagPath }, { retry: AR_RETRY_OPTIONS })
+    )[0];
     if (!version) {
       throw Error(`No version found for ${tagPath}`);
     }
@@ -187,7 +239,10 @@ export class ArtifactRegistryDockerRegistryClient {
 
     this.logger.info(`[AR API] Fetching Docker image ${dockerImagePath}`);
     const { tags } = (
-      await this.client.getDockerImage({ name: dockerImagePath })
+      await this.client.getDockerImage(
+        { name: dockerImagePath },
+        { retry: AR_RETRY_OPTIONS },
+      )
     )[0];
     if (!tags) {
       throw Error(`No tags returned for ${dockerImagePath}`);
