@@ -367,7 +367,7 @@ export class OctokitGitHubClient {
       pull_number: prNumber,
     });
     return {
-      state: response.data.state as PullRequestState,
+      state: response.data.state,
       title: response.data.title,
       closedAt: response.data.closed_at,
     };
