@@ -42,10 +42,12 @@
     },
     // TEMPORARY: we've fallen far behind on major upgrades, and it'll be easier to
     // catch up all at once than to work through a pile of separate major-upgrade PRs.
-    // This rule has no matchers, so it applies to (and overrides the grouping of) every
-    // dependency, bundling all available upgrades of any update type into one PR.
+    // matchPackageNames: ['*'] is Renovate's documented "match everything" special case,
+    // so this rule applies to (and overrides the grouping of) every dependency, bundling
+    // all available upgrades of any update type into one PR.
     // Remove this rule once that PR is merged, to go back to separate major-upgrade PRs.
     {
+      matchPackageNames: ['*'],
       groupName: 'TEMPORARY - combine all available upgrades',
       groupSlug: 'temporary-combine-all',
     },
