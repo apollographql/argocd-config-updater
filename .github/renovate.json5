@@ -33,8 +33,7 @@
     // this writing), so we use v6 until further notice.
     {
       matchPackageNames: ['typescript'],
-      matchUpdateTypes: ['major'],
-      enabled: false,
+      allowedVersions: '<7',
     },
     // Upgrade all the major eslint things in a single PR.
     {
