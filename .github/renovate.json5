@@ -69,5 +69,13 @@
     groupName: 'TEMPORARY - combine all available upgrades',
     groupSlug: 'temporary-combine-all',
     separateMajorMinor: false,
+    // Renovate's default here is "lowest" -- the minimum version that fixes the
+    // vulnerability, rather than the actual latest release. That's the opposite of what
+    // we want while combining every available upgrade into one PR: it silently left
+    // rollup and yaml behind their true latest versions, and for vitest it caused an
+    // actual conflict (vitest got stuck on the lowest fixed version, 4.1.0, while its
+    // sibling @vitest/ui updated normally to the true latest, 4.1.10, and vitest@4.1.0
+    // peer-requires @vitest/ui@4.1.0 exactly).
+    vulnerabilityFixStrategy: 'highest',
   },
 }
