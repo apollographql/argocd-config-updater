@@ -82,6 +82,30 @@ function isSHA(s: string): boolean {
   return !!s.match(/^[0-9a-f]{40}$/);
 }
 
+/**
+ * Wraps a call to the GitHub (octokit) client so that any failure makes clear
+ * it came from the GitHub API. Without this, errors like a 404 or a 502
+ * surface as a bare `HttpError: Not Found`, which gives no hint that it came
+ * from GitHub (as opposed to, say, Artifact Registry) or which request
+ * failed.
+ */
+export async function callGitHub<T>(
+  description: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (originalError) {
+    const message =
+      originalError instanceof Error
+        ? originalError.message
+        : String(originalError);
+    throw new Error(`GitHub API error while ${description}: ${message}`, {
+      cause: originalError,
+    });
+  }
+}
+
 // Resolves a symlink target relative to the symlink's path.
 // For example, if the symlink is at "apps/linter/chart" and points to
 // "../../shared/chart", this returns "shared/chart".
@@ -115,9 +139,16 @@ export class OctokitGitHubClient {
     private logger: PrefixingLogger,
   ) {}
 
-  private logAPICall(name: string, description: string): void {
+  // Logs the call, then makes it, wrapping any failure so it's clear it came
+  // from the GitHub API and which call failed.
+  private async callAPI<T>(
+    name: string,
+    description: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     this.logger.info(`[GH API] ${name} ${description}`);
     this.apiCalls.set(name, (this.apiCalls.get(name) ?? 0) + 1);
+    return callGitHub(`${name} ${description}`, fn);
   }
 
   // The cache key is JSON-ification of `{ repoURL, commitSHA }`.
@@ -132,22 +163,30 @@ export class OctokitGitHubClient {
     fetchMethod: async (_key, _staleValue, { context }) => {
       const { repoURL, commitSHA } = context;
       const { owner, repo } = parseRepoURL(repoURL);
-      this.logAPICall("git.getCommit", `${owner} / ${repo} ${commitSHA}`);
       const rootTreeSHA = (
-        await this.octokit.rest.git.getCommit({
-          owner,
-          repo,
-          commit_sha: commitSHA,
-        })
+        await this.callAPI(
+          "git.getCommit",
+          `${owner} / ${repo} ${commitSHA}`,
+          async () =>
+            this.octokit.rest.git.getCommit({
+              owner,
+              repo,
+              commit_sha: commitSHA,
+            }),
+        )
       ).data.tree.sha;
-      this.logAPICall("git.getTree", `${owner} / ${repo} ${rootTreeSHA}`);
       const { tree, truncated } = (
-        await this.octokit.rest.git.getTree({
-          owner,
-          repo,
-          tree_sha: rootTreeSHA,
-          recursive: "true",
-        })
+        await this.callAPI(
+          "git.getTree",
+          `${owner} / ${repo} ${rootTreeSHA}`,
+          async () =>
+            this.octokit.rest.git.getTree({
+              owner,
+              repo,
+              tree_sha: rootTreeSHA,
+              recursive: "true",
+            }),
+        )
       ).data;
       const allTreesForCommit: AllTreesForCommit = {
         pathToTreeSHA: new Map(),
@@ -168,12 +207,16 @@ export class OctokitGitHubClient {
       }
       // Fetch the content of each symlink blob to get its target path.
       for (const { path, sha } of symlinkSHAs) {
-        this.logAPICall("git.getBlob", `${owner} / ${repo} ${sha}`);
-        const blobData = await this.octokit.rest.git.getBlob({
-          owner,
-          repo,
-          file_sha: sha,
-        });
+        const blobData = await this.callAPI(
+          "git.getBlob",
+          `${owner} / ${repo} ${sha}`,
+          async () =>
+            this.octokit.rest.git.getBlob({
+              owner,
+              repo,
+              file_sha: sha,
+            }),
+        );
         // Symlink target is stored as base64-encoded content.
         const target = Buffer.from(blobData.data.content, "base64").toString(
           "utf-8",
@@ -201,16 +244,20 @@ export class OctokitGitHubClient {
     const { owner, repo } = parseRepoURL(repoURL);
     const prNumber = ref.match(/^pr-([0-9]+)$/)?.[1];
     const refParameter = prNumber ? `pull/${prNumber}/head` : ref;
-    this.logAPICall("repos.getCommit", `${owner}/${repo} ${refParameter}`);
     const sha = (
-      await this.octokit.rest.repos.getCommit({
-        owner,
-        repo,
-        ref: refParameter,
-        mediaType: {
-          format: "sha",
-        },
-      })
+      await this.callAPI(
+        "repos.getCommit",
+        `${owner}/${repo} ${refParameter}`,
+        async () =>
+          this.octokit.rest.repos.getCommit({
+            owner,
+            repo,
+            ref: refParameter,
+            mediaType: {
+              format: "sha",
+            },
+          }),
+      )
     ).data as unknown;
     // The TS types don't understand that `mediaType: { format: 'sha' }` turns
     // `.data` into a string, so we have to cast to `unknown` and check
@@ -284,28 +331,47 @@ export class OctokitGitHubClient {
     path,
   }: GetTreeSHAForPathOptions): Promise<string | null> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall("repos.getContent", `${owner} / ${repo} ${commitSHA}`);
-    let data;
-    try {
-      data = (
-        await this.octokit.rest.repos.getContent({
-          owner,
-          repo,
-          ref: commitSHA,
-          path,
-          mediaType: {
-            format: "object",
-          },
-        })
-      ).data as unknown;
-    } catch (e: unknown) {
-      // If it looks like "not found" just return null.
-      if (typeof e === "object" && e && "status" in e && e.status === 404) {
-        return null;
-      }
-      throw e;
+    const data = await this.callAPI(
+      "repos.getContent",
+      `${owner} / ${repo} ${commitSHA}`,
+      async () => {
+        try {
+          return (
+            // Octokit's response type for this call is a union of "file" |
+            // "symlink" | "submodule" (directories come back as an array,
+            // which we don't handle here) -- it doesn't include the "dir"
+            // shape we check for below, even though the GitHub API can
+            // actually return it for this media type. So we deliberately
+            // erase the type here and re-narrow manually below with runtime
+            // checks instead of trusting Octokit's type.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+            (
+              await this.octokit.rest.repos.getContent({
+                owner,
+                repo,
+                ref: commitSHA,
+                path,
+                mediaType: {
+                  format: "object",
+                },
+              })
+            ).data as unknown
+          );
+        } catch (e: unknown) {
+          // If it looks like "not found" just return null; anything else
+          // propagates up through callAPI to get wrapped with context.
+          if (typeof e === "object" && e && "status" in e && e.status === 404) {
+            return null;
+          }
+          throw e;
+        }
+      },
+    );
+    if (data === null) {
+      return null;
     }
-    // TS types seem confused here too; this works in practice.
+    // See the comment above the `as unknown` cast for why we re-narrow this
+    // by hand instead of trusting Octokit's type here.
     if (
       typeof data === "object" &&
       data !== null &&
@@ -341,15 +407,19 @@ export class OctokitGitHubClient {
     path,
   }: GetCommitSHAsForPathOptions): Promise<string[]> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall("repos.listCommits", `${owner}/${repo}@${ref} ${path}`);
     return (
-      await this.octokit.rest.repos.listCommits({
-        owner,
-        repo,
-        path,
-        sha: ref,
-        per_page: 100, // max allowed
-      })
+      await this.callAPI(
+        "repos.listCommits",
+        `${owner}/${repo}@${ref} ${path}`,
+        async () =>
+          this.octokit.rest.repos.listCommits({
+            owner,
+            repo,
+            path,
+            sha: ref,
+            per_page: 100, // max allowed
+          }),
+      )
     ).data
       .map(({ sha }) => sha)
       .reverse(); // Chronological order
@@ -360,12 +430,16 @@ export class OctokitGitHubClient {
     prNumber,
   }: GetPullRequestForNumberOptions): Promise<PullRequest> {
     const { owner, repo } = parseRepoURL(repoURL);
-    this.logAPICall("pulls.get", `${owner}/${repo} #${prNumber}`);
-    const response = await this.octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: prNumber,
-    });
+    const response = await this.callAPI(
+      "pulls.get",
+      `${owner}/${repo} #${prNumber}`,
+      async () =>
+        this.octokit.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: prNumber,
+        }),
+    );
     return {
       state: response.data.state,
       title: response.data.title,

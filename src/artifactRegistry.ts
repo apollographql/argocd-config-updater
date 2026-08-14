@@ -67,6 +67,31 @@ const AR_RETRY_OPTIONS = {
  */
 const MAX_PAGE_SIZE = 1000;
 
+/**
+ * Wraps a call to the Artifact Registry client so that any failure makes
+ * clear it came from the Artifact Registry API. Without this, errors like a
+ * transient gRPC `UNAVAILABLE` surface as a bare `Error: 14 UNAVAILABLE: The
+ * service is currently unavailable.`, which gives no hint that it came from
+ * Artifact Registry (as opposed to, say, GitHub) or which request failed.
+ */
+export async function callArtifactRegistry<T>(
+  description: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (originalError) {
+    const message =
+      originalError instanceof Error
+        ? originalError.message
+        : String(originalError);
+    throw new Error(
+      `Artifact Registry API error while ${description}: ${message}`,
+      { cause: originalError },
+    );
+  }
+}
+
 export interface DockerRegistryClient {
   getAllEquivalentTags(options: GetAllEquivalentTagsOptions): Promise<string[]>;
   getGitCommitsBetweenTags(
@@ -124,9 +149,10 @@ export class ArtifactRegistryDockerRegistryClient {
     });
 
     // Fetch the tag object
-    const [tag] = await this.client.getTag(
-      { name: tagPath },
-      { retry: AR_RETRY_OPTIONS },
+    const [tag] = await callArtifactRegistry(
+      `fetching tag ${tagPath}`,
+      async () =>
+        this.client.getTag({ name: tagPath }, { retry: AR_RETRY_OPTIONS }),
     );
 
     if (!tag || !tag.version) {
@@ -172,18 +198,21 @@ export class ArtifactRegistryDockerRegistryClient {
     //   "name":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/tags/2022.02-278-g123456789",
     //   "version":"projects/platform-cross-environment/locations/us-central1/repositories/platform-docker/packages/identity/versions/sha256:123abc456defg"
     // }
+    const packagePath = this.client.pathTemplates.packagePathTemplate.render({
+      ...this.repositoryFields,
+      package: encodeURIComponent(dockerImageRepository),
+    });
     const dockerTags = (
-      await this.client.listTags(
-        {
-          parent: this.client.pathTemplates.packagePathTemplate.render({
-            ...this.repositoryFields,
-            package: encodeURIComponent(dockerImageRepository),
-          }),
-          // Still returns every tag; this only sets how many come back per
-          // request. See MAX_PAGE_SIZE.
-          pageSize: MAX_PAGE_SIZE,
-        },
-        { retry: AR_RETRY_OPTIONS },
+      await callArtifactRegistry(`listing tags for ${packagePath}`, async () =>
+        this.client.listTags(
+          {
+            parent: packagePath,
+            // Still returns every tag; this only sets how many come back per
+            // request. See MAX_PAGE_SIZE.
+            pageSize: MAX_PAGE_SIZE,
+          },
+          { retry: AR_RETRY_OPTIONS },
+        ),
       )
     )[0].map((iTag) => {
       const tag = new protos.google.devtools.artifactregistry.v1.Tag(iTag);
@@ -217,7 +246,9 @@ export class ArtifactRegistryDockerRegistryClient {
     this.logger.info(`[AR API] Fetching tag ${tagPath}`);
     // Note: this throws if the repository or tag are not found.
     const { version } = (
-      await this.client.getTag({ name: tagPath }, { retry: AR_RETRY_OPTIONS })
+      await callArtifactRegistry(`fetching tag ${tagPath}`, async () =>
+        this.client.getTag({ name: tagPath }, { retry: AR_RETRY_OPTIONS }),
+      )
     )[0];
     if (!version) {
       throw Error(`No version found for ${tagPath}`);
@@ -239,9 +270,13 @@ export class ArtifactRegistryDockerRegistryClient {
 
     this.logger.info(`[AR API] Fetching Docker image ${dockerImagePath}`);
     const { tags } = (
-      await this.client.getDockerImage(
-        { name: dockerImagePath },
-        { retry: AR_RETRY_OPTIONS },
+      await callArtifactRegistry(
+        `fetching Docker image ${dockerImagePath}`,
+        async () =>
+          this.client.getDockerImage(
+            { name: dockerImagePath },
+            { retry: AR_RETRY_OPTIONS },
+          ),
       )
     )[0];
     if (!tags) {

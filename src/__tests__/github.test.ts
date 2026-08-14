@@ -2,11 +2,42 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  callGitHub,
   resolveSymlinkTarget,
   getGitConfigRefPromotionInfo,
   GitHubClient,
 } from "../github.js";
 import { PrefixingLogger } from "../log.js";
+
+describe("callGitHub", () => {
+  it("passes through a successful result", async () => {
+    await expect(callGitHub("doing a thing", async () => "ok")).resolves.toBe(
+      "ok",
+    );
+  });
+
+  it("wraps a thrown Error with GitHub context, preserving it as the cause", async () => {
+    const original = new Error("Not Found");
+    const call = callGitHub("fetching tag foo", async () => {
+      throw original;
+    });
+    await expect(call).rejects.toThrow(
+      "GitHub API error while fetching tag foo: Not Found",
+    );
+    await expect(call).rejects.toMatchObject({ cause: original });
+  });
+
+  it("wraps a non-Error throw as well", async () => {
+    const call = callGitHub("fetching tag foo", async () => {
+      // eslint-disable-next-line no-throw-literal -- testing non-Error throw
+      throw "some string";
+    });
+    await expect(call).rejects.toThrow(
+      "GitHub API error while fetching tag foo: some string",
+    );
+    await expect(call).rejects.toMatchObject({ cause: "some string" });
+  });
+});
 
 describe("resolveSymlinkTarget", () => {
   it("resolves relative symlinks with ..", () => {
