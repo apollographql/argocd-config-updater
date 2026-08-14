@@ -43,6 +43,19 @@ const config = {
     ) {
       return;
     }
+    // TypeScript's down-leveled async/await helpers (`__awaiter`, etc.) start with
+    // `(this && this.__awaiter) || function ...` so they can reuse an existing helper
+    // if one's already been defined on `this`. At the top level of a CJS module, Rollup
+    // can't know `this` would be `module.exports` in Node, so it rewrites it to
+    // `undefined` -- which just means the `this && ...` check is always false and the
+    // fallback function is always (correctly) used instead. Harmless; see
+    // https://rollupjs.org/troubleshooting/#error-this-is-undefined
+    if (
+      warning.code === 'THIS_IS_UNDEFINED' &&
+      warning.id?.includes('/node_modules/')
+    ) {
+      return;
+    }
     warn(warning);
   },
 };

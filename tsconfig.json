@@ -5,7 +5,6 @@
     "module": "NodeNext",
     "rootDir": "./src",
     "moduleResolution": "NodeNext",
-    "baseUrl": "./",
     "noEmit": true,
     "noImplicitAny": true,
     "esModuleInterop": true,
