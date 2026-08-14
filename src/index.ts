@@ -105,7 +105,6 @@ async function main(): Promise<void> {
             },
           },
         },
-        // @ts-expect-error - Type incompatibility between @actions/github's bundled @octokit/core v5 and throttling/retry plugins' @octokit/core v7
         throttling,
         // Retries idempotent-looking requests on 5xx/network errors (not just
         // rate limits, which `throttling` above already handles) up to 3
