@@ -29,6 +29,14 @@
       matchPackageNames: ['typescript'],
       matchUpdateTypes: ['minor'],
     },
+    // TypeScript v7 isn't ready for general use yet (e.g. eslint doesn't support it as of
+    // this writing), so stay on v6 until further notice. Unlike the TEMPORARY block below,
+    // this rule is permanent and should stick around until we're ready to take on v7.
+    {
+      matchPackageNames: ['typescript'],
+      matchUpdateTypes: ['major'],
+      enabled: false,
+    },
     // Upgrade all the major eslint things in a single PR.
     {
       matchPackageNames: [
