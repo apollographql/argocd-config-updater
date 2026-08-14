@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { faker } from "@faker-js/faker";
-import { DockerTag, getRelevantCommits } from "../artifactRegistry.js";
+import {
+  callArtifactRegistry,
+  DockerTag,
+  getRelevantCommits,
+} from "../artifactRegistry.js";
 import { promotionInfoCommits } from "../promotionInfo.js";
 
 /**
@@ -26,6 +30,38 @@ function getAllHashes(tags: DockerTag[]): string[] {
 function commitSha(): string {
   return faker.git.commitSha();
 }
+
+describe("callArtifactRegistry", () => {
+  it("passes through a successful result", async () => {
+    await expect(
+      callArtifactRegistry("doing a thing", async () => "ok"),
+    ).resolves.toBe("ok");
+  });
+
+  it("wraps a thrown Error with Artifact Registry context, preserving it as the cause", async () => {
+    const original = new Error(
+      "14 UNAVAILABLE: The service is currently unavailable.",
+    );
+    const call = callArtifactRegistry("fetching tag foo", async () => {
+      throw original;
+    });
+    await expect(call).rejects.toThrow(
+      "Artifact Registry API error while fetching tag foo: 14 UNAVAILABLE: The service is currently unavailable.",
+    );
+    await expect(call).rejects.toMatchObject({ cause: original });
+  });
+
+  it("wraps a non-Error throw as well", async () => {
+    const call = callArtifactRegistry("fetching tag foo", async () => {
+      // eslint-disable-next-line no-throw-literal -- testing non-Error throw
+      throw "some string";
+    });
+    await expect(call).rejects.toThrow(
+      "Artifact Registry API error while fetching tag foo: some string",
+    );
+    await expect(call).rejects.toMatchObject({ cause: "some string" });
+  });
+});
 
 describe("ArtifactRegistry.getRelevantCommits", () => {
   it('should return null when "next" is not in tags', async () => {

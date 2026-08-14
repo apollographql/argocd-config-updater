@@ -3,6 +3,7 @@ import * as github from "@actions/github";
 import * as glob from "@actions/glob";
 import * as yaml from "yaml";
 import { throttling } from "@octokit/plugin-throttling";
+import { retry } from "@octokit/plugin-retry";
 import { eachLimit } from "async";
 import { readFile, writeFile } from "fs/promises";
 import {
@@ -104,8 +105,13 @@ async function main(): Promise<void> {
             },
           },
         },
-        // @ts-expect-error - Type incompatibility between @actions/github's bundled @octokit/core v5 and throttling plugin's @octokit/core v7
+        // @ts-expect-error - Type incompatibility between @actions/github's bundled @octokit/core v5 and throttling/retry plugins' @octokit/core v7
         throttling,
+        // Retries idempotent-looking requests on 5xx/network errors (not just
+        // rate limits, which `throttling` above already handles) up to 3
+        // times by default. Without this, a transient GitHub outage fails the
+        // whole run instead of just slowing it down.
+        retry,
       );
 
       // Log GH rate limit response headers after each response and at the end.
