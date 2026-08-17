@@ -248,12 +248,11 @@ async function resolveRollbackTarget(options: {
     // incarnation of the file, and silently rolling back to it would deploy a
     // ref that was never this env's. Stop instead of gliding past.
     if (historicalEnv.kind === "envMissing") {
+      const why = gitSha
+        ? `SHA ${gitSha} predates it.`
+        : `There is no earlier deploy to roll back to.`;
       throw new Error(
-        `Cannot roll back \`${envName}\`: it has no pinned \`gitConfig.ref\` as of commit ${commit}, ` +
-          `which is as far back as its history goes in ${gitRelativePath}. ` +
-          (gitSha
-            ? `SHA ${gitSha} predates it.`
-            : `There is no earlier deploy to roll back to.`),
+        `Cannot roll back \`${envName}\`: it has no pinned \`gitConfig.ref\` as of commit ${commit}, which is as far back as its history goes in ${gitRelativePath}. ${why}`,
       );
     }
 
@@ -304,7 +303,8 @@ function readEnvRefAndTag(
   if (!envBlock || typeof envBlock !== "object") return { kind: "envMissing" };
 
   const gitConfig = (envBlock as Record<string, unknown>).gitConfig;
-  if (!gitConfig || typeof gitConfig !== "object") return { kind: "envMissing" };
+  if (!gitConfig || typeof gitConfig !== "object")
+    return { kind: "envMissing" };
   const ref = (gitConfig as Record<string, unknown>).ref;
   if (typeof ref !== "string") return { kind: "envMissing" };
 
