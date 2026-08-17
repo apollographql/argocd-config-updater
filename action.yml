@@ -61,15 +61,15 @@ inputs:
     default: 'false'
 
   rollback:
-    description: 'Roll back a promoted environment to a previous `gitConfig.ref` (and matching `dockerImage.tag`). Only applies to environments with a `promote.from` block. Reads prior values from the git history of the file.'
+    description: 'Turn on rollback mode. Roll back the environment set by `rollback-target-env` to a previous `gitConfig.ref` and its matching `dockerImage.tag`. This mode applies only to environments that have a `promote.from` block.'
     default: 'false'
 
   rollback-target-env:
-    description: 'The name of the top-level env block to roll back. For example, use `prod` or `staging`. This env must have a `promote.from` block.'
+    description: 'The name of the top-level env block to roll back, for example `prod` or `staging`. This env must have a `promote.from` block.'
     default: 'prod'
 
   rollback-git-sha:
-    description: 'The commit SHA to roll back to. This SHA is from the application''s own source repo, not the config repo. This SHA is the value of `gitConfig.ref`. For example, this SHA can be a monorepo commit. Do not use the Docker image content digest. If you leave this field blank, the action rolls back to the most recent commit where `gitConfig.ref` for the target env was different from the current value. If you set this field, write the full SHA exactly as it appears in the file history. Do not abbreviate it. The action compares the SHA as text against the file history.'
+    description: 'The commit SHA to roll back to, from the applications source repo (not the config repo, and not the Docker image digest). This is the value that `gitConfig.ref` will be set to. If you leave this field blank, the action rolls back to the most recent commit where `gitConfig.ref` differed from its current value. If you set this field, write the full SHA exactly as it appears in the file history; do not abbreviate it, since the action matches the SHA as literal text.'
 
 outputs:
   suggested-promotion-branch-name:
