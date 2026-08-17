@@ -539,7 +539,7 @@ function formatRollbacks(rollbacks: AppRollback[]): string {
   const lines: string[] = ["## Rolled back"];
   for (const r of rollbacks) {
     lines.push(
-      `- **${r.appName}**: \`${r.previousRef.slice(0, 12)}\` → \`${r.newRef.slice(0, 12)}\` (resolved from commit \`${r.resolvedFromCommit.slice(0, 12)}\`)`,
+      `- **${r.appName}**: \`${r.previousRef.slice(0, 12)}\` → \`${r.rolledBackRef.slice(0, 12)}\` (resolved from commit \`${r.resolvedFromCommit.slice(0, 12)}\`)`,
     );
   }
   return `${lines.join("\n")}\n`;

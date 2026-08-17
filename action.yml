@@ -69,7 +69,7 @@ inputs:
     default: 'prod'
 
   rollback-git-sha:
-    description: 'apollo-argo commit SHA to roll back to (the value of `gitConfig.ref`). NOT the Docker image content digest. If blank, rolls back to the most recent commit where the target env''s `gitConfig.ref` differed from its current value. If set, the SHA must have appeared as that env''s `gitConfig.ref` in the file''s history.'
+    description: 'Commit SHA in the application''s own source repo (the value of `gitConfig.ref`, e.g. a monorepo commit) to roll back to. NOT the Docker image content digest, and not a commit in the config repo this action runs against. If blank, rolls back to the most recent commit where the target env''s `gitConfig.ref` differed from its current value. If set, the SHA must match that env''s historical `gitConfig.ref` exactly as written (unabbreviated), since it is compared as a string against the file''s history.'
 
 outputs:
   suggested-promotion-branch-name:

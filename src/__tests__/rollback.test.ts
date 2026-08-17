@@ -27,7 +27,11 @@ class FakeGitHistoryReader implements GitHistoryReader {
 
   async listCommitsAffectingFile(relativePath: string): Promise<string[]> {
     void relativePath;
-    return this.history.filter((h) => h.contents !== null).map((h) => h.commit);
+    // Every entry is listed, including ones with null contents: `git log -- path`
+    // does report commits where `git show <commit>:path` fails (a path deleted
+    // and later re-added lists commits from both eras). `contents: null` models
+    // exactly that commit, so the caller's skip path gets exercised.
+    return this.history.map((h) => h.commit);
   }
 
   async readFileAtCommit(
@@ -108,7 +112,6 @@ describe("rollback", () => {
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "teams/foundation/identity/application-values.yaml",
         _logger: logger,
       });
 
@@ -121,9 +124,9 @@ describe("rollback", () => {
           appName: "identity-prod",
           environment: "prod",
           previousRef: CURRENT.prodRef,
-          newRef: PREVIOUS.prodRef,
+          rolledBackRef: PREVIOUS.prodRef,
           previousTag: CURRENT.prodTag,
-          newTag: PREVIOUS.prodTag,
+          rolledBackTag: PREVIOUS.prodTag,
           resolvedFromCommit: "commit-prev",
         },
       ]);
@@ -154,11 +157,10 @@ describe("rollback", () => {
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
-      expect(rollbacks[0].newRef).toBe(PREVIOUS.prodRef);
+      expect(rollbacks[0].rolledBackRef).toBe(PREVIOUS.prodRef);
       expect(rollbacks[0].resolvedFromCommit).toBe("c-prev-prod");
     });
 
@@ -174,7 +176,6 @@ describe("rollback", () => {
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/No previous deploy found/);
@@ -194,11 +195,10 @@ describe("rollback", () => {
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
-      expect(rollbacks[0].newRef).toBe(PREVIOUS.prodRef);
+      expect(rollbacks[0].rolledBackRef).toBe(PREVIOUS.prodRef);
     });
 
     it("skips older commits where the YAML was malformed", async () => {
@@ -215,11 +215,42 @@ describe("rollback", () => {
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
-      expect(rollbacks[0].newRef).toBe(PREVIOUS.prodRef);
+      expect(rollbacks[0].rolledBackRef).toBe(PREVIOUS.prodRef);
+    });
+
+    it("stops at the commit where the env was introduced instead of rolling back past it", async () => {
+      // The prod block does not exist before `c-added`. The OLDER ref below sits
+      // in a pre-prod era of the file; rolling back to it would deploy a ref
+      // that prod never ran.
+      const withoutProd = `global: {}
+
+staging:
+  track: main
+  gitConfig:
+    ref: ${OLDER.prodRef}
+  dockerImage:
+    tag: ${OLDER.prodTag}
+`;
+      const reader = new FakeGitHistoryReader([
+        { commit: "c-head", contents: valuesFile(CURRENT) },
+        { commit: "c-added", contents: withoutProd },
+        { commit: "c-ancient", contents: valuesFile(OLDER) },
+      ]);
+
+      await expect(
+        rollback({
+          contents: valuesFile(CURRENT),
+          filename: "a/application-values.yaml",
+          targetEnv: "prod",
+          gitSha: "",
+          frozenEnvironments: new Set(),
+          gitHistoryReader: reader,
+          _logger: logger,
+        }),
+      ).rejects.toThrow(/no pinned `gitConfig.ref` as of commit c-added/);
     });
   });
 
@@ -238,12 +269,11 @@ describe("rollback", () => {
         gitSha: OLDER.prodRef,
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
-      expect(rollbacks[0].newRef).toBe(OLDER.prodRef);
-      expect(rollbacks[0].newTag).toBe(OLDER.prodTag);
+      expect(rollbacks[0].rolledBackRef).toBe(OLDER.prodRef);
+      expect(rollbacks[0].rolledBackTag).toBe(OLDER.prodTag);
       expect(rollbacks[0].resolvedFromCommit).toBe("c-older");
     });
 
@@ -261,7 +291,6 @@ describe("rollback", () => {
           gitSha: "deadbeef00000000000000000000000000000000",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/has never been deployed/);
@@ -281,7 +310,6 @@ describe("rollback", () => {
           gitSha: CURRENT.prodRef,
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/would be a no-op/);
@@ -309,7 +337,6 @@ describe("rollback", () => {
           gitSha: PREVIOUS.prodRef,
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/has never been deployed/);
@@ -366,13 +393,12 @@ prod:
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
       expect(rollbacks).toHaveLength(1);
       expect(rollbacks[0].environment).toBe("staging");
-      expect(rollbacks[0].newRef).toBe("staging-previous");
+      expect(rollbacks[0].rolledBackRef).toBe("staging-previous");
     });
 
     it("passes through (no change, no rollback) when the file does not contain the target env", async () => {
@@ -395,7 +421,6 @@ dev:
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
@@ -433,7 +458,6 @@ prod:
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
@@ -454,7 +478,6 @@ prod:
         gitSha: "",
         frozenEnvironments: new Set(["prod"]),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
@@ -483,7 +506,6 @@ prod:
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/missing `gitConfig` block/);
@@ -510,7 +532,6 @@ prod:
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/`gitConfig.ref` is not set/);
@@ -543,7 +564,6 @@ prod:
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: "a/application-values.yaml",
           _logger: logger,
         }),
       ).rejects.toThrow(/historical file .* does not/);
@@ -584,7 +604,6 @@ prod:
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
@@ -678,14 +697,13 @@ prod:
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
-          gitRelativePath: file,
           _logger: logger,
         });
 
         // Rollback walked past the 2 auto-update commits to the original deploy.
         expect(rollbacks).toHaveLength(1);
-        expect(rollbacks[0].newRef).toBe(PREVIOUS.prodRef);
-        expect(rollbacks[0].newTag).toBe(PREVIOUS.prodTag);
+        expect(rollbacks[0].rolledBackRef).toBe(PREVIOUS.prodRef);
+        expect(rollbacks[0].rolledBackTag).toBe(PREVIOUS.prodTag);
         expect(newContents).toContain(`ref: ${PREVIOUS.prodRef}`);
         expect(newContents).toContain(`tag: ${PREVIOUS.prodTag}`);
       } finally {
@@ -721,13 +739,12 @@ prod:
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
-        gitRelativePath: "a/application-values.yaml",
         _logger: logger,
       });
 
       expect(newContents).toContain("ref: r-old");
       expect(rollbacks[0].previousTag).toBeNull();
-      expect(rollbacks[0].newTag).toBeNull();
+      expect(rollbacks[0].rolledBackTag).toBeNull();
     });
   });
 });

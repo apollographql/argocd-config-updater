@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { relative, isAbsolute, basename, dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import * as yaml from "yaml";
 import {
   ScalarTokenWriter,
@@ -59,14 +59,16 @@ export interface AppRollback {
   appName: string;
   environment: string;
   previousRef: string;
-  newRef: string;
+  rolledBackRef: string;
   previousTag: string | null;
-  newTag: string | null;
+  rolledBackTag: string | null;
   resolvedFromCommit: string;
 }
 
 export async function rollback(options: {
   contents: string;
+  /** Repo-relative path of the file, used both for messages and for asking git
+   *  about the file's history. */
   filename: string;
   /** Which top-level env block to roll back (e.g. `prod`, `staging`). Must have
    *  a `promote.from` block; envs that track a mutable ref roll forward instead. */
@@ -76,9 +78,6 @@ export async function rollback(options: {
   gitSha: string;
   frozenEnvironments: Set<string>;
   gitHistoryReader: GitHistoryReader;
-  /** Path to use when asking git about this file. Defaults to deriving from
-   *  `filename` relative to process.cwd(). */
-  gitRelativePath?: string;
   _logger: PrefixingLogger;
 }): Promise<{ newContents: string; rollbacks: AppRollback[] }> {
   const {
@@ -98,8 +97,6 @@ export async function rollback(options: {
   }
 
   const { blocks } = getTopLevelBlocks(document);
-  const gitRelativePath =
-    options.gitRelativePath ?? defaultGitRelativePath(filename);
   const applicationBaseName = basename(dirname(filename));
 
   const envBlock = blocks.get(targetEnv);
@@ -109,8 +106,8 @@ export async function rollback(options: {
   if (frozenEnvironments.has(targetEnv)) {
     return { newContents: contents, rollbacks: [] };
   }
-  // Per FOUN-1335: only apps that are promotion targets get rollback. Non-promoted
-  // envs (which track a mutable ref directly) roll forward instead.
+  // Only apps that are promotion targets get rollback. Non-promoted envs
+  // (which track a mutable ref directly) roll forward instead.
   if (!envBlock.has("promote")) {
     return { newContents: contents, rollbacks: [] };
   }
@@ -151,17 +148,10 @@ export async function rollback(options: {
     envName: targetEnv,
     currentRef: currentRefEntry.value,
     gitSha,
-    gitRelativePath,
+    gitRelativePath: filename,
     gitHistoryReader,
     logger,
   });
-
-  if (resolved.ref === currentRefEntry.value) {
-    throw new AnnotatedError(
-      `Rollback for \`${targetEnv}\` would be a no-op: resolved ref matches current (${resolved.ref})`,
-      { range: currentRefEntry.range, lineCounter },
-    );
-  }
 
   if (currentTagEntry && !resolved.tag) {
     throw new AnnotatedError(
@@ -185,9 +175,9 @@ export async function rollback(options: {
       appName: `${applicationBaseName}-${targetEnv}`,
       environment: targetEnv,
       previousRef: currentRefEntry.value,
-      newRef: resolved.ref,
+      rolledBackRef: resolved.ref,
       previousTag: currentTagEntry?.value ?? null,
-      newTag: currentTagEntry && resolved.tag ? resolved.tag : null,
+      rolledBackTag: currentTagEntry && resolved.tag ? resolved.tag : null,
       resolvedFromCommit: resolved.commit,
     },
   ];
@@ -245,17 +235,35 @@ async function resolveRollbackTarget(options: {
       continue;
     }
 
-    const { ref: historicalRef, tag: historicalTag } =
-      readEnvRefAndTag(historical, envName) ?? {};
-    if (!historicalRef) continue;
+    const historicalEnv = readEnvRefAndTag(historical, envName);
+
+    // A commit whose YAML we cannot parse tells us nothing; keep walking.
+    if (historicalEnv.kind === "unparseable") {
+      logger.info(`Skipping commit ${commit}: could not parse YAML`);
+      continue;
+    }
+
+    // The env is absent (or has no pinned ref) at this commit, so this is the
+    // point where it was introduced. Anything older belongs to a different
+    // incarnation of the file, and silently rolling back to it would deploy a
+    // ref that was never this env's. Stop instead of gliding past.
+    if (historicalEnv.kind === "envMissing") {
+      throw new Error(
+        `Cannot roll back \`${envName}\`: it has no pinned \`gitConfig.ref\` as of commit ${commit}, ` +
+          `which is as far back as its history goes in ${gitRelativePath}. ` +
+          (gitSha
+            ? `SHA ${gitSha} predates it.`
+            : `There is no earlier deploy to roll back to.`),
+      );
+    }
 
     // Explicit-SHA mode: find the commit where this env held exactly that SHA.
     // Blank-SHA mode: first commit where this env's ref differs from current.
     const isTarget = gitSha
-      ? historicalRef === gitSha
-      : historicalRef !== currentRef;
+      ? historicalEnv.ref === gitSha
+      : historicalEnv.ref !== currentRef;
     if (isTarget) {
-      return { ref: historicalRef, tag: historicalTag ?? null, commit };
+      return { ref: historicalEnv.ref, tag: historicalEnv.tag, commit };
     }
   }
 
@@ -269,26 +277,36 @@ async function resolveRollbackTarget(options: {
   );
 }
 
-/** Extract one env block's gitConfig.ref and dockerImage.tag from a YAML string.
- *  Returns null if the block or gitConfig.ref aren't present. */
+/**
+ * What a historical version of the file says about one env. The three cases are
+ * distinguished because they mean different things to the history walk: an
+ * unreadable commit is uninformative and gets skipped, whereas an env that
+ * isn't there marks the start of that env's history and stops the walk.
+ */
+type HistoricalEnv =
+  | { kind: "found"; ref: string; tag: string | null }
+  | { kind: "envMissing" }
+  | { kind: "unparseable" };
+
+/** Extract one env block's gitConfig.ref and dockerImage.tag from a YAML string. */
 function readEnvRefAndTag(
   fileContents: string,
   envName: string,
-): { ref: string; tag: string | null } | null {
+): HistoricalEnv {
   let parsed: unknown;
   try {
     parsed = yaml.parse(fileContents);
   } catch {
-    return null;
+    return { kind: "unparseable" };
   }
-  if (!parsed || typeof parsed !== "object") return null;
+  if (!parsed || typeof parsed !== "object") return { kind: "unparseable" };
   const envBlock = (parsed as Record<string, unknown>)[envName];
-  if (!envBlock || typeof envBlock !== "object") return null;
+  if (!envBlock || typeof envBlock !== "object") return { kind: "envMissing" };
 
   const gitConfig = (envBlock as Record<string, unknown>).gitConfig;
-  if (!gitConfig || typeof gitConfig !== "object") return null;
+  if (!gitConfig || typeof gitConfig !== "object") return { kind: "envMissing" };
   const ref = (gitConfig as Record<string, unknown>).ref;
-  if (typeof ref !== "string") return null;
+  if (typeof ref !== "string") return { kind: "envMissing" };
 
   const dockerImage = (envBlock as Record<string, unknown>).dockerImage;
   let tag: string | null = null;
@@ -296,10 +314,5 @@ function readEnvRefAndTag(
     const rawTag = (dockerImage as Record<string, unknown>).tag;
     if (typeof rawTag === "string") tag = rawTag;
   }
-  return { ref, tag };
-}
-
-function defaultGitRelativePath(filename: string): string {
-  if (!isAbsolute(filename)) return filename;
-  return relative(process.cwd(), filename);
+  return { kind: "found", ref, tag };
 }
