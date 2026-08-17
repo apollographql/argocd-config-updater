@@ -216,11 +216,10 @@ async function resolveRollbackTarget(options: {
     );
   }
 
-  // Skip the most recent commit: it contains the current state.
-  // We walk backwards from the one before.
-  // Most files have many auto-update commits that touch dev/staging but not
-  // the promotion target, so we must find the commit where *this* env's ref
-  // actually differed.
+  // Skip the most recent commit since it is the problem one.
+  // Start the search at the commit before it, going backwards.
+  // Many commits update dev and staging only. They do not change the promotion target.
+  // Find the commit where the ref for this env changed.
   for (let i = 1; i < commits.length; i++) {
     const commit = commits[i];
     let historical: string;
@@ -243,10 +242,10 @@ async function resolveRollbackTarget(options: {
       continue;
     }
 
-    // The env is absent (or has no pinned ref) at this commit, so this is the
-    // point where it was introduced. Anything older belongs to a different
-    // incarnation of the file, and silently rolling back to it would deploy a
-    // ref that was never this env's. Stop instead of gliding past.
+    // The env has no ref at this commit.
+    // Older commits belong to a different version of the file.
+    // Do not roll back to an older commit. The ref there did not belong to this env.
+    // Stop the search here.
     if (historicalEnv.kind === "envMissing") {
       const why = gitSha
         ? `SHA ${gitSha} predates it.`
@@ -277,15 +276,16 @@ async function resolveRollbackTarget(options: {
 }
 
 /**
- * What a historical version of the file says about one env. The three cases are
- * distinguished because they mean different things to the history walk: an
- * unreadable commit is uninformative and gets skipped, whereas an env that
- * isn't there marks the start of that env's history and stops the walk.
+ * The state of one env in a historical version of the file.
+ * There are three cases:
+ * An unreadable commit gives no information. Skip it.
+ * A missing env marks the start of that env's history. Stop the walk.
+ * A found ref is the rollback target. Return it.
  */
 type HistoricalEnv =
-  | { kind: "found"; ref: string; tag: string | null }
+  | { kind: "unparseable" }
   | { kind: "envMissing" }
-  | { kind: "unparseable" };
+  | { kind: "found"; ref: string; tag: string | null };
 
 /** Extract one env block's gitConfig.ref and dockerImage.tag from a YAML string. */
 function readEnvRefAndTag(
