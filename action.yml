@@ -60,6 +60,16 @@ inputs:
     description: 'Clean up track: pr-N patterns where PR N is closed'
     default: 'false'
 
+  rollback:
+    description: 'Turn on rollback mode.
+      This sets the `prod` env block''s `gitConfig.ref` to a previously deployed sha,
+      along with the matching `dockerImage.tag`. Requires a `promote.from` block.'
+    default: 'false'
+
+  rollback-git-sha:
+    description: 'If you leave this blank, it rolls back to the last SHA that was deployed.
+      Otherwise, copy the **full** SHA from the application''s source repo (not apollo-argo).'
+
 outputs:
   suggested-promotion-branch-name:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
@@ -69,6 +79,15 @@ outputs:
 
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'
+
+  rollback-summary-markdown:
+    description: 'Markdown text that describes the rollbacks the action applied.
+      This output appears only if `rollback` is set.'
+
+  rollback-summary-json:
+    description: 'The same rollbacks as `rollback-summary-markdown`, in JSON array format.
+      This is meant for use in scripts and other programs.
+      It appears only if `rollback` is set and the action applied at least one rollback.'
 
 runs:
   using: node24
