@@ -36,6 +36,12 @@ import {
 import { cleanupClosedPrTracking } from "./update-closed-prs.js";
 import { AnnotatedError } from "./annotatedError.js";
 import { PRMetadata, AppPromotion } from "./promotion-metadata-types.js";
+import {
+  rollback,
+  formatRollbacks,
+  ChildProcessGitHistoryReader,
+  AppRollback,
+} from "./rollback.js";
 
 /**
  * The main function for the action.
@@ -233,22 +239,27 @@ async function main(): Promise<void> {
       PromotionsByTargetEnvironment
     >();
     const allCleanupChanges: CleanupChange[] = [];
+    const allRollbacks: AppRollback[] = [];
     await eachLimit(filenames, parallelism, async (filename) => {
       try {
-        const { promotionsByTargetEnvironment, cleanupChanges, appPromotions } =
-          await processFile({
-            filename,
-            gitHubClient,
-            dockerRegistryClient,
-            graphArtifactRegistryClient,
-            generatePromotedCommitsMarkdown,
-            doUpdateDockerTags,
-            doUpdateGraphArtifactRefs,
-            doUpdateGitRefs,
-            doCleanupClosedPrTracking,
-            linkTemplateMap,
-            frozenEnvironments,
-          });
+        const {
+          promotionsByTargetEnvironment,
+          cleanupChanges,
+          appPromotions,
+          appRollbacks,
+        } = await processFile({
+          filename,
+          gitHubClient,
+          dockerRegistryClient,
+          graphArtifactRegistryClient,
+          generatePromotedCommitsMarkdown,
+          doUpdateDockerTags,
+          doUpdateGraphArtifactRefs,
+          doUpdateGitRefs,
+          doCleanupClosedPrTracking,
+          linkTemplateMap,
+          frozenEnvironments,
+        });
         if (promotionsByTargetEnvironment) {
           promotionsByFileThenEnvironment.set(
             shortFilename(filename),
@@ -257,6 +268,7 @@ async function main(): Promise<void> {
         }
         prMetadata.appPromotions.push(...appPromotions);
         allCleanupChanges.push(...cleanupChanges);
+        allRollbacks.push(...appRollbacks);
       } catch (error) {
         if (error instanceof AnnotatedError) {
           errors.push({
@@ -302,6 +314,14 @@ async function main(): Promise<void> {
         formatCleanupChanges(allCleanupChanges),
       );
     }
+
+    if (allRollbacks.length > 0) {
+      core.setOutput(
+        "rollback-summary-markdown",
+        formatRollbacks(allRollbacks),
+      );
+      core.setOutput("rollback-summary-json", JSON.stringify(allRollbacks));
+    }
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
@@ -330,6 +350,7 @@ async function processFile(options: {
   promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
   cleanupChanges: CleanupChange[];
   appPromotions: AppPromotion[];
+  appRollbacks: AppRollback[];
 }> {
   const {
     filename,
@@ -348,10 +369,12 @@ async function processFile(options: {
     promotionsByTargetEnvironment: PromotionsByTargetEnvironment | null;
     cleanupChanges: CleanupChange[];
     appPromotions: AppPromotion[];
+    appRollbacks: AppRollback[];
   } = {
     promotionsByTargetEnvironment: null,
     cleanupChanges: [],
     appPromotions: [],
+    appRollbacks: [],
   };
 
   const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
@@ -396,6 +419,19 @@ async function processFile(options: {
       frozenEnvironments,
       logger,
     );
+  }
+
+  if (core.getBooleanInput("rollback")) {
+    const { newContents, rollbacks } = await rollback({
+      contents,
+      filename: shortFilename(filename),
+      gitSha: core.getInput("rollback-git-sha"),
+      frozenEnvironments,
+      gitHistoryReader: new ChildProcessGitHistoryReader(),
+      _logger: logger,
+    });
+    contents = newContents;
+    ret.appRollbacks = rollbacks;
   }
 
   if (core.getBooleanInput("update-promoted-values")) {
