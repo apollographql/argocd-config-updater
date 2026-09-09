@@ -61,12 +61,12 @@ function valuesFile({
   stagingTag?: string;
 }): string {
   return `global:
-  namespace: apollo-default
+  namespace: some-namespace
   gitConfig:
-    repoURL: https://github.com/mdg-private/monorepo.git
-    path: apps/identity/chart
+    repoURL: https://github.com/example/monorepo.git
+    path: apps/test-app/chart
   dockerImage:
-    repository: identity
+    repository: test-app
 
 staging:
   track: main
@@ -108,7 +108,7 @@ describe("rollback", () => {
 
       const { newContents, rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
-        filename: "teams/foundation/identity/application-values.yaml",
+        filename: "teams/test-team/test-app/application-values.yaml",
         targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
@@ -122,9 +122,9 @@ describe("rollback", () => {
       expect(newContents).not.toContain(`tag: ${CURRENT.prodTag}`);
       expect(rollbacks).toEqual<AppRollback[]>([
         {
-          appName: "identity-prod",
+          appName: "test-app-prod",
           environment: "prod",
-          repoURL: "https://github.com/mdg-private/monorepo.git",
+          repoURL: "https://github.com/example/monorepo.git",
           previousRef: CURRENT.prodRef,
           rolledBackRef: PREVIOUS.prodRef,
           previousTag: CURRENT.prodTag,
@@ -397,7 +397,7 @@ staging:
     it("rolls back only the env named by targetEnv", async () => {
       const dualPromote = (prodRef: string, stagingRef: string): string =>
         `global:
-  namespace: apollo-default
+  namespace: some-namespace
   gitConfig:
     repoURL: https://github.com/x/y.git
     path: charts/app
@@ -476,7 +476,7 @@ prod:
 
     it("passes through (no change, no rollback) when the file does not contain the target env", async () => {
       const noProdFile = `global:
-  namespace: apollo-default
+  namespace: some-namespace
 
 dev:
   track: main
@@ -504,7 +504,7 @@ dev:
     it("passes through when the target env has no promote.from (roll forward, not rollback)", async () => {
       // prod here tracks main directly, no promote block — not a rollback candidate.
       const tracksMainFile = `global:
-  namespace: apollo-default
+  namespace: some-namespace
   gitConfig:
     repoURL: https://github.com/x/y.git
     path: charts/app
@@ -647,7 +647,7 @@ prod:
     it("preserves comments, quoting style, and non-target lines unchanged", async () => {
       const withFormatting = `# top of file
 global:
-  namespace: apollo-default          # inline comment
+  namespace: some-namespace          # inline comment
   gitConfig:
     repoURL: "https://github.com/x/y.git"
     path: charts/app
@@ -703,9 +703,9 @@ prod:
         await git(dir, ["config", "user.name", "Test"]);
         await git(dir, ["config", "commit.gpgsign", "false"]);
 
-        const file = "teams/foundation/widget/application-values.yaml";
+        const file = "teams/test-team/test-widget/application-values.yaml";
         const { mkdir } = await import("node:fs/promises");
-        await mkdir(join(dir, "teams/foundation/widget"), { recursive: true });
+        await mkdir(join(dir, "teams/test-team/test-widget"), { recursive: true });
 
         // Commit 1: PREVIOUS prod ref.
         await writeFile(join(dir, file), valuesFile(PREVIOUS));
@@ -756,7 +756,7 @@ prod:
           }),
         );
         await git(dir, ["add", file]);
-        await git(dir, ["commit", "-q", "-m", "promote widget to prod"]);
+        await git(dir, ["commit", "-q", "-m", "promote test-widget to prod"]);
 
         // Read the HEAD version and roll it back.
         const { readFile } = await import("node:fs/promises");
@@ -823,9 +823,9 @@ prod:
 
   describe("formatRollbacks", () => {
     const applied: AppRollback = {
-      appName: "identity-prod",
+      appName: "test-app-prod",
       environment: "prod",
-      repoURL: "https://github.com/mdg-private/monorepo.git",
+      repoURL: "https://github.com/example/monorepo.git",
       previousRef: CURRENT.prodRef,
       rolledBackRef: PREVIOUS.prodRef,
       previousTag: CURRENT.prodTag,
@@ -835,13 +835,13 @@ prod:
 
     it("writes owner/repo@sha references so GitHub autolinks them", () => {
       expect(formatRollbacks([applied])).toBe(
-        `## Rolled back\n- **identity-prod**: mdg-private/monorepo@${CURRENT.prodRef} → mdg-private/monorepo@${PREVIOUS.prodRef}\n  - resolved from 1111111111111111111111111111111111111111\n`,
+        `## Rolled back\n- **test-app-prod**: example/monorepo@${CURRENT.prodRef} → example/monorepo@${PREVIOUS.prodRef}\n  - resolved from 1111111111111111111111111111111111111111\n`,
       );
     });
 
     it("falls back to short bare SHAs when the app's repo is unknown", () => {
       expect(formatRollbacks([{ ...applied, repoURL: null }])).toBe(
-        `## Rolled back\n- **identity-prod**: \`${CURRENT.prodRef.slice(0, 7)}\` → \`${PREVIOUS.prodRef.slice(0, 7)}\`\n  - resolved from 1111111111111111111111111111111111111111\n`,
+        `## Rolled back\n- **test-app-prod**: \`${CURRENT.prodRef.slice(0, 7)}\` → \`${PREVIOUS.prodRef.slice(0, 7)}\`\n  - resolved from 1111111111111111111111111111111111111111\n`,
       );
     });
 
