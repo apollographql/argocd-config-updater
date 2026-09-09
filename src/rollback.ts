@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { basename, dirname } from "node:path";
 import * as yaml from "yaml";
 import {
-  CSTScalarToken,
+  ScalarEntry,
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
   getStringValue,
@@ -57,10 +57,6 @@ export class GitCliHistoryReader implements GitHistoryReader {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 /**
  * The state of one env in a historical version of the file.
  * There are three cases:
@@ -78,27 +74,25 @@ function readEnvRefAndTag(
   fileContents: string,
   envName: string,
 ): HistoricalEnv {
-  let parsed: unknown;
   try {
-    parsed = yaml.parse(fileContents);
+    const { document } = parseYAML(fileContents);
+    if (!document) return { kind: "unparseable" };
+    const envBlock = getTopLevelBlocks(document).blocks.get(envName);
+    if (!envBlock) return { kind: "envMissing" };
+
+    const gitConfig = envBlock.get("gitConfig");
+    if (!yaml.isMap(gitConfig)) return { kind: "envMissing" };
+    const ref = getStringValue(gitConfig, "ref");
+    if (ref === null) return { kind: "envMissing" };
+
+    const dockerImage = envBlock.get("dockerImage");
+    const tag = yaml.isMap(dockerImage)
+      ? getStringValue(dockerImage, "tag")
+      : null;
+    return { kind: "found", ref, tag };
   } catch {
     return { kind: "unparseable" };
   }
-  if (!isRecord(parsed)) return { kind: "unparseable" };
-
-  const envBlock = parsed[envName];
-  if (!isRecord(envBlock)) return { kind: "envMissing" };
-  const gitConfig = envBlock.gitConfig;
-  if (!isRecord(gitConfig)) return { kind: "envMissing" };
-  const ref = gitConfig.ref;
-  if (typeof ref !== "string") return { kind: "envMissing" };
-
-  const dockerImage = envBlock.dockerImage;
-  const tag =
-    isRecord(dockerImage) && typeof dockerImage.tag === "string"
-      ? dockerImage.tag
-      : null;
-  return { kind: "found", ref, tag };
 }
 
 interface RollbackTarget {
@@ -194,14 +188,6 @@ async function resolveRollbackTarget(options: {
   );
 }
 
-/** A string value in the current document plus the CST token needed to
- *  overwrite it in place. */
-interface ScalarEntry {
-  readonly value: string;
-  readonly scalarToken: CSTScalarToken;
-  readonly range?: yaml.Range | null | undefined;
-}
-
 /** Read the env's current gitConfig.ref (and dockerImage.tag, if the env has
  *  one) or throw if the env isn't shaped like a promotion target. */
 function readCurrentRefAndTag(
@@ -260,24 +246,15 @@ function commitReference(repo: string | null, sha: string): string {
   return `\`${sha.slice(0, 7)}\``;
 }
 
-export function formatRollbacks(
-  rollbacks: AppRollback[],
-  options: {
-    /** `owner/repo` of the repo holding the YAML files, if known. */
-    configRepo?: string | null;
-  } = {},
-): string {
+export function formatRollbacks(rollbacks: AppRollback[]): string {
   if (rollbacks.length === 0) {
     return "## Rolled back\n\nNothing was rolled back.\n";
   }
-  const configRepoURL = options.configRepo
-    ? `https://github.com/${options.configRepo}`
-    : null;
   const lines: string[] = ["## Rolled back"];
   for (const r of rollbacks) {
     lines.push(
       `- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`,
-      `  - resolved from ${commitReference(configRepoURL, r.resolvedFromYamlCommit)}`,
+      `  - resolved from ${r.resolvedFromYamlCommit}`,
     );
   }
   return `${lines.join("\n")}\n`;

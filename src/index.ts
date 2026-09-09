@@ -318,9 +318,7 @@ async function main(): Promise<void> {
     if (core.getInput("rollback-env")) {
       core.setOutput(
         "rollback-summary-markdown",
-        formatRollbacks(allRollbacks, {
-          configRepo: process.env.GITHUB_REPOSITORY ?? null,
-        }),
+        formatRollbacks(allRollbacks),
       );
       core.setOutput(
         "rollback-summary-json",

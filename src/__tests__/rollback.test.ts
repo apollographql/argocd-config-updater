@@ -834,16 +834,14 @@ prod:
     };
 
     it("writes owner/repo@sha references so GitHub autolinks them", () => {
-      expect(
-        formatRollbacks([applied], { configRepo: "mdg-private/apollo-argo" }),
-      ).toBe(
-        `## Rolled back\n- **identity-prod**: mdg-private/monorepo@${CURRENT.prodRef} → mdg-private/monorepo@${PREVIOUS.prodRef}\n  - resolved from mdg-private/apollo-argo@1111111111111111111111111111111111111111\n`,
+      expect(formatRollbacks([applied])).toBe(
+        `## Rolled back\n- **identity-prod**: mdg-private/monorepo@${CURRENT.prodRef} → mdg-private/monorepo@${PREVIOUS.prodRef}\n  - resolved from 1111111111111111111111111111111111111111\n`,
       );
     });
 
-    it("falls back to short bare SHAs when repos are unknown", () => {
+    it("falls back to short bare SHAs when the app's repo is unknown", () => {
       expect(formatRollbacks([{ ...applied, repoURL: null }])).toBe(
-        `## Rolled back\n- **identity-prod**: \`${CURRENT.prodRef.slice(0, 7)}\` → \`${PREVIOUS.prodRef.slice(0, 7)}\`\n  - resolved from \`1111111\`\n`,
+        `## Rolled back\n- **identity-prod**: \`${CURRENT.prodRef.slice(0, 7)}\` → \`${PREVIOUS.prodRef.slice(0, 7)}\`\n  - resolved from 1111111111111111111111111111111111111111\n`,
       );
     });
 
