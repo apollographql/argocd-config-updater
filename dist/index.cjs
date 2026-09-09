@@ -164288,7 +164288,7 @@ const execFileAsync = require$$0$8.promisify(node_child_process.execFile);
  * the repository that contains the file — which is true for this action
  * because GitHub Actions checks the repo out before running.
  */
-class ChildProcessGitHistoryReader {
+class GitCliHistoryReader {
     cwd;
     constructor(cwd = process.cwd()) {
         this.cwd = cwd;
@@ -164375,7 +164375,11 @@ async function resolveRollbackTarget(options) {
                     ? historicalEnv.ref === gitSha
                     : historicalEnv.ref !== currentRef;
                 if (isTarget) {
-                    return { ref: historicalEnv.ref, tag: historicalEnv.tag, commit };
+                    return {
+                        ref: historicalEnv.ref,
+                        tag: historicalEnv.tag,
+                        yamlSha: commit,
+                    };
                 }
                 break;
             }
@@ -164406,23 +164410,53 @@ function readCurrentRefAndTag(envBlock, envName, lineCounter) {
         : null;
     return { ref, tag };
 }
-function formatRollbacks(rollbacks) {
+/** Render a commit as `owner/repo@sha` so GitHub autolinks it, falling back
+ *  to a bare abbreviated SHA when the repo is unknown or not on GitHub. */
+function commitReference(repo, sha) {
+    if (repo) {
+        try {
+            const { owner, repo: name } = parseRepoURL(repo);
+            return `${owner}/${name}@${sha}`;
+        }
+        catch {
+            // Not a GitHub URL; fall through to the bare SHA.
+        }
+    }
+    return `\`${sha.slice(0, 7)}\``;
+}
+function formatRollbacks(rollbacks, options = {}) {
+    if (rollbacks.length === 0) {
+        return "## Rolled back\n\nNothing was rolled back.\n";
+    }
+    const configRepoURL = options.configRepo
+        ? `https://github.com/${options.configRepo}`
+        : null;
     const lines = ["## Rolled back"];
     for (const r of rollbacks) {
-        lines.push(`- **${r.appName}**: \`${r.previousRef.slice(0, 12)}\` → \`${r.rolledBackRef.slice(0, 12)}\` (resolved from commit \`${r.resolvedFromCommit.slice(0, 12)}\`)`);
+        lines.push(`- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`, `  - resolved from ${commitReference(configRepoURL, r.resolvedFromYamlCommit)}`);
     }
     return `${lines.join("\n")}\n`;
 }
-const TARGET_ENV = "prod";
+/** The env's `gitConfig.repoURL`, falling back to `global.gitConfig.repoURL`. */
+function readRepoURL(envBlock, globalBlock) {
+    for (const block of [envBlock, globalBlock]) {
+        const gitConfig = block?.get("gitConfig");
+        if (gitConfig && isMap(gitConfig)) {
+            const url = getStringValue(gitConfig, "repoURL");
+            if (url)
+                return url;
+        }
+    }
+    return null;
+}
 async function rollback(options) {
-    const { contents, filename, gitSha, frozenEnvironments, gitHistoryReader, _logger, } = options;
-    const targetEnv = TARGET_ENV;
+    const { contents, filename, targetEnv, gitSha, frozenEnvironments, gitHistoryReader, _logger, } = options;
     const logger = _logger.withExtendedPrefix("[rollback] ");
     const unchanged = { newContents: contents, rollbacks: [] };
     const { document, stringify, lineCounter } = parseYAML(contents);
     if (!document)
         return unchanged;
-    const { blocks } = getTopLevelBlocks(document);
+    const { blocks, globalBlock } = getTopLevelBlocks(document);
     const envBlock = blocks.get(targetEnv);
     // The action runs across a glob; files that don't contain the target env or
     // are frozen just pass through unchanged. So do envs without a `promote`
@@ -164443,11 +164477,11 @@ async function rollback(options) {
         logger,
     });
     if (current.tag && !resolved.tag) {
-        throw new AnnotatedError(`Cannot roll back \`${targetEnv}\`: the current file has a \`dockerImage.tag\` but the historical file (commit ${resolved.commit}) does not`, { range: current.tag.range, lineCounter });
+        throw new AnnotatedError(`Cannot roll back \`${targetEnv}\`: the current file has a \`dockerImage.tag\` but the historical file (commit ${resolved.yamlSha}) does not`, { range: current.tag.range, lineCounter });
     }
     const tagUnchanged = (current.tag?.value ?? null) === resolved.tag;
     if (resolved.ref === current.ref.value && tagUnchanged) {
-        throw new AnnotatedError(`Rollback for \`${targetEnv}\` would be a no-op: ${resolved.ref} is already deployed (commit ${resolved.commit} matches the current ref and tag)`, { range: current.ref.range, lineCounter });
+        throw new AnnotatedError(`Rollback for \`${targetEnv}\` would be a no-op: ${resolved.ref} is already deployed (commit ${resolved.yamlSha} matches the current ref and tag)`, { range: current.ref.range, lineCounter });
     }
     // All validations passed — apply writes.
     new ScalarTokenWriter(current.ref.scalarToken, document.schema).write(resolved.ref);
@@ -164460,11 +164494,12 @@ async function rollback(options) {
             {
                 appName: `${node_path.basename(node_path.dirname(filename))}-${targetEnv}`,
                 environment: targetEnv,
+                repoURL: readRepoURL(envBlock, globalBlock),
                 previousRef: current.ref.value,
                 rolledBackRef: resolved.ref,
                 previousTag: current.tag?.value ?? null,
                 rolledBackTag: current.tag ? resolved.tag : null,
-                resolvedFromCommit: resolved.commit,
+                resolvedFromYamlCommit: resolved.yamlSha,
             },
         ],
     };
@@ -164645,9 +164680,11 @@ async function main() {
         if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
             setOutput("cleanup-changes-markdown", formatCleanupChanges(allCleanupChanges));
         }
-        if (allRollbacks.length > 0) {
-            setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks));
-            setOutput("rollback-summary-json", JSON.stringify(allRollbacks));
+        if (getInput("rollback-env")) {
+            setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks, {
+                configRepo: process.env.GITHUB_REPOSITORY ?? null,
+            }));
+            setOutput("rollback-summary-json", JSON.stringify({ rollbacks: allRollbacks }));
         }
     }
     catch (error) {
@@ -164693,13 +164730,15 @@ async function processFile(options) {
     if (gitHubClient && doUpdateGitRefs) {
         contents = await updateGitRefs(contents, gitHubClient, frozenEnvironments, logger);
     }
-    if (getBooleanInput("rollback")) {
+    const rollbackEnv = getInput("rollback-env");
+    if (rollbackEnv) {
         const { newContents, rollbacks } = await rollback({
             contents,
             filename: shortFilename(filename),
+            targetEnv: rollbackEnv,
             gitSha: getInput("rollback-git-sha"),
             frozenEnvironments,
-            gitHistoryReader: new ChildProcessGitHistoryReader(),
+            gitHistoryReader: new GitCliHistoryReader(),
             _logger: logger,
         });
         contents = newContents;

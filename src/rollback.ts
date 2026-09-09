@@ -6,9 +6,11 @@ import {
   CSTScalarToken,
   ScalarTokenWriter,
   getStringAndScalarTokenFromMap,
+  getStringValue,
   getTopLevelBlocks,
   parseYAML,
 } from "./yaml.js";
+import { parseRepoURL } from "./github.js";
 import { PrefixingLogger } from "./log.js";
 import { AnnotatedError } from "./annotatedError.js";
 
@@ -30,7 +32,7 @@ export interface GitHistoryReader {
  * the repository that contains the file — which is true for this action
  * because GitHub Actions checks the repo out before running.
  */
-export class ChildProcessGitHistoryReader implements GitHistoryReader {
+export class GitCliHistoryReader implements GitHistoryReader {
   constructor(private cwd: string = process.cwd()) {}
 
   async listCommitsAffectingFile(relativePath: string): Promise<string[]> {
@@ -99,10 +101,12 @@ function readEnvRefAndTag(
   return { kind: "found", ref, tag };
 }
 
-interface ResolvedTarget {
+interface RollbackTarget {
   ref: string;
   tag: string | null;
-  commit: string;
+  /** The commit in the config repo (the one holding the YAML file) whose
+   *  version of the file supplied `ref` and `tag`. */
+  yamlSha: string;
 }
 
 async function resolveRollbackTarget(options: {
@@ -112,7 +116,7 @@ async function resolveRollbackTarget(options: {
   filename: string;
   gitHistoryReader: GitHistoryReader;
   logger: PrefixingLogger;
-}): Promise<ResolvedTarget> {
+}): Promise<RollbackTarget> {
   const { envName, currentRef, gitSha, filename, gitHistoryReader, logger } =
     options;
 
@@ -165,7 +169,11 @@ async function resolveRollbackTarget(options: {
           ? historicalEnv.ref === gitSha
           : historicalEnv.ref !== currentRef;
         if (isTarget) {
-          return { ref: historicalEnv.ref, tag: historicalEnv.tag, commit };
+          return {
+            ref: historicalEnv.ref,
+            tag: historicalEnv.tag,
+            yamlSha: commit,
+          };
         }
         break;
       }
@@ -228,30 +236,75 @@ function readCurrentRefAndTag(
 export interface AppRollback {
   appName: string;
   environment: string;
+  /** The app's source repo (`gitConfig.repoURL`), if the file declares one. */
+  repoURL: string | null;
   previousRef: string;
   rolledBackRef: string;
   previousTag: string | null;
   rolledBackTag: string | null;
-  resolvedFromCommit: string;
+  /** The config-repo commit whose version of the file supplied the rolled-back values. */
+  resolvedFromYamlCommit: string;
 }
 
-export function formatRollbacks(rollbacks: AppRollback[]): string {
+/** Render a commit as `owner/repo@sha` so GitHub autolinks it, falling back
+ *  to a bare abbreviated SHA when the repo is unknown or not on GitHub. */
+function commitReference(repo: string | null, sha: string): string {
+  if (repo) {
+    try {
+      const { owner, repo: name } = parseRepoURL(repo);
+      return `${owner}/${name}@${sha}`;
+    } catch {
+      // Not a GitHub URL; fall through to the bare SHA.
+    }
+  }
+  return `\`${sha.slice(0, 7)}\``;
+}
+
+export function formatRollbacks(
+  rollbacks: AppRollback[],
+  options: {
+    /** `owner/repo` of the repo holding the YAML files, if known. */
+    configRepo?: string | null;
+  } = {},
+): string {
+  if (rollbacks.length === 0) {
+    return "## Rolled back\n\nNothing was rolled back.\n";
+  }
+  const configRepoURL = options.configRepo
+    ? `https://github.com/${options.configRepo}`
+    : null;
   const lines: string[] = ["## Rolled back"];
   for (const r of rollbacks) {
     lines.push(
-      `- **${r.appName}**: \`${r.previousRef.slice(0, 12)}\` → \`${r.rolledBackRef.slice(0, 12)}\` (resolved from commit \`${r.resolvedFromCommit.slice(0, 12)}\`)`,
+      `- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`,
+      `  - resolved from ${commitReference(configRepoURL, r.resolvedFromYamlCommit)}`,
     );
   }
   return `${lines.join("\n")}\n`;
 }
 
-const TARGET_ENV = "prod";
+/** The env's `gitConfig.repoURL`, falling back to `global.gitConfig.repoURL`. */
+function readRepoURL(
+  envBlock: yaml.YAMLMap.Parsed,
+  globalBlock: yaml.YAMLMap.Parsed | null,
+): string | null {
+  for (const block of [envBlock, globalBlock]) {
+    const gitConfig = block?.get("gitConfig");
+    if (gitConfig && yaml.isMap(gitConfig)) {
+      const url = getStringValue(gitConfig, "repoURL");
+      if (url) return url;
+    }
+  }
+  return null;
+}
 
 export async function rollback(options: {
   contents: string;
   /** Repo-relative path of the file, used both for messages and for asking git
    *  about the file's history. */
   filename: string;
+  /** The env to roll back (eg `prod`). */
+  targetEnv: string;
   /** If non-empty, roll back to this SHA. If blank, roll back to the most recent
    *  commit where the target env's gitConfig.ref differed from the current value. */
   gitSha: string;
@@ -262,12 +315,12 @@ export async function rollback(options: {
   const {
     contents,
     filename,
+    targetEnv,
     gitSha,
     frozenEnvironments,
     gitHistoryReader,
     _logger,
   } = options;
-  const targetEnv = TARGET_ENV;
   const logger = _logger.withExtendedPrefix("[rollback] ");
 
   const unchanged = { newContents: contents, rollbacks: [] };
@@ -275,7 +328,7 @@ export async function rollback(options: {
   const { document, stringify, lineCounter } = parseYAML(contents);
   if (!document) return unchanged;
 
-  const { blocks } = getTopLevelBlocks(document);
+  const { blocks, globalBlock } = getTopLevelBlocks(document);
   const envBlock = blocks.get(targetEnv);
 
   // The action runs across a glob; files that don't contain the target env or
@@ -304,7 +357,7 @@ export async function rollback(options: {
 
   if (current.tag && !resolved.tag) {
     throw new AnnotatedError(
-      `Cannot roll back \`${targetEnv}\`: the current file has a \`dockerImage.tag\` but the historical file (commit ${resolved.commit}) does not`,
+      `Cannot roll back \`${targetEnv}\`: the current file has a \`dockerImage.tag\` but the historical file (commit ${resolved.yamlSha}) does not`,
       { range: current.tag.range, lineCounter },
     );
   }
@@ -312,7 +365,7 @@ export async function rollback(options: {
   const tagUnchanged = (current.tag?.value ?? null) === resolved.tag;
   if (resolved.ref === current.ref.value && tagUnchanged) {
     throw new AnnotatedError(
-      `Rollback for \`${targetEnv}\` would be a no-op: ${resolved.ref} is already deployed (commit ${resolved.commit} matches the current ref and tag)`,
+      `Rollback for \`${targetEnv}\` would be a no-op: ${resolved.ref} is already deployed (commit ${resolved.yamlSha} matches the current ref and tag)`,
       { range: current.ref.range, lineCounter },
     );
   }
@@ -333,11 +386,12 @@ export async function rollback(options: {
       {
         appName: `${basename(dirname(filename))}-${targetEnv}`,
         environment: targetEnv,
+        repoURL: readRepoURL(envBlock, globalBlock),
         previousRef: current.ref.value,
         rolledBackRef: resolved.ref,
         previousTag: current.tag?.value ?? null,
         rolledBackTag: current.tag ? resolved.tag : null,
-        resolvedFromCommit: resolved.commit,
+        resolvedFromYamlCommit: resolved.yamlSha,
       },
     ],
   };

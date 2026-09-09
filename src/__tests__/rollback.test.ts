@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   rollback,
+  formatRollbacks,
   GitHistoryReader,
   AppRollback,
-  ChildProcessGitHistoryReader,
+  GitCliHistoryReader,
 } from "../rollback.js";
 import { PrefixingLogger } from "../log.js";
 
@@ -108,6 +109,7 @@ describe("rollback", () => {
       const { newContents, rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "teams/foundation/identity/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -122,11 +124,12 @@ describe("rollback", () => {
         {
           appName: "identity-prod",
           environment: "prod",
+          repoURL: "https://github.com/mdg-private/monorepo.git",
           previousRef: CURRENT.prodRef,
           rolledBackRef: PREVIOUS.prodRef,
           previousTag: CURRENT.prodTag,
           rolledBackTag: PREVIOUS.prodTag,
-          resolvedFromCommit: "commit-prev",
+          resolvedFromYamlCommit: "commit-prev",
         },
       ]);
     });
@@ -152,6 +155,7 @@ describe("rollback", () => {
       const { rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -159,7 +163,7 @@ describe("rollback", () => {
       });
 
       expect(rollbacks[0].rolledBackRef).toBe(PREVIOUS.prodRef);
-      expect(rollbacks[0].resolvedFromCommit).toBe("c-prev-prod");
+      expect(rollbacks[0].resolvedFromYamlCommit).toBe("c-prev-prod");
     });
 
     it("throws when there is no previous prod deploy in history", async () => {
@@ -170,6 +174,7 @@ describe("rollback", () => {
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -188,6 +193,7 @@ describe("rollback", () => {
       const { rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -207,6 +213,7 @@ describe("rollback", () => {
       const { rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -239,6 +246,7 @@ staging:
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -259,6 +267,7 @@ staging:
       const { rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: OLDER.prodRef,
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -267,7 +276,7 @@ staging:
 
       expect(rollbacks[0].rolledBackRef).toBe(OLDER.prodRef);
       expect(rollbacks[0].rolledBackTag).toBe(OLDER.prodTag);
-      expect(rollbacks[0].resolvedFromCommit).toBe("c-older");
+      expect(rollbacks[0].resolvedFromYamlCommit).toBe("c-older");
     });
 
     it("throws when the explicit SHA never appeared in prod", async () => {
@@ -280,6 +289,7 @@ staging:
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "deadbeef00000000000000000000000000000000",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -299,6 +309,7 @@ staging:
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: CURRENT.prodRef,
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -318,6 +329,7 @@ staging:
       const { newContents, rollbacks } = await rollback({
         contents: valuesFile(REBUILT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: CURRENT.prodRef,
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -330,7 +342,7 @@ staging:
         rolledBackRef: CURRENT.prodRef,
         previousTag: REBUILT.prodTag,
         rolledBackTag: CURRENT.prodTag,
-        resolvedFromCommit: "c-orig",
+        resolvedFromYamlCommit: "c-orig",
       });
     });
 
@@ -344,6 +356,7 @@ staging:
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: CURRENT.prodRef,
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -370,6 +383,7 @@ staging:
         rollback({
           contents: valuesFile(CURRENT),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: PREVIOUS.prodRef,
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -380,7 +394,7 @@ staging:
   });
 
   describe("env selection", () => {
-    it("leaves staging alone even when it has promote.from: rollback is prod-only", async () => {
+    it("rolls back only the env named by targetEnv", async () => {
       const dualPromote = (prodRef: string, stagingRef: string): string =>
         `global:
   namespace: apollo-default
@@ -423,17 +437,41 @@ prod:
       ]);
 
       // prod is unchanged across history, so there is nothing to roll back to.
-      // If staging were eligible, c-prev would have been a valid target.
       await expect(
         rollback({
           contents: dualPromote("prod-current", "staging-current"),
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
           _logger: logger,
         }),
       ).rejects.toThrow(/No previous deploy found for `prod`/);
+
+      // Same history, but targeting staging finds c-prev.
+      const { newContents, rollbacks } = await rollback({
+        contents: dualPromote("prod-current", "staging-current"),
+        filename: "a/application-values.yaml",
+        targetEnv: "staging",
+        gitSha: "",
+        frozenEnvironments: new Set(),
+        gitHistoryReader: reader,
+        _logger: logger,
+      });
+      expect(newContents).toBe(dualPromote("prod-current", "staging-previous"));
+      expect(rollbacks).toEqual<AppRollback[]>([
+        {
+          appName: "a-staging",
+          environment: "staging",
+          repoURL: "https://github.com/x/y.git",
+          previousRef: "staging-current",
+          rolledBackRef: "staging-previous",
+          previousTag: "main---0002-gstaging-current",
+          rolledBackTag: "main---0002-gstaging-previous",
+          resolvedFromYamlCommit: "c-prev",
+        },
+      ]);
     });
 
     it("passes through (no change, no rollback) when the file does not contain the target env", async () => {
@@ -452,6 +490,7 @@ dev:
       const { newContents, rollbacks } = await rollback({
         contents: noProdFile,
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -488,6 +527,7 @@ prod:
       const { newContents, rollbacks } = await rollback({
         contents: tracksMainFile,
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -507,6 +547,7 @@ prod:
       const { newContents, rollbacks } = await rollback({
         contents: valuesFile(CURRENT),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(["prod"]),
         gitHistoryReader: reader,
@@ -534,6 +575,7 @@ prod:
         rollback({
           contents: broken,
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -559,6 +601,7 @@ prod:
         rollback({
           contents: broken,
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -590,6 +633,7 @@ prod:
         rollback({
           contents: withTag,
           filename: "a/application-values.yaml",
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -629,6 +673,7 @@ prod:
       const { newContents } = await rollback({
         contents: withFormatting,
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -648,7 +693,7 @@ prod:
     });
   });
 
-  describe("ChildProcessGitHistoryReader against a real git repo", () => {
+  describe("GitCliHistoryReader against a real git repo", () => {
     it("reads history and rolls back using real git", async () => {
       const dir = await mkdtemp(join(tmpdir(), "rollback-integ-"));
       try {
@@ -717,10 +762,11 @@ prod:
         const { readFile } = await import("node:fs/promises");
         const headContents = await readFile(join(dir, file), "utf-8");
 
-        const reader = new ChildProcessGitHistoryReader(dir);
+        const reader = new GitCliHistoryReader(dir);
         const { newContents, rollbacks } = await rollback({
           contents: headContents,
           filename: file,
+          targetEnv: "prod",
           gitSha: "",
           frozenEnvironments: new Set(),
           gitHistoryReader: reader,
@@ -762,6 +808,7 @@ prod:
       const { newContents, rollbacks } = await rollback({
         contents: minimal("r-new"),
         filename: "a/application-values.yaml",
+        targetEnv: "prod",
         gitSha: "",
         frozenEnvironments: new Set(),
         gitHistoryReader: reader,
@@ -771,6 +818,39 @@ prod:
       expect(newContents).toContain("ref: r-old");
       expect(rollbacks[0].previousTag).toBeNull();
       expect(rollbacks[0].rolledBackTag).toBeNull();
+    });
+  });
+
+  describe("formatRollbacks", () => {
+    const applied: AppRollback = {
+      appName: "identity-prod",
+      environment: "prod",
+      repoURL: "https://github.com/mdg-private/monorepo.git",
+      previousRef: CURRENT.prodRef,
+      rolledBackRef: PREVIOUS.prodRef,
+      previousTag: CURRENT.prodTag,
+      rolledBackTag: PREVIOUS.prodTag,
+      resolvedFromYamlCommit: "1111111111111111111111111111111111111111",
+    };
+
+    it("writes owner/repo@sha references so GitHub autolinks them", () => {
+      expect(
+        formatRollbacks([applied], { configRepo: "mdg-private/apollo-argo" }),
+      ).toBe(
+        `## Rolled back\n- **identity-prod**: mdg-private/monorepo@${CURRENT.prodRef} → mdg-private/monorepo@${PREVIOUS.prodRef}\n  - resolved from mdg-private/apollo-argo@1111111111111111111111111111111111111111\n`,
+      );
+    });
+
+    it("falls back to short bare SHAs when repos are unknown", () => {
+      expect(formatRollbacks([{ ...applied, repoURL: null }])).toBe(
+        `## Rolled back\n- **identity-prod**: \`${CURRENT.prodRef.slice(0, 7)}\` → \`${PREVIOUS.prodRef.slice(0, 7)}\`\n  - resolved from \`1111111\`\n`,
+      );
+    });
+
+    it("says so when nothing was rolled back", () => {
+      expect(formatRollbacks([])).toBe(
+        "## Rolled back\n\nNothing was rolled back.\n",
+      );
     });
   });
 });

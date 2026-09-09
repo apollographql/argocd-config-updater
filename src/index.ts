@@ -39,7 +39,7 @@ import { PRMetadata, AppPromotion } from "./promotion-metadata-types.js";
 import {
   rollback,
   formatRollbacks,
-  ChildProcessGitHistoryReader,
+  GitCliHistoryReader,
   AppRollback,
 } from "./rollback.js";
 
@@ -315,12 +315,17 @@ async function main(): Promise<void> {
       );
     }
 
-    if (allRollbacks.length > 0) {
+    if (core.getInput("rollback-env")) {
       core.setOutput(
         "rollback-summary-markdown",
-        formatRollbacks(allRollbacks),
+        formatRollbacks(allRollbacks, {
+          configRepo: process.env.GITHUB_REPOSITORY ?? null,
+        }),
       );
-      core.setOutput("rollback-summary-json", JSON.stringify(allRollbacks));
+      core.setOutput(
+        "rollback-summary-json",
+        JSON.stringify({ rollbacks: allRollbacks }),
+      );
     }
   } catch (error) {
     // Fail the workflow run if an error occurs
@@ -421,13 +426,15 @@ async function processFile(options: {
     );
   }
 
-  if (core.getBooleanInput("rollback")) {
+  const rollbackEnv = core.getInput("rollback-env");
+  if (rollbackEnv) {
     const { newContents, rollbacks } = await rollback({
       contents,
       filename: shortFilename(filename),
+      targetEnv: rollbackEnv,
       gitSha: core.getInput("rollback-git-sha"),
       frozenEnvironments,
-      gitHistoryReader: new ChildProcessGitHistoryReader(),
+      gitHistoryReader: new GitCliHistoryReader(),
       _logger: logger,
     });
     contents = newContents;

@@ -60,11 +60,10 @@ inputs:
     description: 'Clean up track: pr-N patterns where PR N is closed'
     default: 'false'
 
-  rollback:
-    description: 'Turn on rollback mode.
-      This sets the `prod` env block''s `gitConfig.ref` to a previously deployed sha,
-      along with the matching `dockerImage.tag`. Requires a `promote.from` block.'
-    default: 'false'
+  rollback-env:
+    description: 'If set, turns on rollback mode for the named env (eg `prod`, or `staging`).
+      This sets that env block''s `gitConfig.ref` to a previously deployed sha,
+      along with the matching `dockerImage.tag`. The env must have a `promote.from` block.'
 
   rollback-git-sha:
     description: 'If you leave this blank, it rolls back to the last SHA that was deployed.
@@ -82,12 +81,12 @@ outputs:
 
   rollback-summary-markdown:
     description: 'Markdown text that describes the rollbacks the action applied.
-      This output appears only if `rollback` is set.'
+      This output appears if `rollback-env` is set.'
 
   rollback-summary-json:
-    description: 'The same rollbacks as `rollback-summary-markdown`, in JSON array format.
-      This is meant for use in scripts and other programs.
-      It appears only if `rollback` is set and the action applied at least one rollback.'
+    description: 'The same rollbacks as `rollback-summary-markdown`, as a JSON object
+      of the form `{"rollbacks": [...]}`. This is meant for use in scripts and other programs.
+      It appears if `rollback-env` is set.'
 
 runs:
   using: node24
