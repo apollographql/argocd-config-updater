@@ -93,16 +93,18 @@ export function getStringValue(node: yaml.YAMLMap, key: string): string | null {
   return getStringAndScalarTokenFromMap(node, key)?.value ?? null;
 }
 
+export interface ScalarEntry {
+  scalarToken: CSTScalarToken;
+  value: string;
+  range?: yaml.Range | null | undefined;
+}
+
 /**  Returns null if the value isn't there at all; throws if it's there but isn't
  * a string. */
 export function getStringAndScalarTokenFromMap(
   node: yaml.YAMLMap,
   key: string,
-): {
-  scalarToken: CSTScalarToken;
-  value: string;
-  range?: yaml.Range | null | undefined;
-} | null {
+): ScalarEntry | null {
   if (!node.has(key)) {
     return null;
   }

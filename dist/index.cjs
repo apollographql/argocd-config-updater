@@ -45,6 +45,7 @@ var require$$1$a = require('querystring');
 var require$$0$d = require('buffer');
 var node_crypto = require('node:crypto');
 var node_path = require('node:path');
+var node_child_process = require('node:child_process');
 
 function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -89574,7 +89575,7 @@ function requireGaxios () {
 	        const hasWindow = typeof window !== 'undefined' && !!window;
 	        this.#fetch ||= hasWindow
 	            ? window.fetch
-	            : (await Promise.resolve().then(function () { return require('./index-BkIX-nvq.cjs'); })).default;
+	            : (await Promise.resolve().then(function () { return require('./index-_QvGCUZF.cjs'); })).default;
 	        return this.#fetch;
 	    }
 	    /**
@@ -164281,6 +164282,222 @@ async function cleanupClosedPrTracking(options) {
     };
 }
 
+const execFileAsync = require$$0$8.promisify(node_child_process.execFile);
+/**
+ * Shells out to the git CLI. Assumes the caller's working directory is inside
+ * the repository that contains the file — which is true for this action
+ * because GitHub Actions checks the repo out before running.
+ */
+class GitCliHistoryReader {
+    cwd;
+    constructor(cwd = process.cwd()) {
+        this.cwd = cwd;
+    }
+    async listCommitsAffectingFile(relativePath) {
+        const { stdout } = await execFileAsync("git", ["log", "--format=%H", "--", relativePath], { cwd: this.cwd, maxBuffer: 16 * 1024 * 1024 });
+        return stdout.split("\n").filter(Boolean);
+    }
+    async readFileAtCommit(commit, relativePath) {
+        const { stdout } = await execFileAsync("git", ["show", `${commit}:${relativePath}`], { cwd: this.cwd, maxBuffer: 16 * 1024 * 1024 });
+        return stdout;
+    }
+}
+/** Extract one env block's gitConfig.ref and dockerImage.tag from a YAML string. */
+function readEnvRefAndTag(fileContents, envName) {
+    try {
+        const { document } = parseYAML(fileContents);
+        if (!document)
+            return { kind: "unparseable" };
+        const envBlock = getTopLevelBlocks(document).blocks.get(envName);
+        if (!envBlock)
+            return { kind: "envMissing" };
+        const gitConfig = envBlock.get("gitConfig");
+        if (!isMap(gitConfig))
+            return { kind: "envMissing" };
+        const ref = getStringValue(gitConfig, "ref");
+        if (ref === null)
+            return { kind: "envMissing" };
+        const dockerImage = envBlock.get("dockerImage");
+        const tag = isMap(dockerImage)
+            ? getStringValue(dockerImage, "tag")
+            : null;
+        return { kind: "found", ref, tag };
+    }
+    catch {
+        return { kind: "unparseable" };
+    }
+}
+async function resolveRollbackTarget(options) {
+    const { envName, currentRef, gitSha, filename, gitHistoryReader, logger } = options;
+    const commits = await gitHistoryReader.listCommitsAffectingFile(filename);
+    if (commits.length === 0) {
+        throw new Error(`Git history for ${filename} is empty; cannot compute rollback target`);
+    }
+    // Skip the most recent commit since it is the problem one.
+    // Start the search at the commit before it, going backwards.
+    // Many commits update dev and staging only. They do not change the promotion target.
+    // Find the commit where the ref for this env changed.
+    for (const commit of commits.slice(1)) {
+        let historical;
+        try {
+            historical = await gitHistoryReader.readFileAtCommit(commit, filename);
+        }
+        catch (err) {
+            // File may not have existed at that commit (e.g. rename). Skip.
+            const message = err instanceof Error ? err.message : String(err);
+            logger.info(`Skipping commit ${commit}: ${message}`);
+            continue;
+        }
+        const historicalEnv = readEnvRefAndTag(historical, envName);
+        switch (historicalEnv.kind) {
+            // A commit whose YAML we cannot parse tells us nothing; keep walking.
+            case "unparseable":
+                logger.info(`Skipping commit ${commit}: could not parse YAML`);
+                continue;
+            // The env has no ref at this commit.
+            // Older commits belong to a different version of the file.
+            // Do not roll back to an older commit. The ref there did not belong to this env.
+            // Stop the search here.
+            case "envMissing": {
+                const why = gitSha
+                    ? `SHA ${gitSha} predates it.`
+                    : `There is no earlier deploy to roll back to.`;
+                throw new Error(`Cannot roll back \`${envName}\`: it has no pinned \`gitConfig.ref\` as of commit ${commit}, which is as far back as its history goes in ${filename}. ${why}`);
+            }
+            // Explicit-SHA mode: find the commit where this env held exactly that SHA.
+            // Blank-SHA mode: first commit where this env's ref differs from current.
+            case "found": {
+                const isTarget = gitSha
+                    ? historicalEnv.ref === gitSha
+                    : historicalEnv.ref !== currentRef;
+                if (isTarget) {
+                    return {
+                        ref: historicalEnv.ref,
+                        tag: historicalEnv.tag,
+                        yamlSha: commit,
+                    };
+                }
+                break;
+            }
+        }
+    }
+    if (gitSha) {
+        const why = gitSha === currentRef
+            ? `it is the current deploy and has no earlier deploy to return to`
+            : `it has never been deployed to \`${envName}\``;
+        throw new Error(`Cannot roll back to SHA ${gitSha}: ${why} (scanned ${commits.length} commits of ${filename})`);
+    }
+    throw new Error(`No previous deploy found for \`${envName}\` in the history of ${filename} (scanned ${commits.length} commits)`);
+}
+/** Read the env's current gitConfig.ref (and dockerImage.tag, if the env has
+ *  one) or throw if the env isn't shaped like a promotion target. */
+function readCurrentRefAndTag(envBlock, envName, lineCounter) {
+    const gitConfigNode = envBlock.get("gitConfig");
+    if (!gitConfigNode || !isMap(gitConfigNode)) {
+        throw new AnnotatedError(`Cannot roll back \`${envName}\`: missing \`gitConfig\` block`, { range: envBlock.range, lineCounter });
+    }
+    const ref = getStringAndScalarTokenFromMap(gitConfigNode, "ref");
+    if (!ref) {
+        throw new AnnotatedError(`Cannot roll back \`${envName}\`: \`gitConfig.ref\` is not set`, { range: gitConfigNode.range, lineCounter });
+    }
+    const dockerImageNode = envBlock.get("dockerImage");
+    const tag = dockerImageNode && isMap(dockerImageNode)
+        ? getStringAndScalarTokenFromMap(dockerImageNode, "tag")
+        : null;
+    return { ref, tag };
+}
+/** Render a commit as `owner/repo@sha` so GitHub autolinks it, falling back
+ *  to a bare abbreviated SHA when the repo is unknown or not on GitHub. */
+function commitReference(repo, sha) {
+    if (repo) {
+        try {
+            const { owner, repo: name } = parseRepoURL(repo);
+            return `${owner}/${name}@${sha}`;
+        }
+        catch {
+            // Not a GitHub URL; fall through to the bare SHA.
+        }
+    }
+    return `\`${sha.slice(0, 7)}\``;
+}
+function formatRollbacks(rollbacks) {
+    if (rollbacks.length === 0) {
+        return "## Rolled back\n\nNothing was rolled back.\n";
+    }
+    const lines = ["## Rolled back"];
+    for (const r of rollbacks) {
+        lines.push(`- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`, `  - resolved from ${r.resolvedFromYamlCommit}`);
+    }
+    return `${lines.join("\n")}\n`;
+}
+/** The env's `gitConfig.repoURL`, falling back to `global.gitConfig.repoURL`. */
+function readRepoURL(envBlock, globalBlock) {
+    for (const block of [envBlock, globalBlock]) {
+        const gitConfig = block?.get("gitConfig");
+        if (gitConfig && isMap(gitConfig)) {
+            const url = getStringValue(gitConfig, "repoURL");
+            if (url)
+                return url;
+        }
+    }
+    return null;
+}
+async function rollback(options) {
+    const { contents, filename, targetEnv, gitSha, frozenEnvironments, gitHistoryReader, _logger, } = options;
+    const logger = _logger.withExtendedPrefix("[rollback] ");
+    const unchanged = { newContents: contents, rollbacks: [] };
+    const { document, stringify, lineCounter } = parseYAML(contents);
+    if (!document)
+        return unchanged;
+    const { blocks, globalBlock } = getTopLevelBlocks(document);
+    const envBlock = blocks.get(targetEnv);
+    // The action runs across a glob; files that don't contain the target env or
+    // are frozen just pass through unchanged. So do envs without a `promote`
+    // block: only apps that are promotion targets get rollback, while
+    // non-promoted envs (which track a mutable ref directly) roll forward
+    // instead.
+    const isRollbackCandidate = envBlock && !frozenEnvironments.has(targetEnv) && envBlock.has("promote");
+    if (!isRollbackCandidate)
+        return unchanged;
+    const current = readCurrentRefAndTag(envBlock, targetEnv, lineCounter);
+    logger.info(`Resolving rollback target for ${targetEnv} (current ref: ${current.ref.value})`);
+    const resolved = await resolveRollbackTarget({
+        envName: targetEnv,
+        currentRef: current.ref.value,
+        gitSha,
+        filename,
+        gitHistoryReader,
+        logger,
+    });
+    if (current.tag && !resolved.tag) {
+        throw new AnnotatedError(`Cannot roll back \`${targetEnv}\`: the current file has a \`dockerImage.tag\` but the historical file (commit ${resolved.yamlSha}) does not`, { range: current.tag.range, lineCounter });
+    }
+    const tagUnchanged = (current.tag?.value ?? null) === resolved.tag;
+    if (resolved.ref === current.ref.value && tagUnchanged) {
+        throw new AnnotatedError(`Rollback for \`${targetEnv}\` would be a no-op: ${resolved.ref} is already deployed (commit ${resolved.yamlSha} matches the current ref and tag)`, { range: current.ref.range, lineCounter });
+    }
+    // All validations passed — apply writes.
+    new ScalarTokenWriter(current.ref.scalarToken, document.schema).write(resolved.ref);
+    if (current.tag && resolved.tag) {
+        new ScalarTokenWriter(current.tag.scalarToken, document.schema).write(resolved.tag);
+    }
+    return {
+        newContents: stringify(),
+        rollbacks: [
+            {
+                appName: `${node_path.basename(node_path.dirname(filename))}-${targetEnv}`,
+                environment: targetEnv,
+                repoURL: readRepoURL(envBlock, globalBlock),
+                previousRef: current.ref.value,
+                rolledBackRef: resolved.ref,
+                previousTag: current.tag?.value ?? null,
+                rolledBackTag: current.tag ? resolved.tag : null,
+                resolvedFromYamlCommit: resolved.yamlSha,
+            },
+        ],
+    };
+}
+
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -164398,9 +164615,10 @@ async function main() {
         const prMetadata = { appPromotions: [] };
         const promotionsByFileThenEnvironment = new Map();
         const allCleanupChanges = [];
+        const allRollbacks = [];
         await eachLimit$1(filenames, parallelism, async (filename) => {
             try {
-                const { promotionsByTargetEnvironment, cleanupChanges, appPromotions } = await processFile({
+                const { promotionsByTargetEnvironment, cleanupChanges, appPromotions, appRollbacks, } = await processFile({
                     filename,
                     gitHubClient,
                     dockerRegistryClient,
@@ -164418,6 +164636,7 @@ async function main() {
                 }
                 prMetadata.appPromotions.push(...appPromotions);
                 allCleanupChanges.push(...cleanupChanges);
+                allRollbacks.push(...appRollbacks);
             }
             catch (error) {
                 if (error instanceof AnnotatedError) {
@@ -164454,6 +164673,10 @@ async function main() {
         if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
             setOutput("cleanup-changes-markdown", formatCleanupChanges(allCleanupChanges));
         }
+        if (getInput("rollback-env")) {
+            setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks));
+            setOutput("rollback-summary-json", JSON.stringify({ rollbacks: allRollbacks }));
+        }
     }
     catch (error) {
         // Fail the workflow run if an error occurs
@@ -164472,6 +164695,7 @@ async function processFile(options) {
         promotionsByTargetEnvironment: null,
         cleanupChanges: [],
         appPromotions: [],
+        appRollbacks: [],
     };
     const logger = new PrefixingLogger(`[${shortFilename(filename)}] `);
     let contents = await promises.readFile(filename, "utf-8");
@@ -164496,6 +164720,20 @@ async function processFile(options) {
     // docker tags are updated.
     if (gitHubClient && doUpdateGitRefs) {
         contents = await updateGitRefs(contents, gitHubClient, frozenEnvironments, logger);
+    }
+    const rollbackEnv = getInput("rollback-env");
+    if (rollbackEnv) {
+        const { newContents, rollbacks } = await rollback({
+            contents,
+            filename: shortFilename(filename),
+            targetEnv: rollbackEnv,
+            gitSha: getInput("rollback-git-sha"),
+            frozenEnvironments,
+            gitHistoryReader: new GitCliHistoryReader(),
+            _logger: logger,
+        });
+        contents = newContents;
+        ret.appRollbacks = rollbacks;
     }
     if (getBooleanInput("update-promoted-values")) {
         const promotionTargetRegexp = getInput("promotion-target-regexp");

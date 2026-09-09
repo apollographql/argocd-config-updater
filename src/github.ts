@@ -47,12 +47,12 @@ export interface GitHubClient {
   getPullRequest(options: GetPullRequestForNumberOptions): Promise<PullRequest>;
 }
 
-interface OwnerAndRepo {
+export interface OwnerAndRepo {
   owner: string;
   repo: string;
 }
 
-function parseRepoURL(repoURL: string): OwnerAndRepo {
+export function parseRepoURL(repoURL: string): OwnerAndRepo {
   const m = repoURL.match(/\bgithub\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git|\/)?$/);
   if (!m) {
     throw Error(`Can only track GitHub repoURLs, not ${repoURL}`);
