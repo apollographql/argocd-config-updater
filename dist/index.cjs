@@ -164302,34 +164302,30 @@ class GitCliHistoryReader {
         return stdout;
     }
 }
-function isRecord(value) {
-    return typeof value === "object" && value !== null;
-}
 /** Extract one env block's gitConfig.ref and dockerImage.tag from a YAML string. */
 function readEnvRefAndTag(fileContents, envName) {
-    let parsed;
     try {
-        parsed = parse$1(fileContents);
+        const { document } = parseYAML(fileContents);
+        if (!document)
+            return { kind: "unparseable" };
+        const envBlock = getTopLevelBlocks(document).blocks.get(envName);
+        if (!envBlock)
+            return { kind: "envMissing" };
+        const gitConfig = envBlock.get("gitConfig");
+        if (!isMap(gitConfig))
+            return { kind: "envMissing" };
+        const ref = getStringValue(gitConfig, "ref");
+        if (ref === null)
+            return { kind: "envMissing" };
+        const dockerImage = envBlock.get("dockerImage");
+        const tag = isMap(dockerImage)
+            ? getStringValue(dockerImage, "tag")
+            : null;
+        return { kind: "found", ref, tag };
     }
     catch {
         return { kind: "unparseable" };
     }
-    if (!isRecord(parsed))
-        return { kind: "unparseable" };
-    const envBlock = parsed[envName];
-    if (!isRecord(envBlock))
-        return { kind: "envMissing" };
-    const gitConfig = envBlock.gitConfig;
-    if (!isRecord(gitConfig))
-        return { kind: "envMissing" };
-    const ref = gitConfig.ref;
-    if (typeof ref !== "string")
-        return { kind: "envMissing" };
-    const dockerImage = envBlock.dockerImage;
-    const tag = isRecord(dockerImage) && typeof dockerImage.tag === "string"
-        ? dockerImage.tag
-        : null;
-    return { kind: "found", ref, tag };
 }
 async function resolveRollbackTarget(options) {
     const { envName, currentRef, gitSha, filename, gitHistoryReader, logger } = options;
@@ -164424,16 +164420,13 @@ function commitReference(repo, sha) {
     }
     return `\`${sha.slice(0, 7)}\``;
 }
-function formatRollbacks(rollbacks, options = {}) {
+function formatRollbacks(rollbacks) {
     if (rollbacks.length === 0) {
         return "## Rolled back\n\nNothing was rolled back.\n";
     }
-    const configRepoURL = options.configRepo
-        ? `https://github.com/${options.configRepo}`
-        : null;
     const lines = ["## Rolled back"];
     for (const r of rollbacks) {
-        lines.push(`- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`, `  - resolved from ${commitReference(configRepoURL, r.resolvedFromYamlCommit)}`);
+        lines.push(`- **${r.appName}**: ${commitReference(r.repoURL, r.previousRef)} → ${commitReference(r.repoURL, r.rolledBackRef)}`, `  - resolved from ${r.resolvedFromYamlCommit}`);
     }
     return `${lines.join("\n")}\n`;
 }
@@ -164681,9 +164674,7 @@ async function main() {
             setOutput("cleanup-changes-markdown", formatCleanupChanges(allCleanupChanges));
         }
         if (getInput("rollback-env")) {
-            setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks, {
-                configRepo: process.env.GITHUB_REPOSITORY ?? null,
-            }));
+            setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks));
             setOutput("rollback-summary-json", JSON.stringify({ rollbacks: allRollbacks }));
         }
     }

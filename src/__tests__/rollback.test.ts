@@ -705,7 +705,9 @@ prod:
 
         const file = "teams/test-team/test-widget/application-values.yaml";
         const { mkdir } = await import("node:fs/promises");
-        await mkdir(join(dir, "teams/test-team/test-widget"), { recursive: true });
+        await mkdir(join(dir, "teams/test-team/test-widget"), {
+          recursive: true,
+        });
 
         // Commit 1: PREVIOUS prod ref.
         await writeFile(join(dir, file), valuesFile(PREVIOUS));
