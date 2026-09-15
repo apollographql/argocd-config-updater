@@ -175,6 +175,12 @@ export function formatPromotedCommits(
       return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
     .join("");
-  const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
-  return `${body}\n\n${footer}\n`;
+  // The metadata comment goes at the *top* of the body rather than the bottom.
+  // The GitHub Action that opens promotion PRs (peter-evans/create-pull-request)
+  // silently truncates bodies longer than 65536 characters, and a promotion PR
+  // covering many apps can exceed that. Losing the tail of the human-readable
+  // commit list is harmless; losing the tail of the metadata comment breaks the
+  // tooling (argo-lookout) that parses it to produce required status checks.
+  const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
+  return `${metadataComment}\n\n${body}\n`;
 }
