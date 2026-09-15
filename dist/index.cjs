@@ -164173,8 +164173,56 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
         return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
         .join("");
-    const footer = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
-    return `${body}\n\n${footer}\n`;
+    const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->\n\n`;
+    return assemblePRBody(metadataComment, body);
+}
+// peter-evans/create-pull-request (which opens promotion PRs from this
+// action's output) silently truncates PR bodies longer than this before
+// sending them to GitHub. We enforce the same limit ourselves so that the
+// truncation is explicit rather than silent.
+const MAX_PR_BODY_LENGTH = 65536;
+// Appended to the body when the human-readable commit list had to be cut.
+// A reader must never assume that an app or commit missing from the list is
+// not being promoted.
+//
+// Starts with a blank line on purpose: `text\n---` would render as a setext
+// heading rather than a horizontal rule.
+const PR_BODY_TRUNCATION_NOTICE = `
+
+---
+
+> [!WARNING]
+> **This description is incomplete.** The full list of promoted apps and commits was longer than GitHub's ${MAX_PR_BODY_LENGTH}-character limit for pull request bodies, so it has been cut off above. Apps and commits that are not listed here are **still promoted by this PR**. The changed \`application-values.yaml\` files in the diff are the complete record of what will be deployed. Consider promoting fewer apps at a time.
+`;
+/**
+ * Combines the metadata comment and the human-readable body into the final
+ * PR body, keeping it within MAX_PR_BODY_LENGTH.
+ *
+ * The metadata comment goes at the *top* of the body rather than the bottom:
+ * a promotion PR covering many apps can exceed the limit, and losing part of
+ * the human-readable commit list is recoverable (the diff is the source of
+ * truth) whereas losing part of the metadata breaks the tooling (argo-lookout)
+ * that parses it to produce required status checks.
+ *
+ * If the body must be cut, it is cut at a line boundary (so a half-written
+ * link is never emitted) and PR_BODY_TRUNCATION_NOTICE is appended.
+ *
+ * `metadataComment` is expected to carry its own trailing separator.
+ */
+function assemblePRBody(metadataComment, body) {
+    const full = `${metadataComment}${body}\n`;
+    if (full.length <= MAX_PR_BODY_LENGTH) {
+        return { promotedCommitsMarkdown: full, truncated: false };
+    }
+    const available = MAX_PR_BODY_LENGTH -
+        metadataComment.length -
+        PR_BODY_TRUNCATION_NOTICE.length;
+    const cutAt = available > 0 ? body.lastIndexOf("\n", available) : -1;
+    const truncatedBody = cutAt > 0 ? body.slice(0, cutAt) : "";
+    return {
+        promotedCommitsMarkdown: `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`,
+        truncated: true,
+    };
 }
 
 function formatCleanupChanges(changes) {
@@ -164668,7 +164716,11 @@ async function main() {
         }
         if (generatePromotedCommitsMarkdown &&
             getBooleanInput("update-promoted-values")) {
-            setOutput("promoted-commits-markdown", formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata));
+            const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata);
+            if (truncated) {
+                warning(`The promoted-commits-markdown output exceeded ${MAX_PR_BODY_LENGTH} characters and its commit list was truncated. The PR body says so explicitly; consider promoting fewer apps at a time.`);
+            }
+            setOutput("promoted-commits-markdown", promotedCommitsMarkdown);
         }
         if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
             setOutput("cleanup-changes-markdown", formatCleanupChanges(allCleanupChanges));

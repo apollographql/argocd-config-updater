@@ -1,6 +1,11 @@
 // Tests for format-promoted-commits.ts
 import { describe, it, expect } from "vitest";
-import { formatPromotedCommits } from "../format-promoted-commits.js";
+import {
+  assemblePRBody,
+  formatPromotedCommits,
+  MAX_PR_BODY_LENGTH,
+  PR_BODY_TRUNCATION_NOTICE,
+} from "../format-promoted-commits.js";
 import { PRMetadata } from "../promotion-metadata-types.js";
 
 const sampleGitConfig = {
@@ -21,9 +26,13 @@ describe("formatPromotedCommits", () => {
       ],
     };
 
-    const result = formatPromotedCommits(promotions, prMetadata);
+    const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(
+      promotions,
+      prMetadata,
+    );
 
-    expect(result).toMatchSnapshot();
+    expect(truncated).toBe(false);
+    expect(promotedCommitsMarkdown).toMatchSnapshot();
   });
 
   it("validates prMetadata structure", () => {
@@ -46,9 +55,13 @@ describe("formatPromotedCommits", () => {
       appPromotions: [],
     };
 
-    const result = formatPromotedCommits(promotions, prMetadata);
+    const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(
+      promotions,
+      prMetadata,
+    );
 
-    expect(result).toMatchSnapshot();
+    expect(truncated).toBe(false);
+    expect(promotedCommitsMarkdown).toMatchSnapshot();
   });
 
   it("handles multiple app promotions", () => {
@@ -69,8 +82,67 @@ describe("formatPromotedCommits", () => {
       ],
     };
 
-    const result = formatPromotedCommits(promotions, prMetadata);
+    const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(
+      promotions,
+      prMetadata,
+    );
 
-    expect(result).toMatchSnapshot();
+    expect(truncated).toBe(false);
+    expect(promotedCommitsMarkdown).toMatchSnapshot();
+  });
+});
+
+describe("assemblePRBody", () => {
+  const metadataComment =
+    "<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbXX0= -->\n\n";
+
+  it("puts the metadata comment first and leaves short bodies untouched", () => {
+    const body = "### Promoting to prod\nApps:\n- teams/x/app\n";
+    const { promotedCommitsMarkdown, truncated } = assemblePRBody(
+      metadataComment,
+      body,
+    );
+    expect(truncated).toBe(false);
+    expect(promotedCommitsMarkdown).toBe(`${metadataComment}${body}\n`);
+    expect(promotedCommitsMarkdown).not.toContain(PR_BODY_TRUNCATION_NOTICE);
+  });
+
+  it("truncates an over-long body at a line boundary and appends the notice", () => {
+    const line = "- https://github.com/example/repo/commit/0123456789abcdef\n";
+    const lines = Math.ceil((MAX_PR_BODY_LENGTH * 2) / line.length);
+    const body = line.repeat(lines);
+    const { promotedCommitsMarkdown: result, truncated } = assemblePRBody(
+      metadataComment,
+      body,
+    );
+
+    expect(truncated).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(MAX_PR_BODY_LENGTH);
+    expect(result.startsWith(metadataComment)).toBe(true);
+    expect(result.endsWith(PR_BODY_TRUNCATION_NOTICE)).toBe(true);
+
+    // Every surviving line must be a complete copy of the input line: nothing
+    // half-written.
+    const kept = result
+      .slice(metadataComment.length, -PR_BODY_TRUNCATION_NOTICE.length)
+      .split("\n");
+    expect(kept.length).toBeGreaterThan(0);
+    for (const keptLine of kept) {
+      expect(`${keptLine}\n`).toBe(line);
+    }
+    // And we kept as much as we could: one more line would not have fit.
+    expect(result.length + line.length).toBeGreaterThan(MAX_PR_BODY_LENGTH);
+  });
+
+  it("never drops the metadata comment even when nothing else fits", () => {
+    const hugeMetadataComment = `<!-- prMetadata:${"A".repeat(MAX_PR_BODY_LENGTH)} -->\n\n`;
+    const { promotedCommitsMarkdown, truncated } = assemblePRBody(
+      hugeMetadataComment,
+      "some body\n",
+    );
+    expect(truncated).toBe(true);
+    expect(promotedCommitsMarkdown.startsWith(hugeMetadataComment)).toBe(true);
+    expect(promotedCommitsMarkdown).toContain(PR_BODY_TRUNCATION_NOTICE);
+    expect(promotedCommitsMarkdown).not.toContain("some body");
   });
 });
