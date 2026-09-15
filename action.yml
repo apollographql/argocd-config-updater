@@ -74,7 +74,7 @@ outputs:
     description: 'A combination of the promotion-target-regexp and files inputs with special characters changed to underscores; appropriate for constructing a branch name'
 
   promoted-commits-markdown:
-    description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set.'
+    description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set. Kept within the 65536-character GitHub PR body limit; if the commit list had to be cut, the markdown ends with an explicit warning saying so.'
 
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'

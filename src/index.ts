@@ -28,7 +28,11 @@ import { PrefixingLogger } from "./log.js";
 import { inspect } from "util";
 import { PromotionsByTargetEnvironment } from "./promotionInfo.js";
 import { LinkTemplateMap, readLinkTemplateMapFile } from "./templates.js";
-import { formatPromotedCommits } from "./format-promoted-commits.js";
+import {
+  formatPromotedCommits,
+  MAX_PR_BODY_LENGTH,
+  PR_BODY_TRUNCATION_NOTICE,
+} from "./format-promoted-commits.js";
 import {
   CleanupChange,
   formatCleanupChanges,
@@ -302,10 +306,16 @@ async function main(): Promise<void> {
       generatePromotedCommitsMarkdown &&
       core.getBooleanInput("update-promoted-values")
     ) {
-      core.setOutput(
-        "promoted-commits-markdown",
-        formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata),
+      const promotedCommitsMarkdown = formatPromotedCommits(
+        promotionsByFileThenEnvironment,
+        prMetadata,
       );
+      if (promotedCommitsMarkdown.includes(PR_BODY_TRUNCATION_NOTICE)) {
+        core.warning(
+          `The promoted-commits-markdown output exceeded ${MAX_PR_BODY_LENGTH} characters and its commit list was truncated. The PR body says so explicitly; consider promoting fewer apps at a time.`,
+        );
+      }
+      core.setOutput("promoted-commits-markdown", promotedCommitsMarkdown);
     }
 
     if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {

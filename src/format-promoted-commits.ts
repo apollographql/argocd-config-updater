@@ -175,12 +175,49 @@ export function formatPromotedCommits(
       return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
     .join("");
-  // The metadata comment goes at the *top* of the body rather than the bottom.
-  // The GitHub Action that opens promotion PRs (peter-evans/create-pull-request)
-  // silently truncates bodies longer than 65536 characters, and a promotion PR
-  // covering many apps can exceed that. Losing the tail of the human-readable
-  // commit list is harmless; losing the tail of the metadata comment breaks the
-  // tooling (argo-lookout) that parses it to produce required status checks.
   const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
-  return `${metadataComment}\n\n${body}\n`;
+  return assemblePRBody(metadataComment, body);
+}
+
+// peter-evans/create-pull-request (which opens promotion PRs from this
+// action's output) silently truncates PR bodies longer than this before
+// sending them to GitHub. We enforce the same limit ourselves so that the
+// truncation is explicit rather than silent.
+export const MAX_PR_BODY_LENGTH = 65536;
+
+// Appended to the body when the human-readable commit list had to be cut.
+// A reader must never assume that an app or commit missing from the list is
+// not being promoted.
+export const PR_BODY_TRUNCATION_NOTICE = `---
+
+> [!WARNING]
+> **This description is incomplete.** The full list of promoted apps and commits was longer than GitHub's ${MAX_PR_BODY_LENGTH}-character limit for pull request bodies, so it has been cut off above. Apps and commits that are not listed here are **still promoted by this PR**. The changed \`application-values.yaml\` files in the diff are the complete record of what will be deployed. Consider promoting fewer apps at a time.
+`;
+
+/**
+ * Combines the metadata comment and the human-readable body into the final
+ * PR body, keeping it within MAX_PR_BODY_LENGTH.
+ *
+ * The metadata comment goes at the *top* of the body rather than the bottom:
+ * a promotion PR covering many apps can exceed the limit, and losing part of
+ * the human-readable commit list is recoverable (the diff is the source of
+ * truth) whereas losing part of the metadata breaks the tooling (argo-lookout)
+ * that parses it to produce required status checks.
+ *
+ * If the body must be cut, it is cut at a line boundary (so a half-written
+ * link is never emitted) and PR_BODY_TRUNCATION_NOTICE is appended.
+ */
+export function assemblePRBody(metadataComment: string, body: string): string {
+  const full = `${metadataComment}\n\n${body}\n`;
+  if (full.length <= MAX_PR_BODY_LENGTH) {
+    return full;
+  }
+  // A blank line before the notice matters: `text\n---` would render as a
+  // setext heading rather than a horizontal rule.
+  const suffix = `\n\n${PR_BODY_TRUNCATION_NOTICE}`;
+  const available =
+    MAX_PR_BODY_LENGTH - metadataComment.length - "\n\n".length - suffix.length;
+  const cutAt = available > 0 ? body.lastIndexOf("\n", available) : -1;
+  const truncatedBody = cutAt > 0 ? body.slice(0, cutAt) : "";
+  return `${metadataComment}\n\n${truncatedBody}${suffix}`;
 }
