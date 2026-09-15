@@ -31,7 +31,6 @@ import { LinkTemplateMap, readLinkTemplateMapFile } from "./templates.js";
 import {
   formatPromotedCommits,
   MAX_PR_BODY_LENGTH,
-  PR_BODY_TRUNCATION_NOTICE,
 } from "./format-promoted-commits.js";
 import {
   CleanupChange,
@@ -306,11 +305,11 @@ async function main(): Promise<void> {
       generatePromotedCommitsMarkdown &&
       core.getBooleanInput("update-promoted-values")
     ) {
-      const promotedCommitsMarkdown = formatPromotedCommits(
+      const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(
         promotionsByFileThenEnvironment,
         prMetadata,
       );
-      if (promotedCommitsMarkdown.includes(PR_BODY_TRUNCATION_NOTICE)) {
+      if (truncated) {
         core.warning(
           `The promoted-commits-markdown output exceeded ${MAX_PR_BODY_LENGTH} characters and its commit list was truncated. The PR body says so explicitly; consider promoting fewer apps at a time.`,
         );

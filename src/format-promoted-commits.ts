@@ -67,10 +67,17 @@ function reorganizePromotionInfoForMessage(
   return organizedPromotionsByTargetEnvironment;
 }
 
+export interface PromotedCommitsMarkdown {
+  /** The PR body: metadata comment first, then the human-readable list. */
+  promotedCommitsMarkdown: string;
+  /** True if the human-readable list had to be cut to fit MAX_PR_BODY_LENGTH. */
+  truncated: boolean;
+}
+
 export function formatPromotedCommits(
   promotionsByFileThenEnvironment: Map<string, PromotionsByTargetEnvironment>,
   prMetadata: PRMetadata,
-): string {
+): PromotedCommitsMarkdown {
   const validatedPrMetadata = PRMetadata(prMetadata);
   if (validatedPrMetadata instanceof type.errors) {
     validatedPrMetadata.throw();
@@ -214,10 +221,13 @@ export const PR_BODY_TRUNCATION_NOTICE = `
  *
  * `metadataComment` is expected to carry its own trailing separator.
  */
-export function assemblePRBody(metadataComment: string, body: string): string {
+export function assemblePRBody(
+  metadataComment: string,
+  body: string,
+): PromotedCommitsMarkdown {
   const full = `${metadataComment}${body}\n`;
   if (full.length <= MAX_PR_BODY_LENGTH) {
-    return full;
+    return { promotedCommitsMarkdown: full, truncated: false };
   }
   const available =
     MAX_PR_BODY_LENGTH -
@@ -225,5 +235,8 @@ export function assemblePRBody(metadataComment: string, body: string): string {
     PR_BODY_TRUNCATION_NOTICE.length;
   const cutAt = available > 0 ? body.lastIndexOf("\n", available) : -1;
   const truncatedBody = cutAt > 0 ? body.slice(0, cutAt) : "";
-  return `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`;
+  return {
+    promotedCommitsMarkdown: `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`,
+    truncated: true,
+  };
 }

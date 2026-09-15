@@ -164212,14 +164212,17 @@ const PR_BODY_TRUNCATION_NOTICE = `
 function assemblePRBody(metadataComment, body) {
     const full = `${metadataComment}${body}\n`;
     if (full.length <= MAX_PR_BODY_LENGTH) {
-        return full;
+        return { promotedCommitsMarkdown: full, truncated: false };
     }
     const available = MAX_PR_BODY_LENGTH -
         metadataComment.length -
         PR_BODY_TRUNCATION_NOTICE.length;
     const cutAt = available > 0 ? body.lastIndexOf("\n", available) : -1;
     const truncatedBody = cutAt > 0 ? body.slice(0, cutAt) : "";
-    return `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`;
+    return {
+        promotedCommitsMarkdown: `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`,
+        truncated: true,
+    };
 }
 
 function formatCleanupChanges(changes) {
@@ -164713,8 +164716,8 @@ async function main() {
         }
         if (generatePromotedCommitsMarkdown &&
             getBooleanInput("update-promoted-values")) {
-            const promotedCommitsMarkdown = formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata);
-            if (promotedCommitsMarkdown.includes(PR_BODY_TRUNCATION_NOTICE)) {
+            const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata);
+            if (truncated) {
                 warning(`The promoted-commits-markdown output exceeded ${MAX_PR_BODY_LENGTH} characters and its commit list was truncated. The PR body says so explicitly; consider promoting fewer apps at a time.`);
             }
             setOutput("promoted-commits-markdown", promotedCommitsMarkdown);
