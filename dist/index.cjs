@@ -164173,7 +164173,7 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
         return environmentHeader + forEnvironment.join("\n\n---\n\n");
     })
         .join("");
-    const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->`;
+    const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->\n\n`;
     return assemblePRBody(metadataComment, body);
 }
 // peter-evans/create-pull-request (which opens promotion PRs from this
@@ -164184,7 +164184,12 @@ const MAX_PR_BODY_LENGTH = 65536;
 // Appended to the body when the human-readable commit list had to be cut.
 // A reader must never assume that an app or commit missing from the list is
 // not being promoted.
-const PR_BODY_TRUNCATION_NOTICE = `---
+//
+// Starts with a blank line on purpose: `text\n---` would render as a setext
+// heading rather than a horizontal rule.
+const PR_BODY_TRUNCATION_NOTICE = `
+
+---
 
 > [!WARNING]
 > **This description is incomplete.** The full list of promoted apps and commits was longer than GitHub's ${MAX_PR_BODY_LENGTH}-character limit for pull request bodies, so it has been cut off above. Apps and commits that are not listed here are **still promoted by this PR**. The changed \`application-values.yaml\` files in the diff are the complete record of what will be deployed. Consider promoting fewer apps at a time.
@@ -164201,19 +164206,20 @@ const PR_BODY_TRUNCATION_NOTICE = `---
  *
  * If the body must be cut, it is cut at a line boundary (so a half-written
  * link is never emitted) and PR_BODY_TRUNCATION_NOTICE is appended.
+ *
+ * `metadataComment` is expected to carry its own trailing separator.
  */
 function assemblePRBody(metadataComment, body) {
-    const full = `${metadataComment}\n\n${body}\n`;
+    const full = `${metadataComment}${body}\n`;
     if (full.length <= MAX_PR_BODY_LENGTH) {
         return full;
     }
-    // A blank line before the notice matters: `text\n---` would render as a
-    // setext heading rather than a horizontal rule.
-    const suffix = `\n\n${PR_BODY_TRUNCATION_NOTICE}`;
-    const available = MAX_PR_BODY_LENGTH - metadataComment.length - "\n\n".length - suffix.length;
+    const available = MAX_PR_BODY_LENGTH -
+        metadataComment.length -
+        PR_BODY_TRUNCATION_NOTICE.length;
     const cutAt = available > 0 ? body.lastIndexOf("\n", available) : -1;
     const truncatedBody = cutAt > 0 ? body.slice(0, cutAt) : "";
-    return `${metadataComment}\n\n${truncatedBody}${suffix}`;
+    return `${metadataComment}${truncatedBody}${PR_BODY_TRUNCATION_NOTICE}`;
 }
 
 function formatCleanupChanges(changes) {

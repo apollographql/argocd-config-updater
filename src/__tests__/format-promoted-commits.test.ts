@@ -81,12 +81,13 @@ describe("formatPromotedCommits", () => {
 });
 
 describe("assemblePRBody", () => {
-  const metadataComment = "<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbXX0= -->";
+  const metadataComment =
+    "<!-- prMetadata:eyJhcHBQcm9tb3Rpb25zIjpbXX0= -->\n\n";
 
   it("puts the metadata comment first and leaves short bodies untouched", () => {
     const body = "### Promoting to prod\nApps:\n- teams/x/app\n";
     const result = assemblePRBody(metadataComment, body);
-    expect(result).toBe(`${metadataComment}\n\n${body}\n`);
+    expect(result).toBe(`${metadataComment}${body}\n`);
     expect(result).not.toContain(PR_BODY_TRUNCATION_NOTICE);
   });
 
@@ -97,16 +98,13 @@ describe("assemblePRBody", () => {
     const result = assemblePRBody(metadataComment, body);
 
     expect(result.length).toBeLessThanOrEqual(MAX_PR_BODY_LENGTH);
-    expect(result.startsWith(`${metadataComment}\n\n`)).toBe(true);
-    expect(result.endsWith(`\n\n${PR_BODY_TRUNCATION_NOTICE}`)).toBe(true);
+    expect(result.startsWith(metadataComment)).toBe(true);
+    expect(result.endsWith(PR_BODY_TRUNCATION_NOTICE)).toBe(true);
 
     // Every surviving line must be a complete copy of the input line: nothing
     // half-written.
     const kept = result
-      .slice(
-        `${metadataComment}\n\n`.length,
-        -`\n\n${PR_BODY_TRUNCATION_NOTICE}`.length,
-      )
+      .slice(metadataComment.length, -PR_BODY_TRUNCATION_NOTICE.length)
       .split("\n");
     expect(kept.length).toBeGreaterThan(0);
     for (const keptLine of kept) {
@@ -117,7 +115,7 @@ describe("assemblePRBody", () => {
   });
 
   it("never drops the metadata comment even when nothing else fits", () => {
-    const hugeMetadataComment = `<!-- prMetadata:${"A".repeat(MAX_PR_BODY_LENGTH)} -->`;
+    const hugeMetadataComment = `<!-- prMetadata:${"A".repeat(MAX_PR_BODY_LENGTH)} -->\n\n`;
     const result = assemblePRBody(hugeMetadataComment, "some body\n");
     expect(result.startsWith(hugeMetadataComment)).toBe(true);
     expect(result).toContain(PR_BODY_TRUNCATION_NOTICE);
