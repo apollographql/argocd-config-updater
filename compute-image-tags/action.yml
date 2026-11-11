@@ -1,0 +1,49 @@
+name: Compute image tags
+description: >-
+  Computes the Docker image tags a build should publish so that
+  argocd-config-updater's `trackMutableTag` / `track` feature can follow it:
+  a mutable tag (`main` or `pr-N`) and an immutable tag that sorts in build
+  order and names the commit.
+inputs:
+  pr-number:
+    description: >-
+      Pull request number to tag as `pr-N`. Defaults to the pull request of a
+      `pull_request` event; leave unset for other events.
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  commit:
+    description: >-
+      Commit named in the immutable tag's `-g<sha>` suffix. Defaults to the
+      head of a `pull_request` event (not the synthetic merge commit the
+      checkout is of) and to HEAD otherwise.
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+outputs:
+  mutable:
+    description: Mutable tag (`main` or `pr-N`); empty when this build should not publish.
+    value: ${{ steps.compute.outputs.mutable }}
+  immutable:
+    description: >-
+      Immutable tag, `<mutable>---<depth>-<year.month>.b<run>.<attempt>-g<sha>`;
+      empty when `mutable` is.
+    value: ${{ steps.compute.outputs.immutable }}
+  publish:
+    description: '`true` when `mutable` is set.'
+    value: ${{ steps.compute.outputs.publish }}
+  tree:
+    description: Git tree hash of the checkout, a content key for skipping unchanged builds.
+    value: ${{ steps.compute.outputs.tree }}
+runs:
+  using: composite
+  steps:
+    - id: compute
+      shell: bash
+      run: ${{ github.action_path }}/compute-image-tags.sh
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF_NAME: ${{ github.ref_name }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        COMMIT: ${{ inputs.commit }}
+        RUN_NUMBER: ${{ github.run_number }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}

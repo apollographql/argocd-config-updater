@@ -154,6 +154,80 @@ access to the Artifact Registry repository in question (specifically, the
 `artifactregistry.tags.get` and `artifactregistry.versions.get` permissions).
 You should run the `google-github-actions/auth` action before this one.
 
+### Producing the tags: the `compute-image-tags` action
+
+A build that wants to be followed this way has to publish two tags per image:
+the mutable one (`main`, `pr-123`, ...) and an immutable one of the form
+`<mutable>---<7-digit first-parent commit depth>-<commit year.month>.b<7-digit run number>.<2-digit attempt>-g<commit sha>`,
+for example `main---0000123-2026.11.b0000456.01-g0123abcd...`. Tags of one
+mutable stream then sort in commit order; the month lets a retention job age
+tags out by name; the run number and attempt give every job execution its own
+tag, so an immutable tag is written once and never moved, even by a re-run; and
+the `-g<sha>` suffix is what lets promotion PRs list the commits being promoted.
+Everything between the depth and the `-g<sha>` suffix is free of `-`, which
+some consumers of these tags rely on.
+
+The `compute-image-tags` composite action in this repository computes them:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0 # the depth needs the whole first-parent history
+- uses: apollographql/argocd-config-updater/compute-image-tags@v1.25.0
+  id: tags
+- uses: docker/build-push-action@v6
+  if: steps.tags.outputs.publish == 'true'
+  with:
+    push: true
+    tags: |
+      registry/image:${{ steps.tags.outputs.mutable }}
+      registry/image:${{ steps.tags.outputs.immutable }}
+```
+
+It tags a push to the default branch with the branch's name and a
+`pull_request` with `pr-<number>`; any other event sets `publish` to `false`.
+The action is released together with the rest of this repository, so pin it to
+the same exact version tag you would use for the updater.
+
+#### Optional: skipping builds of an identical tree
+
+The action also outputs `tree`, the git tree hash of the checkout. A workflow
+can use it as a content key: push a `tree-<hash>` tag with every build, and
+when a later build finds that tag already in the registry (typically the
+default-branch build right after a squash merge of an up-to-date branch), point
+the new mutable and immutable tags at the existing image instead of rebuilding.
+The updater behaves the same either way, since it only changes a pinned tag when
+the mutable tag's digest changes.
+
+```yaml
+- uses: apollographql/argocd-config-updater/compute-image-tags@v1.25.0
+  id: tags
+- id: existing
+  if: steps.tags.outputs.publish == 'true'
+  run: |
+    if docker manifest inspect "registry/image:tree-${{ steps.tags.outputs.tree }}" >/dev/null 2>&1; then
+      echo "found=true" >> "$GITHUB_OUTPUT"
+    fi
+- uses: docker/build-push-action@v6
+  if: steps.tags.outputs.publish == 'true' && steps.existing.outputs.found != 'true'
+  with:
+    push: true
+    tags: |
+      registry/image:${{ steps.tags.outputs.mutable }}
+      registry/image:${{ steps.tags.outputs.immutable }}
+      registry/image:tree-${{ steps.tags.outputs.tree }}
+- if: steps.tags.outputs.publish == 'true' && steps.existing.outputs.found == 'true'
+  run: |
+    docker buildx imagetools create \
+      --tag "registry/image:${{ steps.tags.outputs.mutable }}" \
+      --tag "registry/image:${{ steps.tags.outputs.immutable }}" \
+      "registry/image:tree-${{ steps.tags.outputs.tree }}"
+```
+
+`docker buildx imagetools create` copies the manifest, so this also works for
+multi-platform images. The hash covers the whole checkout, so in a repository
+that builds several images any commit rebuilds all of them.
+
 ## Promoting values between apps
 
 Top-level sections can have a `promote` block with a `from` key naming a
