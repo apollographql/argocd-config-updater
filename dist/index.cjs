@@ -92407,7 +92407,7 @@ function requireGaxios () {
 	     * @returns A proxy agent
 	     */
 	    static async #getProxyAgent() {
-	        this.#proxyAgent ||= (await Promise.resolve().then(function () { return require('./index-DgxjmCHF.cjs'); }).then(function (n) { return n.index; })).HttpsProxyAgent;
+	        this.#proxyAgent ||= (await Promise.resolve().then(function () { return require('./index-DTPhXiPj.cjs'); }).then(function (n) { return n.index; })).HttpsProxyAgent;
 	        return this.#proxyAgent;
 	    }
 	    static #createBunFetch() {
@@ -92539,7 +92539,7 @@ function requireGaxios () {
 	            this.#bunFetch ||= this.#createBunFetch();
 	            return this.#bunFetch;
 	        }
-	        this.#fetch ||= (await Promise.resolve().then(function () { return require('./index-kIE2Fnu2.cjs'); })).default;
+	        this.#fetch ||= (await Promise.resolve().then(function () { return require('./src-Cjw3LvUR.cjs'); })).default;
 	        return this.#fetch;
 	    }
 	    /**
@@ -199547,6 +199547,7 @@ const flatMorph = (o, flatMapEntry) => {
  * of keys, e.g. those defined internally as configs
  */
 const entriesOf = Object.entries;
+const keysOf = (o) => Object.keys(o);
 const isKeyOf = (k, o) => k in o;
 const hasKey = (o, k) => k in o;
 class DynamicBase {
@@ -199652,6 +199653,10 @@ const builtinConstructors = {
     Boolean
 };
 const objectKindOf = (data) => {
+    // Realm-safe: cross-window/vm arrays fail `instanceof Array` but pass
+    // Array.isArray (https://github.com/arktypeio/arktype/issues/1597).
+    if (Array.isArray(data))
+        return "Array";
     let prototype = Object.getPrototypeOf(data);
     while (prototype?.constructor &&
         (!isKeyOf(prototype.constructor.name, builtinConstructors) ||
@@ -199831,8 +199836,8 @@ const isomorphic = {
     env
 };
 
-const capitalize$1 = (s) => (s[0].toUpperCase() + s.slice(1));
-const uncapitalize = (s) => (s[0].toLowerCase() + s.slice(1));
+const capitalize$1 = (s) => (s.length === 0 ? s : s[0].toUpperCase() + s.slice(1));
+const uncapitalize = (s) => (s.length === 0 ? s : s[0].toLowerCase() + s.slice(1));
 const anchoredRegex = (regex) => new RegExp(anchoredSource(regex), typeof regex === "string" ? "" : regex.flags);
 const anchoredSource = (regex) => {
     const source = typeof regex === "string" ? regex : regex.source;
@@ -199866,8 +199871,7 @@ const createNumberMatcher = (opts) => anchoredRegex(RegexPatterns.negativeLookah
         RegexPatterns.nonCapturingGroup(RegexPatterns.nonCapturingGroup("0|" + positiveIntegerPattern) +
             RegexPatterns.nonCapturingGroup(opts.decimalPattern) +
             "?") +
-        (opts.allowDecimalOnly ? "|" + opts.decimalPattern : "") +
-        "?"));
+        (opts.allowDecimalOnly ? "|" + opts.decimalPattern + "?" : "")));
 /**
  *  Matches a well-formatted numeric expression according to the following rules:
  *    1. Must include an integer portion (i.e. '.321' must be written as '0.321')
@@ -199956,7 +199960,7 @@ const tryParseWellFormedBigint = (def) => {
 // but for now, import assertions are too unstable and it wouldn't support
 // recent node versions (https://nodejs.org/api/esm.html#json-modules).
 // For now, we assert this matches the package.json version via a unit test.
-const arkUtilVersion = "0.56.2";
+const arkUtilVersion = "0.56.8";
 const initialRegistryContents = {
     version: arkUtilVersion,
     filename: isomorphic.fileName(),
@@ -200015,7 +200019,7 @@ const printable = (data, opts) => {
             return (ctorName === "Object" || ctorName === "Array" ?
                 opts?.quoteKeys === false ?
                     stringifyUnquoted(o, opts?.indent ?? 0, "")
-                    : JSON.stringify(_serialize(o, printableOpts, []), null, opts?.indent)
+                    : JSON.stringify(_serialize(o, printableOpts, []), null, opts?.indent).replace(quotedBigIntMarker, "$1")
                 : stringifyUnquoted(o, opts?.indent ?? 0, ""));
         case "symbol":
             return printableOpts.onSymbol(data);
@@ -200061,8 +200065,14 @@ const stringifyUnquoted = (value, indent, currentIndent) => {
 const printableOpts = {
     onCycle: () => "(cycle)",
     onSymbol: v => `Symbol(${register(v)})`,
-    onFunction: v => `Function(${register(v)})`
+    onFunction: v => `Function(${register(v)})`,
+    // prefix bigints with a marker so printable can strip the quotes
+    // JSON.stringify adds, e.g. [1n] rather than ["1n"]
+    onBigInt: n => `${bigIntMarker}${n}n`
 };
+// private use character that JSON.stringify leaves unescaped
+const bigIntMarker = "\uE000";
+const quotedBigIntMarker = new RegExp(`"${bigIntMarker}(-?\\d+n)"`, "g");
 const _serialize = (data, opts, seen) => {
     switch (domainOf(data)) {
         case "object": {
@@ -200119,16 +200129,13 @@ const describeCollapsibleDate = (date) => {
     const datePortion = `${months[month]} ${dayOfMonth}, ${year}`;
     if (hours === 0 && minutes === 0 && seconds === 0 && milliseconds === 0)
         return datePortion;
-    let timePortion = date.toLocaleTimeString();
-    const suffix = timePortion.endsWith(" AM") || timePortion.endsWith(" PM") ?
-        timePortion.slice(-3)
-        : "";
-    if (suffix)
-        timePortion = timePortion.slice(0, -suffix.length);
+    const h = hours % 12 || 12;
+    const suffix = hours < 12 ? " AM" : " PM";
+    let timePortion = seconds || milliseconds ?
+        `${h}:${pad(minutes, 2)}:${pad(seconds, 2)}`
+        : `${h}:${pad(minutes, 2)}`;
     if (milliseconds)
         timePortion += `.${pad(milliseconds, 3)}`;
-    else if (timeWithUnnecessarySeconds.test(timePortion))
-        timePortion = timePortion.slice(0, -3);
     return `${timePortion + suffix}, ${datePortion}`;
 };
 const months = [
@@ -200145,7 +200152,6 @@ const months = [
     "November",
     "December"
 ];
-const timeWithUnnecessarySeconds = /:\d\d:00$/;
 const pad = (value, length) => String(value).padStart(length, "0");
 
 const appendStringifiedKey = (path, prop, ...[opts]) => {
@@ -200242,7 +200248,7 @@ class Scanner {
         }
         return shifted;
     }
-    shiftUntilEscapable(condition) {
+    shiftUntilEscapable(condition, escapeEscape = "") {
         let shifted = "";
         while (this.lookahead) {
             if (this.lookahead === Backslash) {
@@ -200250,7 +200256,7 @@ class Scanner {
                 if (condition(this, shifted))
                     shifted += this.shift();
                 else if (this.lookahead === Backslash)
-                    shifted += this.shift();
+                    shifted += `${escapeEscape}${this.shift()}`;
                 else
                     shifted += `${Backslash}${this.shift()}`;
             }
@@ -200578,13 +200584,30 @@ const defaultConfig = {
         date: ctx => ToJsonSchema.throw("date", ctx)
     }
 };
+// Standard JSON Schema converters only throw for unsupported options, so
+// these keep the part of a type JSON Schema can represent, or {} if none
+const standardFallback = {
+    arrayObject: ctx => ctx.base,
+    // draft-07 tuples keep their prefix in items
+    arrayPostfix: ({ base: { items, additionalItems, ...base } }) => (Array.isArray(items) ? { ...base, items } : base),
+    defaultValue: () => undefined,
+    domain: ctx => ctx.base,
+    morph: ctx => ctx.base,
+    patternIntersection: ctx => ctx.base,
+    predicate: ctx => ctx.base,
+    proto: ctx => ctx.base,
+    symbolKey: ctx => ctx.base,
+    unit: ctx => ctx.base,
+    date: ctx => ctx.base
+};
 const ToJsonSchema = {
     Error: ToJsonSchemaError,
     throw: (...args) => {
         throw new ToJsonSchema.Error(...args);
     },
     throwInternalOperandError: (kind, schema) => throwInternalError(`Unexpected JSON Schema input for ${kind}: ${printable(schema)}`),
-    defaultConfig
+    defaultConfig,
+    standardFallback
 };
 
 // $ark.config could already be set if it were imported previously from the
@@ -200900,6 +200923,12 @@ class ArkErrors extends ReadonlyArray {
      */
     get summary() {
         return this.toString();
+    }
+    /**
+     * Alias of {@link summary} for consistency with `Error`.
+     */
+    get message() {
+        return this.summary;
     }
     /**
      * Alias of this ArkErrors instance for StandardSchema compatibility.
@@ -201635,11 +201664,16 @@ class Disjoint extends Array {
         return result;
     }
     withPrefixKey(key, kind) {
-        return this.map(entry => ({
+        const result = this.map(entry => ({
             ...entry,
             path: [key, ...entry.path],
             optional: entry.optional || kind === "optional"
         }));
+        // same Hermes workaround as invert
+        // https://github.com/arktypeio/arktype/issues/1645
+        if (!(result instanceof Disjoint))
+            return new Disjoint(...result);
+        return result;
     }
     toNeverIfDisjoint() {
         return $ark.intrinsic.never;
@@ -201859,8 +201893,11 @@ const intersectConstraints = (s) => {
             s.l[i] = result;
             matched = true;
         }
-        else if (!s.l.includes(result)) {
-            return throwInternalError(`Unexpectedly encountered multiple distinct intersection results for refinement ${head}`);
+        else {
+            // a head can narrow two constraints, e.g. <= 1 meeting >= 1 and <= 2
+            s.l.splice(i--, 1);
+            if (!s.l.includes(result))
+                s.r.push(result);
         }
     }
     if (!matched)
@@ -201980,6 +202017,7 @@ class GenericRoot extends Callable {
 }
 const writeUnsatisfiedParameterConstraintMessage = (name, constraint, arg) => `${name} must be assignable to ${constraint} (was ${arg})`;
 
+const describePredicate = (predicate) => `valid according to ${predicate?.name || "an anonymous predicate"}`;
 const implementation$l = implementNode({
     kind: "predicate",
     hasAssociatedError: true,
@@ -201989,7 +202027,9 @@ const implementation$l = implementNode({
     },
     normalize: schema => typeof schema === "function" ? { predicate: schema } : schema,
     defaults: {
-        description: node => `valid according to ${node.predicate.name || "an anonymous predicate"}`
+        description: node => describePredicate(node.predicate),
+        // error contexts from ctx.reject have neither a description nor a predicate
+        expected: ctx => ctx.description ?? describePredicate(ctx.predicate)
     },
     intersectionIsOpen: true,
     intersections: {
@@ -202987,14 +203027,8 @@ class BaseRoot extends BaseNode {
                 return { value: out };
             },
             jsonSchema: {
-                input: opts => this.rawIn.toJsonSchema({
-                    target: validateStandardJsonSchemaTarget(opts.target),
-                    ...opts.libraryOptions
-                }),
-                output: opts => this.rawOut.toJsonSchema({
-                    target: validateStandardJsonSchemaTarget(opts.target),
-                    ...opts.libraryOptions
-                })
+                input: opts => toStandardJsonSchema(this.rawIn, opts),
+                output: opts => toStandardJsonSchema(this.rawOut, opts)
             }
         };
     }
@@ -203020,13 +203054,18 @@ class BaseRoot extends BaseNode {
     toJsonSchema(opts = {}) {
         const ctx = mergeToJsonSchemaConfigs(this.$.resolvedConfig.toJsonSchema, opts);
         ctx.useRefs ||= this.isCyclic;
+        if (ctx.useRefs)
+            ctx.refs = new Map();
         // ensure $schema is the first key if present
         const schema = typeof ctx.dialect === "string" ? { $schema: ctx.dialect } : {};
         Object.assign(schema, this.toJsonSchemaRecurse(ctx));
-        if (ctx.useRefs) {
-            const defs = flatMorph(this.references, (i, ref) => ref.isRoot() && !ref.alwaysExpandJsonSchema ?
-                [ref.id, ref.toResolvedJsonSchema(ctx)]
-                : []);
+        if (ctx.refs) {
+            // only resolve referenced roots, since this.references also includes
+            // discriminated union cases that may not be valid on their own
+            const defs = {};
+            // refs added while resolving a definition are visited by this loop
+            for (const [id, ref] of ctx.refs)
+                defs[id] = ref.toResolvedJsonSchema(ctx);
             // draft-2020-12 uses $defs, draft-07 uses definitions
             if (ctx.target === "draft-07")
                 Object.assign(schema, { definitions: defs });
@@ -203039,6 +203078,7 @@ class BaseRoot extends BaseNode {
         if (ctx.useRefs && !this.alwaysExpandJsonSchema) {
             // draft-2020-12 uses $defs, draft-07 uses definitions
             const defsKey = ctx.target === "draft-07" ? "definitions" : "$defs";
+            ctx.refs?.set(this.id, this);
             return { $ref: `#/${defsKey}/${this.id}` };
         }
         return this.toResolvedJsonSchema(ctx);
@@ -203050,7 +203090,23 @@ class BaseRoot extends BaseNode {
     }
     toResolvedJsonSchema(ctx) {
         const result = this.innerToJsonSchema(ctx);
-        return Object.assign(result, this.metaJson);
+        for (const k in this.meta) {
+            const v = this.meta[k];
+            // metaJson serializes non-primitives like [5] to references like
+            // "$ark.array1", so prefer the original value when it is valid JSON
+            // (jsonData's object domain also allows functions, so exclude them)
+            const jsonValue = typeof v !== "function" && $ark.intrinsic.jsonData.allows(v) ? v
+                : k === "default" ?
+                    ctx.fallback.defaultValue({
+                        code: "defaultValue",
+                        base: result,
+                        value: v
+                    })
+                    : this.metaJson[k];
+            if (jsonValue !== undefined)
+                result[k] = jsonValue;
+        }
+        return result;
     }
     intersect(r) {
         const rNode = this.$.parseDefinition(r);
@@ -203120,7 +203176,9 @@ class BaseRoot extends BaseNode {
     }
     applyStructuralOperation(operation, args) {
         return this.distribute(branch => {
-            if (branch.equals($ark.intrinsic.object) && operation !== "merge")
+            if (branch.equals($ark.intrinsic.object) &&
+                operation !== "merge" &&
+                operation !== "props")
                 // ideally this wouldn't be a special case, but for now it
                 // allows us to bypass `assertHasKeys` checks on base
                 // instantiations of generics like Pick and Omit. Could
@@ -203140,9 +203198,20 @@ class BaseRoot extends BaseNode {
             const structuralMethodName = operation === "required" ? "require"
                 : operation === "partial" ? "optionalize"
                     : operation;
+            const transformed = structure[structuralMethodName](...args);
+            // like the mapped types they're named for, `required` and `partial` are
+            // homomorphic, preserving an array or tuple base
+            const isHomomorphic = operation === "required" || operation === "partial";
+            // they are also the only operations that can be a no-op (e.g. on an
+            // array with no fixed elements), in which case the original branch is
+            // preserved rather than reduced to a new object
+            if (isHomomorphic && transformed.equals(structure))
+                return branch;
             return this.$.node("intersection", {
-                domain: "object",
-                structure: structure[structuralMethodName](...args)
+                ...(isHomomorphic && transformed.sequence ?
+                    { proto: Array }
+                    : { domain: "object" }),
+                structure: transformed
             });
         });
     }
@@ -203160,7 +203229,10 @@ class BaseRoot extends BaseNode {
         return this.$.schema(this.branches.filter(branch => !branch.extends(rNode)));
     }
     array() {
-        return this.$.schema(this.isUnknown() ?
+        return this.$.finalize(this.rawArray());
+    }
+    rawArray() {
+        return this.$.parseSchema(this.isUnknown() ?
             { proto: Array }
             : {
                 proto: Array,
@@ -203375,6 +203447,19 @@ const validateStandardJsonSchemaTarget = (target) => {
     if (!includes(supportedJsonSchemaTargets, target))
         throwParseError(writeInvalidJsonSchemaTargetMessage(target));
     return target;
+};
+const toStandardJsonSchema = (node, opts) => {
+    const ctx = mergeToJsonSchemaConfigs(node.$.resolvedConfig.toJsonSchema, {
+        target: validateStandardJsonSchemaTarget(opts.target),
+        ...opts.libraryOptions
+    });
+    const fallback = flatMorph(ctx.fallback, (code, handler) => [
+        code,
+        handler === ToJsonSchema.defaultConfig.fallback[code] ?
+            ToJsonSchema.standardFallback[code]
+            : handler
+    ]);
+    return node.toJsonSchema({ ...ctx, fallback });
 };
 const exclusivizeRangeSchema = (schema) => (typeof schema === "object" && !(schema instanceof Date) ?
     { ...schema, exclusive: true }
@@ -204105,10 +204190,14 @@ class ProtoNode extends InternalBasis {
     builtinName = getBuiltinNameOfConstructor(this.proto);
     serializedConstructor = this.json.proto;
     requiresInvalidDateCheck = this.proto === Date && !this.dateAllowsInvalid;
+    // Array.isArray is realm-safe; `instanceof Array` rejects arrays from other
+    // windows/vm contexts (https://github.com/arktypeio/arktype/issues/1597).
+    isArrayProto = this.proto === Array;
     traverseAllows = this.requiresInvalidDateCheck ?
         data => data instanceof Date && data.toString() !== "Invalid Date"
-        : data => data instanceof this.proto;
-    compiledCondition = `data instanceof ${this.serializedConstructor}${this.requiresInvalidDateCheck ? ` && data.toString() !== "Invalid Date"` : ""}`;
+        : this.isArrayProto ? data => isArray(data)
+            : data => data instanceof this.proto;
+    compiledCondition = this.isArrayProto ? `Array.isArray(data)` : (`data instanceof ${this.serializedConstructor}${this.requiresInvalidDateCheck ? ` && data.toString() !== "Invalid Date"` : ""}`);
     compiledNegation = `!(${this.compiledCondition})`;
     innerToJsonSchema(ctx) {
         switch (this.builtinName) {
@@ -204164,9 +204253,12 @@ const implementation$5 = implementNode({
                                 branches.push(node);
                             else {
                                 const matchingMorph = branches[matchingMorphIndex];
+                                const mergedIn = matchingMorph.inner.in && node.inner.in ?
+                                    matchingMorph.inner.in.rawOr(node.inner.in)
+                                    : matchingMorph.rawIn.rawOr(node.rawIn);
                                 branches[matchingMorphIndex] = ctx.$.node("morph", {
                                     ...matchingMorph.inner,
-                                    in: matchingMorph.rawIn.rawOr(node.rawIn)
+                                    in: mergedIn
                                 });
                             }
                         }
@@ -204658,7 +204750,10 @@ const discriminantCaseToNode = (caseDiscriminant, path, $) => {
     let node = caseDiscriminant === "undefined" ? $.node("unit", { unit: undefined })
         : caseDiscriminant === "null" ? $.node("unit", { unit: null })
             : caseDiscriminant === "boolean" ? $.units([true, false])
-                : caseDiscriminant;
+                : (caseDiscriminant.hasKind("domain") && caseDiscriminant.domain === "number") ?
+                    // a typeof check doesn't exclude NaN
+                    $.node("domain", { domain: "number", numberAllowsNaN: true })
+                    : caseDiscriminant;
     for (let i = path.length - 1; i >= 0; i--) {
         const key = path[i];
         node = $.node("intersection", typeof key === "number" ?
@@ -204836,10 +204931,13 @@ const pruneDiscriminant = (discriminantBranch, discriminantCtx) => discriminantB
             // we don't need to revalidate that we're in an object
             return true;
         if ((node.hasKind("domain") || discriminantCtx.kind === "unit") &&
-            propString === discriminantCtx.optionallyChainedPropString)
+            propString === discriminantCtx.optionallyChainedPropString) {
             // if the discriminant has already checked the domain at the current path
-            // (or a unit literal, implying a domain), we don't need to recheck it
-            return true;
+            // (or a unit literal, implying a domain), we don't need to recheck it,
+            // unless it is a number domain excluding NaN, which typeof doesn't
+            return (discriminantCtx.kind === "unit" ||
+                !(node.hasKind("domain") && node.requiresNaNCheck));
+        }
         // we don't need to recurse into index nodes as they will never
         // have a required path therefore can't be used to discriminate
         return node.children.length !== 0 && node.kind !== "index";
@@ -205065,6 +205163,13 @@ const implementation$1 = implementNode({
                 if (schema.length === 0)
                     return undefined;
                 return schema.map(element => ctx.$.parseSchema(element));
+            },
+            reduceIo: (ioKind, inner, prefix) => {
+                // before defaultables, which reduce first and are required on output
+                inner.prefix = [
+                    ...prefix.map(node => ioKind === "in" ? node.rawIn : node.rawOut),
+                    ...(inner.prefix ?? [])
+                ];
             }
         },
         optionals: {
@@ -205073,6 +205178,10 @@ const implementation$1 = implementNode({
                 if (schema.length === 0)
                     return undefined;
                 return schema.map(element => ctx.$.parseSchema(element));
+            },
+            reduceIo: (ioKind, inner, optionals) => {
+                // after defaultables, which reduce first and are optional on input
+                inner.optionals = append(inner.optionals, optionals.map(node => (ioKind === "in" ? node.rawIn : node.rawOut)));
             }
         },
         defaultables: {
@@ -205282,6 +205391,25 @@ class SequenceNode extends BaseConstraint {
     defaultValueMorphsReference = this.defaultValueMorphs.length ?
         registeredReference(this.defaultValueMorphs)
         : undefined;
+    optionalize() {
+        const { prefix, defaultables, ...inner } = this.inner;
+        // without a prefix, every element is already optional. bailing here
+        // preserves defaultables, which would otherwise have to be flattened
+        // into optionals to maintain their position relative to the prefix.
+        if (!prefix)
+            return this;
+        return this.$.node("sequence", {
+            ...inner,
+            optionals: conflatenate(prefix, this.defaultablesAndOptionals)
+        });
+    }
+    require() {
+        const { defaultables, optionals, ...inner } = this.inner;
+        return this.$.node("sequence", {
+            ...inner,
+            prefix: conflatenate(this.prefix, this.defaultablesAndOptionals)
+        });
+    }
     elementAtIndex(data, index) {
         if (index < this.prevariadic.length)
             return this.tuple[index];
@@ -205303,9 +205431,15 @@ class SequenceNode extends BaseConstraint {
         return true;
     };
     traverseApply = (data, ctx) => {
+        const errorCount = ctx.currentErrorCount;
         let i = 0;
         for (; i < data.length; i++) {
             traverseKey(i, () => this.elementAtIndex(data, i).node.traverseApply(data[i], ctx), ctx);
+            // bail out of subsequent elements in fail-fast mode (e.g. inside a
+            // union branch) so we don't traverse an element whose basis has
+            // already failed - see https://github.com/arktypeio/arktype/issues/1458
+            if (ctx.failFast && ctx.currentErrorCount > errorCount)
+                return;
         }
     };
     get element() {
@@ -205313,24 +205447,40 @@ class SequenceNode extends BaseConstraint {
     }
     // minLength/maxLength compilation should be handled by Intersection
     compile(js) {
+        // like Structure, bail out of subsequent elements in fail-fast mode
+        // (e.g. inside a union branch) so we don't traverse an element whose
+        // basis has already failed - see
+        // https://github.com/arktypeio/arktype/issues/1458
+        if (js.traversalKind === "Apply")
+            js.initializeErrorCount();
         if (this.prefix) {
-            for (const [i, node] of this.prefix.entries())
+            for (const [i, node] of this.prefix.entries()) {
                 js.traverseKey(`${i}`, `data[${i}]`, node);
+                if (js.traversalKind === "Apply")
+                    js.returnIfFailFast();
+            }
         }
         for (const [i, node] of this.defaultablesAndOptionals.entries()) {
             const dataIndex = `${i + this.prefixLength}`;
             js.if(`${dataIndex} >= data.length`, () => js.traversalKind === "Allows" ? js.return(true) : js.return());
             js.traverseKey(dataIndex, `data[${dataIndex}]`, node);
+            if (js.traversalKind === "Apply")
+                js.returnIfFailFast();
         }
         if (this.variadic) {
             if (this.postfix) {
                 js.const("firstPostfixIndex", `data.length${this.postfix ? `- ${this.postfix.length}` : ""}`);
             }
-            js.for(`i < ${this.postfix ? "firstPostfixIndex" : "data.length"}`, () => js.traverseKey("i", "data[i]", this.variadic), this.prevariadic.length);
+            js.for(`i < ${this.postfix ? "firstPostfixIndex" : "data.length"}`, () => {
+                js.traverseKey("i", "data[i]", this.variadic);
+                return js.traversalKind === "Apply" ? js.returnIfFailFast() : js;
+            }, this.prevariadic.length);
             if (this.postfix) {
                 for (const [i, node] of this.postfix.entries()) {
                     const keyExpression = `firstPostfixIndex + ${i}`;
                     js.traverseKey(keyExpression, `data[${keyExpression}]`, node);
+                    if (js.traversalKind === "Apply")
+                        js.returnIfFailFast();
                 }
             }
         }
@@ -205352,14 +205502,15 @@ class SequenceNode extends BaseConstraint {
                 const valueSchema = el.node.toJsonSchemaRecurse(ctx);
                 if (el.kind === "defaultables") {
                     const value = typeof el.default === "function" ? el.default() : el.default;
-                    valueSchema.default =
-                        $ark.intrinsic.jsonData.allows(value) ?
+                    const jsonDefault = $ark.intrinsic.jsonData.allows(value) ?
+                        value
+                        : ctx.fallback.defaultValue({
+                            code: "defaultValue",
+                            base: valueSchema,
                             value
-                            : ctx.fallback.defaultValue({
-                                code: "defaultValue",
-                                base: valueSchema,
-                                value
-                            });
+                        });
+                    if (jsonDefault !== undefined)
+                        valueSchema.default = jsonDefault;
                 }
                 return valueSchema;
             });
@@ -205663,6 +205814,10 @@ const implementation = implementNode({
             const lInner = { ...l.inner };
             const rInner = { ...r.inner };
             const disjointResult = new Disjoint();
+            // props an index signature narrows to once the other side's keys
+            // are known. they can't be added to the side they came from, where
+            // a prop with the same key would never be merged with them
+            const derived = [];
             if (l.undeclared) {
                 const lKey = l.keyof();
                 for (const k of r.requiredKeys) {
@@ -205682,12 +205837,8 @@ const implementation = implementNode({
                         if (indexOverlap instanceof Disjoint)
                             return [];
                         const normalized = normalizeIndex(indexOverlap, n.value, ctx.$);
-                        if (normalized.required) {
-                            rInner.required = conflatenate(rInner.required, normalized.required);
-                        }
-                        if (normalized.optional) {
-                            rInner.optional = conflatenate(rInner.optional, normalized.optional);
-                        }
+                        derived.push(...(normalized.required ?? []));
+                        derived.push(...(normalized.optional ?? []));
                         return normalized.index ?? [];
                     });
                 }
@@ -205711,12 +205862,8 @@ const implementation = implementNode({
                         if (indexOverlap instanceof Disjoint)
                             return [];
                         const normalized = normalizeIndex(indexOverlap, n.value, ctx.$);
-                        if (normalized.required) {
-                            lInner.required = conflatenate(lInner.required, normalized.required);
-                        }
-                        if (normalized.optional) {
-                            lInner.optional = conflatenate(lInner.optional, normalized.optional);
-                        }
+                        derived.push(...(normalized.required ?? []));
+                        derived.push(...(normalized.optional ?? []));
                         return normalized.index ?? [];
                     });
                 }
@@ -205732,7 +205879,7 @@ const implementation = implementNode({
                 kind: "structure",
                 baseInner,
                 l: flattenConstraints(lInner),
-                r: flattenConstraints(rInner),
+                r: [...flattenConstraints(rInner), ...derived],
                 roots: [],
                 ctx
             });
@@ -205794,7 +205941,9 @@ class StructureNode extends BaseConstraint {
     impliedBasis = $ark.intrinsic.object.internal;
     impliedSiblings = this.children.flatMap(n => n.impliedSiblings ?? []);
     props = conflatenate(this.required, this.optional);
-    propsByKey = flatMorph(this.props, (i, node) => [node.key, node]);
+    // a null prototype, so a key like "toString" isn't declared, and
+    // fromEntries, so a declared "__proto__" is an own key
+    propsByKey = Object.setPrototypeOf(Object.fromEntries(this.props.map(node => [node.key, node])), null);
     propsByKeyReference = registeredReference(this.propsByKey);
     expression = structuralExpression(this);
     requiredKeys = this.required?.map(node => node.key) ?? [];
@@ -205899,6 +206048,7 @@ class StructureNode extends BaseConstraint {
         const { required, ...inner } = this.inner;
         return this.$.node("structure", {
             ...inner,
+            ...(inner.sequence ? { sequence: inner.sequence.optionalize() } : {}),
             optional: this.props.map(prop => prop.hasKind("required") ? this.$.node("optional", prop.inner) : prop)
         });
     }
@@ -205906,6 +206056,7 @@ class StructureNode extends BaseConstraint {
         const { optional, ...inner } = this.inner;
         return this.$.node("structure", {
             ...inner,
+            ...(inner.sequence ? { sequence: inner.sequence.require() } : {}),
             required: this.props.map(prop => prop.hasKind("optional") ?
                 {
                     key: prop.key,
@@ -206123,14 +206274,15 @@ class StructureNode extends BaseConstraint {
                 }
                 if (prop.hasDefault()) {
                     const value = typeof prop.default === "function" ? prop.default() : prop.default;
-                    valueSchema.default =
-                        $ark.intrinsic.jsonData.allows(value) ?
+                    const jsonDefault = $ark.intrinsic.jsonData.allows(value) ?
+                        value
+                        : ctx.fallback.defaultValue({
+                            code: "defaultValue",
+                            base: valueSchema,
                             value
-                            : ctx.fallback.defaultValue({
-                                code: "defaultValue",
-                                base: valueSchema,
-                                value
-                            });
+                        });
+                    if (jsonDefault !== undefined)
+                        valueSchema.default = jsonDefault;
                 }
                 schema.properties[prop.key] = valueSchema;
             }
@@ -206369,7 +206521,9 @@ const schemaBranchesOf = (schema) => isArray(schema) ? schema
         : undefined;
 const throwMismatchedNodeRootError = (expected, actual) => throwParseError(`Node of kind ${actual} is not valid as a ${expected} definition`);
 const writeDuplicateAliasError = (alias) => `#${alias} duplicates public alias ${alias}`;
-const scopesByName = {};
+// Fallback counter for anonymous scopes; scopes are identified by instance
+// identity rather than names to support HMR and multi-bundle environments.
+let anonymousScopeCount = 0;
 $ark.ambient ??= {};
 let rawUnknownUnion;
 const rootScopeFnName = "function $";
@@ -206438,11 +206592,7 @@ class BaseScope {
         this.config = mergeConfigs($ark.config, config);
         this.resolvedConfig = mergeConfigs($ark.resolvedConfig, config);
         this.name =
-            this.resolvedConfig.name ??
-                `anonymousScope${Object.keys(scopesByName).length}`;
-        if (this.name in scopesByName)
-            throwParseError(`A Scope already named ${this.name} already exists`);
-        scopesByName[this.name] = this;
+            this.resolvedConfig.name ?? `anonymousScope${anonymousScopeCount++}`;
         const aliasEntries = Object.entries(def).map(entry => this.preparseOwnAliasEntry(...entry));
         for (const [k, v] of aliasEntries) {
             let name = k;
@@ -206712,10 +206862,15 @@ class BaseScope {
         const ctxOrNode = this.preparseNode(kinds, nodeSchema, opts);
         if (isNode(ctxOrNode))
             return this.bindReference(ctxOrNode);
+        const hasPreassignedId = ctxOrNode.id !== undefined;
         const ctx = this.createParseContext(ctxOrNode);
         const node = parseNode(ctx);
         const bound = this.bindReference(node);
-        return (nodesByRegisteredId[ctx.id] = bound);
+        if (!hasPreassignedId)
+            releaseUnusedContextId(ctx.id, bound);
+        else
+            nodesByRegisteredId[ctx.id] = bound;
+        return bound;
     };
     parse = (def, opts = {}) => this.finalize(this.parseDefinition(def, opts));
     parseDefinition(def, opts = {}) {
@@ -206724,17 +206879,25 @@ class BaseScope {
         const ctxInputOrNode = this.preparseOwnDefinitionFormat(def, opts);
         if (hasArkKind(ctxInputOrNode, "root"))
             return this.bindReference(ctxInputOrNode);
+        const hasPreassignedId = ctxInputOrNode.id !== undefined;
         const ctx = this.createParseContext(ctxInputOrNode);
-        nodesByRegisteredId[ctx.id] = ctx;
         let node = this.bindReference(this.parseOwnDefinitionFormat(def, ctx));
         // if the node is recursive e.g. { box: "this" }, we need to make sure it
         // has the original id from context so that its references compile correctly
         if (node.isCyclic)
             node = withId(node, ctx.id);
-        nodesByRegisteredId[ctx.id] = node;
+        if (!hasPreassignedId)
+            releaseUnusedContextId(ctx.id, node);
+        else
+            nodesByRegisteredId[ctx.id] = node;
         return node;
     }
     finalize(node) {
+        // a node referencing a `this` whose enclosing type is still being parsed,
+        // e.g. Record<string, this>, can't be resolved yet. the enclosing parse
+        // finalizes it once the context has been replaced with the resolved node.
+        if (node.isCyclic && hasUnresolvedContextAlias(node))
+            return node;
         bootstrapAliasReferences(node);
         if (!node.precompilation && !this.resolvedConfig.jitless)
             precompile(node.references);
@@ -206755,16 +206918,34 @@ class SchemaScope extends BaseScope {
         return v;
     }
 }
+// each parse context gets a new id, because a nested definition can refer to
+// it (e.g. with "this"). if the result node does not use that id (e.g. the
+// node came from a cache), no node can refer to the id. remove it, so that the
+// global registry does not grow each time an equivalent type is parsed.
+const releaseUnusedContextId = (id, node) => {
+    if (node.id === id)
+        nodesByRegisteredId[id] = node;
+    else
+        delete nodesByRegisteredId[id];
+};
+// scope aliases are `$name` references, so can be skipped without a lookup
+const hasUnresolvedContextAlias = (node) => node.references.some(ref => ref.hasKind("alias") &&
+    ref.reference[0] !== "$" &&
+    hasArkKind(nodesByRegisteredId[ref.reference], "context"));
 const bootstrapAliasReferences = (resolution) => {
     const aliases = resolution.references.filter(node => node.hasKind("alias"));
     for (const aliasNode of aliases) {
-        Object.assign(aliasNode.referencesById, aliasNode.resolution.referencesById);
+        addReferences(aliasNode.referencesById, aliasNode.resolution.referencesById);
         for (const ref of resolution.references) {
             if (aliasNode.id in ref.referencesById)
-                Object.assign(ref.referencesById, aliasNode.referencesById);
+                addReferences(ref.referencesById, aliasNode.referencesById);
         }
     }
     return resolution;
+};
+const addReferences = (base, references) => {
+    for (const id in references)
+        base[id] ??= references[id];
 };
 const resolutionsToJson = (resolutions) => flatMorph(resolutions, (k, v) => [
     k,
@@ -206917,7 +207098,11 @@ const regexExecArray = rootSchema({
     }
 });
 const parseEnclosed = (s, enclosing) => {
-    const enclosed = s.scanner.shiftUntilEscapable(untilLookaheadIsClosing[enclosingTokens[enclosing]]);
+    const enclosed = s.scanner.shiftUntilEscapable(untilLookaheadIsClosing[enclosingTokens[enclosing]], 
+    // within a regex literal, `\\` is a literal backslash and must be
+    // preserved verbatim in the pattern source; collapsing it to a single
+    // backslash would corrupt the regex (e.g. `\\d` -> `\d` digit class)
+    enclosing in enclosingRegexTokens ? Backslash : "");
     if (s.scanner.lookahead === "")
         return s.error(writeUnterminatedEnclosedMessage(enclosed, enclosing));
     // Shift the scanner one additional time for the second enclosing token
@@ -207232,7 +207417,7 @@ const parseOperator = (s) => {
     return (lookahead === "" ? s.finalize("")
         : lookahead === "[" ?
             s.scanner.shift() === "]" ?
-                s.setRoot(s.root.array())
+                s.setRoot(s.root.rawArray())
                 : s.error(incompleteArrayTokenMessage)
             : lookahead === "|" ?
                 s.scanner.lookahead === ">" ?
@@ -207251,9 +207436,22 @@ const parseOperator = (s) => {
 const writeUnexpectedCharacterMessage = (char, shouldBe = "") => `'${char}' is not allowed here${shouldBe && ` (should be ${shouldBe})`}`;
 const incompleteArrayTokenMessage = `Missing expected ']'`;
 
+const emptyCollectionDefaults = {
+    "[]": () => [],
+    "{}": () => ({})
+};
+const emptyCollectionLiterals = keysOf(emptyCollectionDefaults);
 const parseDefault = (s) => {
     // store the node that will be bounded
     const baseNode = s.unsetRoot();
+    // an empty collection is not a unit literal, so it must be short-circuited
+    // here and represented as a thunk to keep each traversal's default distinct
+    s.scanner.shiftUntilNonWhitespace();
+    const emptyCollection = emptyCollectionLiterals.find(literal => s.scanner.unscanned.startsWith(literal));
+    if (emptyCollection !== undefined) {
+        s.scanner.jumpForward(emptyCollection.length);
+        return [baseNode, "=", emptyCollectionDefaults[emptyCollection]];
+    }
     s.parseOperand();
     const defaultNode = s.unsetRoot();
     // after parsing the next operand, use the locations to get the
@@ -207274,7 +207472,7 @@ const parseString = (def, ctx) => {
     if (def.endsWith("[]")) {
         const possibleElementResolution = ctx.$.maybeResolveRoot(def.slice(0, -2));
         if (possibleElementResolution)
-            return possibleElementResolution.array();
+            return possibleElementResolution.rawArray();
     }
     const s = new RuntimeState(new Scanner(def), ctx);
     const node = fullStringParse(s);
@@ -207783,7 +207981,7 @@ const parseBranchTuple = (def, ctx) => {
         return result.throw();
     return result;
 };
-const parseArrayTuple = (def, ctx) => ctx.$.parseOwnDefinitionFormat(def[0], ctx).array();
+const parseArrayTuple = (def, ctx) => ctx.$.parseOwnDefinitionFormat(def[0], ctx).rawArray();
 const parseMorphTuple = (def, ctx) => {
     if (typeof def[2] !== "function") {
         return throwParseError(writeMalformedFunctionalExpressionMessage("=>", def[2]));
@@ -207961,7 +208159,7 @@ const requiredPostOptionalMessage = "A required element may not follow an option
 const optionalOrDefaultableAfterVariadicMessage = "An optional element may not follow a variadic element";
 const defaultablePostOptionalMessage = "A defaultable element may not follow an optional element without a default";
 
-const parseCache = {};
+const parseCache = new WeakMap();
 const parseInnerDefinition = (def, ctx) => {
     if (typeof def === "string") {
         if (ctx.args && Object.keys(ctx.args).some(k => def.includes(k))) {
@@ -207969,7 +208167,11 @@ const parseInnerDefinition = (def, ctx) => {
             // resolutions like "this" or generic args
             return parseString(def, ctx);
         }
-        const scopeCache = (parseCache[ctx.$.name] ??= {});
+        let scopeCache = parseCache.get(ctx.$);
+        if (!scopeCache) {
+            scopeCache = {};
+            parseCache.set(ctx.$, scopeCache);
+        }
         return (scopeCache[def] ??= parseString(def, ctx));
     }
     return hasDomain(def, "object") ?
@@ -208175,7 +208377,7 @@ class InternalScope extends BaseScope {
     }
     type = new InternalTypeParser(this);
     static scope = ((def, config = {}) => new InternalScope(def, config));
-    static module = ((def, config = {}) => this.scope(def, config).export());
+    static module = ((def, config = {}) => InternalScope.scope(def, config).export());
 }
 const scope = Object.assign(InternalScope.scope, {
     define: (def) => def
@@ -208353,6 +208555,7 @@ const stringInteger = Scope.module({
     name: "string.integer"
 });
 const hex = regexStringNode(/^[\dA-Fa-f]+$/, "hex characters only");
+const base58 = regexStringNode(/^[1-9A-HJ-NP-Za-km-z]+$/, "base58-encoded");
 const base64 = Scope.module({
     root: regexStringNode(/^(?:[\d+/A-Za-z]{4})*(?:[\d+/A-Za-z]{2}==|[\d+/A-Za-z]{3}=)?$/, "base64-encoded"),
     url: regexStringNode(/^(?:[\w-]{4})*(?:[\w-]{2}(?:==|%3D%3D)?|[\w-]{3}(?:=|%3D)?)?$/, "base64url-encoded")
@@ -208435,7 +208638,9 @@ const epoch = Scope.module({
     root: epochRoot,
     parse: rootSchema({
         in: epochRoot,
-        morphs: (s) => new Date(s),
+        // parse as a number so the string is treated as milliseconds
+        // rather than passed to the Date string parser
+        morphs: (s) => new Date(Number.parseInt(s)),
         declaredOut: intrinsic.Date
     })
 }, {
@@ -208713,15 +208918,15 @@ const uuid = Scope.module({
     ],
     "#nil": "'00000000-0000-0000-0000-000000000000'",
     "#max": "'ffffffff-ffff-ffff-ffff-ffffffffffff'",
-    "#versioned": /^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
-    v1: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-1[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv1"),
-    v2: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-2[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv2"),
-    v3: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-3[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv3"),
-    v4: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv4"),
-    v5: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-5[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv5"),
-    v6: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-6[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv6"),
-    v7: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv7"),
-    v8: regexStringNode(/^[\da-f]{8}-[\da-f]{4}-8[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i, "a UUIDv8")
+    "#versioned": /^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-[1-8][\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/,
+    v1: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-1[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv1"),
+    v2: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-2[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv2"),
+    v3: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-3[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv3"),
+    v4: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-4[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv4"),
+    v5: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-5[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv5"),
+    v6: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-6[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv6"),
+    v7: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-7[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv7"),
+    v8: regexStringNode(/^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-8[\dA-Fa-f]{3}-[89ABab][\dA-Fa-f]{3}-[\dA-Fa-f]{12}$/, "a UUIDv8")
 }, {
     name: "string.uuid"
 });
@@ -208730,6 +208935,7 @@ const string = Scope.module({
     alpha: regexStringNode(/^[A-Za-z]*$/, "only letters"),
     alphanumeric: regexStringNode(/^[\dA-Za-z]*$/, "only letters and digits 0-9"),
     hex,
+    base58,
     base64,
     capitalize,
     creditCard,
