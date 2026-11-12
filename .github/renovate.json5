@@ -8,6 +8,24 @@
   prCreation: 'immediate',
   schedule: 'at any time',
   dependencyDashboard: true,
+  // We try to stay on top of ALL of our dependency upgrades rather than
+  // splitting them into security-related and non-security-related PRs.
+  // Splitting them out gets us into trouble when a package with a security fix
+  // is versioned in lockstep with another package (like vitest and @vitest/ui):
+  // the security PR bumps only one of them, and the lockfile can't be
+  // resolved. Vulnerable deps still get fixed by the normal grouped PRs.
+  vulnerabilityAlerts: {
+    enabled: false,
+  },
+  osvVulnerabilityAlerts: false,
+  // Periodically regenerate package-lock.json from scratch. This keeps
+  // transitive dependencies fresh, and can unstick a lockfile where npm refuses
+  // to update a stale transitive pin. The top-level schedule doesn't apply to
+  // lockFileMaintenance, which has its own default schedule.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['at any time'],
+  },
   packageRules: [
     {
       // Override automerge set in apollo-open-source, as this is deployment infrastructure.
@@ -22,6 +40,16 @@
       groupName: 'all non-major dependencies',
       matchUpdateTypes: ['patch', 'minor'],
       groupSlug: 'all-minor-patch',
+    },
+    // vitest and @vitest/ui must be on exactly the same version (each has an
+    // exact-version peer dependency on the other), so they always need to be
+    // upgraded together. Without this rule, the all-minor-patch group above
+    // overrides the vitest monorepo group from group:monorepos, and the two
+    // packages can end up in separate PRs whose lockfiles can't be resolved.
+    {
+      groupName: 'vitest',
+      groupSlug: 'vitest',
+      matchPackageNames: ['vitest', '@vitest/ui'],
     },
     // TypeScript minor versions don't follow semver, and typically require a few changes on our end to take the upgrade. Break them out from the all-minor-patch group so they don't block other upgrades.
     {
