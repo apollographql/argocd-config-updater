@@ -2,6 +2,7 @@ import * as yaml from "yaml";
 import {
   GetTreeSHAForPathOptions,
   GitHubClient,
+  IsAncestorOptions,
   ResolveRefToSHAOptions,
 } from "./github.js";
 import {
@@ -185,6 +186,25 @@ async function getTreeSHAForPathOrNull(
   }
 }
 
+// If we can't tell whether the current ref is in the history of the tracked
+// ref, treat it as if it is: that means we fall back to only caring about
+// whether the tree SHA has changed, rather than potentially making no-op
+// changes to every file each time the tracked ref changes.
+async function isInHistoryOrUnknown(
+  gitHubClient: GitHubClient,
+  options: IsAncestorOptions,
+  logger: PrefixingLogger,
+): Promise<boolean> {
+  try {
+    return await gitHubClient.isAncestor(options);
+  } catch (e) {
+    logger.warning(
+      `Ignoring error checking if ${options.ancestorSHA} is an ancestor of ${options.descendantSHA} in ${options.repoURL}: ${e}`,
+    );
+    return true;
+  }
+}
+
 async function checkRefsAgainstGitHubAndModifyScalars(
   trackables: Trackable[],
   gitHubClient: GitHubClient,
@@ -279,6 +299,32 @@ async function checkRefsAgainstGitHubAndModifyScalars(
         // Commit sha is already whats written so no changes
         logger.info("(matches docker, unchanged)");
       }
+    } else if (
+      currentRefCommitSHA &&
+      currentTreeSHA === trackedTreeSHA &&
+      !(await isInHistoryOrUnknown(
+        gitHubClient,
+        {
+          repoURL: trackable.repoURL,
+          ancestorSHA: currentRefCommitSHA,
+          descendantSHA: trackedRefCommitSHA,
+          descendantRef: trackable.trackMutableRef,
+        },
+        logger,
+      ))
+    ) {
+      // Normally we avoid no-op changes, but we also want `ref` to be a commit
+      // that's actually in the history of the ref we're tracking. The usual
+      // way to get here is that the environment temporarily tracked a PR
+      // branch which was then squash-merged, and now the environment is
+      // tracking the main branch again: the tree is the same but the commit in
+      // `ref` is from the PR branch, not from main. If we left it alone, then
+      // (among other things) later promotions out of this environment would
+      // not be able to describe which commits they contain.
+      logger.info(
+        "(tree unchanged, but current ref is not in the history of the tracked ref; updated to latest from ref!)",
+      );
+      trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
     } else if (currentRefCommitSHA && currentTreeSHA === trackedTreeSHA) {
       if (currentRefCommitSHA !== trackable.ref) {
         // This will freeze the current ref if it is a mutable ref.
