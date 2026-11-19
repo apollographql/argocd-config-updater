@@ -30,6 +30,7 @@ import { PromotionsByTargetEnvironment } from "./promotionInfo.js";
 import { LinkTemplateMap, readLinkTemplateMapFile } from "./templates.js";
 import {
   formatPromotedCommits,
+  lookUpCommitInfos,
   MAX_PR_BODY_LENGTH,
 } from "./format-promoted-commits.js";
 import {
@@ -293,21 +294,32 @@ async function main(): Promise<void> {
       for (const { error, annotation } of errors) {
         core.error(error, annotation);
       }
-    } else {
-      await finalizeGitHubClient?.();
-      await finalizeDockerRegistryClient?.();
-      if (apiCacheFileName) {
-        await writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
-      }
     }
 
     if (
       generatePromotedCommitsMarkdown &&
       core.getBooleanInput("update-promoted-values")
     ) {
-      const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(
+      // `describe-promoted-commits` is a temporary flag for rolling this out
+      // gradually. If it's not set, we don't look anything up, so every commit
+      // is listed as a bare link (which is how it always used to work).
+      const commitInfoLookup =
+        core.getBooleanInput("describe-promoted-commits") && gitHubClient
+          ? await lookUpCommitInfos(
+              promotionsByFileThenEnvironment,
+              gitHubClient,
+              parallelism,
+              (message) => core.warning(message),
+            )
+          : undefined;
+      const {
+        promotedCommitsMarkdown,
+        truncated,
+        promotedCommitsCommitMessage,
+      } = formatPromotedCommits(
         promotionsByFileThenEnvironment,
         prMetadata,
+        commitInfoLookup,
       );
       if (truncated) {
         core.warning(
@@ -315,6 +327,10 @@ async function main(): Promise<void> {
         );
       }
       core.setOutput("promoted-commits-markdown", promotedCommitsMarkdown);
+      core.setOutput(
+        "promoted-commits-commit-message",
+        promotedCommitsCommitMessage,
+      );
     }
 
     if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
@@ -333,6 +349,16 @@ async function main(): Promise<void> {
         "rollback-summary-json",
         JSON.stringify({ rollbacks: allRollbacks }),
       );
+    }
+
+    // Save the API cache. We do this last so that it includes everything we
+    // learned from every API call above.
+    if (!errors.length) {
+      await finalizeGitHubClient?.();
+      await finalizeDockerRegistryClient?.();
+      if (apiCacheFileName) {
+        await writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
+      }
     }
   } catch (error) {
     // Fail the workflow run if an error occurs

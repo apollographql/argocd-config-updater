@@ -6,6 +6,7 @@ import {
   resolveSymlinkTarget,
   getGitConfigRefPromotionInfo,
   GitHubClient,
+  OctokitGitHubClient,
 } from "../github.js";
 import { PrefixingLogger } from "../log.js";
 
@@ -99,6 +100,9 @@ describe("getGitConfigRefPromotionInfo", () => {
       async getSymlinkTarget() {
         return "../shared/chart";
       },
+      async getCommitInfo() {
+        return null;
+      },
       async getCommitSHAsForPath() {
         return [];
       },
@@ -140,6 +144,9 @@ describe("getGitConfigRefPromotionInfo", () => {
       async getSymlinkTarget() {
         return null;
       },
+      async getCommitInfo() {
+        return null;
+      },
       async getCommitSHAsForPath() {
         return ["commit1"];
       },
@@ -162,5 +169,121 @@ describe("getGitConfigRefPromotionInfo", () => {
 
     // Should not return unknown/symlink message - normal processing occurred
     expect(result.type).toBe("no-commits");
+  });
+});
+
+describe("OctokitGitHubClient.getCommitInfo", () => {
+  const repoURL = "https://github.com/example/repo.git";
+
+  function makeClient(): { client: OctokitGitHubClient; calls: string[] } {
+    const calls: string[] = [];
+    const octokit = {
+      rest: {
+        repos: {
+          async listCommits({ sha }: { sha: string }) {
+            calls.push(`listCommits ${sha}`);
+            return {
+              data: [
+                {
+                  sha: "listed2",
+                  commit: {
+                    message: "Second listed (#2)\n\nBody text",
+                    author: { name: "Bob B." },
+                  },
+                  author: { login: "bob" },
+                },
+                {
+                  sha: "listed1",
+                  commit: {
+                    message: "First listed",
+                    author: { name: "Alice A." },
+                  },
+                  author: null,
+                },
+              ],
+            };
+          },
+          async getCommit({ ref }: { ref: string }) {
+            calls.push(`getCommit ${ref}`);
+            if (ref === "missing") {
+              throw Object.assign(new Error("Not Found"), { status: 404 });
+            }
+            if (ref === "ambiguous") {
+              throw Object.assign(new Error("No commit found for SHA"), {
+                status: 422,
+              });
+            }
+            if (ref === "broken") {
+              throw Object.assign(new Error("Bad Gateway"), { status: 502 });
+            }
+            return {
+              data: {
+                commit: {
+                  message: `  Title of ${ref} (#7)  \n\nBody`,
+                  author: { name: "Carol C." },
+                },
+                author: { login: "carol" },
+              },
+            };
+          },
+        },
+      },
+    };
+    return {
+      client: new OctokitGitHubClient(
+        octokit as unknown as ConstructorParameters<
+          typeof OctokitGitHubClient
+        >[0],
+        PrefixingLogger.silent(),
+      ),
+      calls,
+    };
+  }
+
+  it("fetches a commit's title and author", async () => {
+    const { client, calls } = makeClient();
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "abc" }),
+    ).toStrictEqual({
+      title: "Title of abc (#7)",
+      authorLogin: "carol",
+      authorName: "Carol C.",
+    });
+    expect(calls).toStrictEqual(["getCommit abc"]);
+  });
+
+  it("returns null for commits that can't be found, but throws other errors", async () => {
+    const { client } = makeClient();
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "missing" }),
+    ).toBeNull();
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "ambiguous" }),
+    ).toBeNull();
+    await expect(
+      client.getCommitInfo({ repoURL, commitSHA: "broken" }),
+    ).rejects.toThrow("GitHub API error");
+  });
+
+  it("reuses what it learned from getCommitSHAsForPath instead of making a call per commit", async () => {
+    const { client, calls } = makeClient();
+    expect(
+      await client.getCommitSHAsForPath({ repoURL, ref: "main", path: "x" }),
+    ).toStrictEqual(["listed1", "listed2"]);
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "listed1" }),
+    ).toStrictEqual({
+      title: "First listed",
+      authorLogin: null,
+      authorName: "Alice A.",
+    });
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "listed2" }),
+    ).toStrictEqual({
+      title: "Second listed (#2)",
+      authorLogin: "bob",
+      authorName: "Bob B.",
+    });
+    expect(calls).toStrictEqual(["listCommits main"]);
   });
 });

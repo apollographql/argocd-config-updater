@@ -249,6 +249,57 @@ By default, the copied values are `gitConfig.ref` and `dockerImage.tag`; you can
 specify a different set of paths via `promote.yamlPaths`. This is applied after
 updating mutable refs and tags.
 
+### Describing promotions
+
+If `generate-promoted-commits-markdown` is also set, the action sets the
+`promoted-commits-markdown` output to a Markdown description of what is being
+promoted, suitable for use as the body of a promotion PR. For each target
+environment and each set of apps that are promoting the same thing, it lists the
+commits that changed the Helm chart (the commits affecting `gitConfig.path`
+between the old and new `gitConfig.ref`) and the commits that changed the Docker
+image (based on the `-g<sha>` suffixes of the image's tags between the old and
+new `dockerImage.tag`).
+
+By default, each commit is listed as a bare link to the commit. If
+`describe-promoted-commits` is set (this is a temporary input for rolling out
+this behavior gradually; it will become the only behavior), each commit is
+listed like one of these:
+
+```
+- @author org/repo#1234 ([commit](https://github.com/org/repo/commit/SHA))
+- @author [Title of the commit](https://github.com/org/repo/commit/SHA)
+```
+
+- The author is the GitHub user associated with the commit, as a mention (so
+  that people can find and are notified about PRs promoting their changes). Apps
+  such as `renovate[bot]` are named but not mentioned. If GitHub does not
+  associate the commit with a user, the author name from the git commit is shown
+  instead.
+- If the commit's title (the first line of its message) says which PR it came
+  from, the commit is described by a reference to that PR, which GitHub displays
+  as the PR's title. This is the case for commits that GitHub creates when
+  merging a PR, whose titles either end with ` (#1234)` or look like
+  `Merge pull request #1234 from org/branch`. The reference is qualified with
+  the repository name so that it links to the right PR when the promotion PR is
+  in a different repository.
+- Otherwise, the commit is described by its title. Titles longer than 120
+  characters are truncated.
+- If the action is unable to look up the commit, it is listed as a bare link to
+  the commit.
+
+The action also sets the `promoted-commits-commit-message` output, which is the
+same description in a form intended for the message of the commit that performs
+the promotion. It leaves out the machine-readable metadata comment that
+`promoted-commits-markdown` starts with, and it always lists commits as bare
+links, even if `describe-promoted-commits` is set. This is because the promotion
+commit is typically re-created whenever the promotion PR is updated, and each
+new commit would notify the people it mentions and add an entry to the timeline
+of each PR it refers to.
+
+Looking up commits uses the GitHub API (via `github-token`). Results are saved
+in the `api-cache` file, if provided, so that each commit is only looked up
+once.
+
 # Caveat
 
 This package is designed specifically to meet the needs of Apollo's ArgoCD
