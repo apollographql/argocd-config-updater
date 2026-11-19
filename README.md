@@ -96,6 +96,17 @@ If the value at `ref` is already a git commit SHA, and the subtree named by
 This means that changes to other parts of the repository will not result in
 "no-op" changes to this line.
 
+There is one exception: if the commit at `ref` is not in the history of the
+commit named by `trackMutableRef`, the value is changed to the current git SHA
+for `trackMutableRef` even though the subtree is identical. This typically
+happens when a section temporarily tracks a PR branch and then goes back to
+tracking the main branch after the PR is squash-merged: the PR's head commit and
+the squashed commit on the main branch have identical trees, but only the latter
+is in the main branch's history. Making this change ensures that `ref` ends up
+as a commit on the branch being tracked, which (among other things) lets later
+promotions describe which commits they contain. (This also means that
+force-pushing a tracked branch updates `ref` even if the subtree is unchanged.)
+
 As a convenience, if `trackMutableRef` has the form `pr-123` followed by digits,
 it is converted to `pull/123/head`, which is the ref syntax GitHub uses for PRs.
 

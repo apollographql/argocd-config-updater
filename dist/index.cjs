@@ -176853,6 +176853,26 @@ class OctokitGitHubClient {
             .map(({ sha }) => sha)
             .reverse(); // Chronological order
     }
+    async isAncestor({ repoURL, ancestorSHA, descendantSHA, }) {
+        if (ancestorSHA === descendantSHA) {
+            return true;
+        }
+        const { owner, repo } = parseRepoURL(repoURL);
+        const basehead = `${ancestorSHA}...${descendantSHA}`;
+        const { status } = (await this.callAPI("repos.compareCommitsWithBasehead", `${owner}/${repo} ${basehead}`, async () => this.octokit.rest.repos.compareCommitsWithBasehead({
+            owner,
+            repo,
+            basehead,
+            // We only care about `status`, not the lists of commits and
+            // files, so ask for as little of them as possible.
+            per_page: 1,
+        }))).data;
+        // `status` describes the head (descendantSHA) relative to the base
+        // (ancestorSHA): "ahead" means the head contains everything in the base
+        // plus more, ie the base is an ancestor of the head. The other
+        // possibilities are "behind" and "diverged".
+        return status === "ahead" || status === "identical";
+    }
     async getPullRequest({ repoURL, prNumber, }) {
         const { owner, repo } = parseRepoURL(repoURL);
         const response = await this.callAPI("pulls.get", `${owner}/${repo} #${prNumber}`, async () => this.octokit.rest.pulls.get({
@@ -176877,6 +176897,10 @@ class CachingGitHubClient {
             if (dump.commitSHAs) {
                 this.getCommitSHAsForPathCache.load(dump.commitSHAs);
             }
+            // Support old cache files that don't have knownDescendants.
+            if (dump.knownDescendants) {
+                this.knownDescendantCache.load(dump.knownDescendants);
+            }
         }
     }
     resolveRefToSHACache = new U({
@@ -176897,6 +176921,91 @@ class CachingGitHubClient {
             return await this.wrapped.getCommitSHAsForPath(context);
         },
     });
+    // isAncestor uses two caches which work together: `isAncestorCache` and
+    // `knownDescendantCache`.
+    //
+    // The typical use of isAncestor is to ask "is the commit in this config file
+    // still in the history of the branch it tracks?" for a lot of different
+    // commits (one per tracked environment), and the head of that branch changes
+    // frequently. We'd like the number of API calls we make to be proportional
+    // to the number of times the branch moves, not to the number of
+    // environments tracking it.
+    //
+    // `isAncestorCache` is a straightforward memoization of the wrapped
+    // client's isAncestor: it maps an exact (repoURL, ancestorSHA,
+    // descendantSHA) triple to true or false. It is only kept in memory for a
+    // single execution.
+    //
+    // `knownDescendantCache` maps (the JSON-ification of) `{ repoURL,
+    // ancestorSHA, descendantRef }` to the most recent value of the ref
+    // `descendantRef` which we have confirmed that `ancestorSHA` is an ancestor
+    // of. It never leads directly to an API call; instead, it lets us use
+    // transitivity to turn a question we haven't asked before into one that we
+    // probably have. It is saved across executions.
+    //
+    // For example, say `main` moves from M1 to M2, and 200 environments track
+    // `main` with refs C1 through C200, each of which we have already confirmed
+    // is an ancestor of M1 (so `knownDescendantCache` maps each (Cn, main) to
+    // M1).
+    //
+    // - The first environment asks "is C1 an ancestor of M2?".
+    //   `knownDescendantCache` tells us that C1 is an ancestor of M1, so it
+    //   suffices to know "is M1 an ancestor of M2?". That goes through
+    //   `isAncestorCache`, which makes one API call (and learns the answer is
+    //   yes).
+    // - The other 199 environments ask "is Cn an ancestor of M2?", which get
+    //   converted in the same way into the identical question "is M1 an ancestor
+    //   of M2?". `isAncestorCache` answers all of those without any API calls.
+    // - Each (Cn, main) entry in `knownDescendantCache` is updated to M2, ready
+    //   for the next time `main` moves.
+    //
+    // We need both caches to make this work with a single API call:
+    //
+    // - With only `knownDescendantCache`, each of the 200 environments would
+    //   make its own API call to ask "is M1 an ancestor of M2?".
+    // - With only `isAncestorCache` (even if we saved it across executions),
+    //   none of the (Cn, M2) pairs have ever been seen before because M2 is new,
+    //   so that's also 200 API calls.
+    //
+    // `isAncestorCache` is also the only place we remember a negative answer
+    // (`knownDescendantCache` can only express "yes, it's an ancestor of this
+    // commit"), and it shares one request between concurrent identical
+    // questions.
+    //
+    // We don't save `isAncestorCache` across executions. It would be correct to
+    // do so (its keys and values are facts about commit SHAs, which never
+    // change), but nearly every pair in it involves whatever the head of the
+    // branch was at the time, so it won't be asked about again once the branch
+    // moves. The part of what it learned that stays useful is already recorded
+    // in `knownDescendantCache`.
+    //
+    // We only remember one descendant per `knownDescendantCache` entry, which is
+    // why the ref name is part of the key: the transitivity trick relies on each
+    // entry following a single line of history. The same commit can be checked
+    // against several refs. For example, one environment tracks `main` with ref
+    // C, and another tracks `pr-123`, a PR which hasn't changed that
+    // environment's path, so it has ref C too. The heads of `main` and `pr-123`
+    // are generally not descendants of each other. If the two environments
+    // shared an entry, each would overwrite the other's answer, and then find
+    // that the remembered commit is no help for its own question: we'd make
+    // several API calls for C on every execution even when neither ref has
+    // moved.
+    //
+    // It is safe to save `knownDescendantCache` across executions because its
+    // values are facts about commit SHAs, which never change. The ref name only
+    // determines which entry we look at, and we always confirm that the
+    // remembered commit is an ancestor of the one we're being asked about. So if
+    // a ref is force-pushed (ie, its old head M1 is not an ancestor of its new
+    // head M2), the "is M1 an ancestor of M2?" question is answered "no", and we
+    // fall back to directly asking "is Cn an ancestor of M2?" for each
+    // environment.
+    isAncestorCache = new U({
+        max: 4096,
+        fetchMethod: async (_key, _staleValue, { context }) => {
+            return { boxed: await this.wrapped.isAncestor(context) };
+        },
+    });
+    knownDescendantCache = new U({ max: 4096 });
     // We mainly care about the state of the PR, a very dynamic value, so this cache is only
     // for avoiding repeated lookups within a single action run; we don't save it to the Actions cache.
     getPullRequestCache = new U({
@@ -176935,6 +177044,44 @@ class CachingGitHubClient {
         }
         return shas;
     }
+    async isAncestorViaCache(options) {
+        const cached = await this.isAncestorCache.fetch(JSON.stringify(options), {
+            context: options,
+        });
+        if (!cached) {
+            throw Error("isAncestorCache.fetch should never resolve without a boxed value");
+        }
+        return cached.boxed;
+    }
+    async isAncestor(options) {
+        const { repoURL, ancestorSHA, descendantSHA, descendantRef } = options;
+        if (ancestorSHA === descendantSHA) {
+            return true;
+        }
+        const knownDescendantKey = JSON.stringify({
+            repoURL,
+            ancestorSHA,
+            descendantRef: descendantRef ?? null,
+        });
+        const knownDescendantSHA = this.knownDescendantCache.get(knownDescendantKey);
+        const result = knownDescendantSHA === descendantSHA ||
+            // See the comment on knownDescendantCache: this call is shared by
+            // everything that was last checked against the same commit.
+            (knownDescendantSHA !== undefined &&
+                (await this.isAncestorViaCache({
+                    repoURL,
+                    ancestorSHA: knownDescendantSHA,
+                    descendantSHA,
+                }))) ||
+            // Either we've never checked this ancestor against this ref before, or
+            // the commit we last checked it against isn't in the history of this
+            // descendant (eg, a force push). Ask directly.
+            (await this.isAncestorViaCache({ repoURL, ancestorSHA, descendantSHA }));
+        if (result) {
+            this.knownDescendantCache.set(knownDescendantKey, descendantSHA);
+        }
+        return result;
+    }
     async getSymlinkTarget(options) {
         // No caching for symlink targets - they're already cached in the wrapped
         // client's allTreesForCommitCache.
@@ -176952,6 +177099,7 @@ class CachingGitHubClient {
             commitSHAs: this.getCommitSHAsForPathCache
                 .dump()
                 .filter(([key]) => key.startsWith("SHA!")),
+            knownDescendants: this.knownDescendantCache.dump(),
         };
     }
     async getPullRequest(options) {
@@ -176978,6 +177126,12 @@ function isCachingGitHubClientDump(dump) {
     if ("commitSHAs" in dump) {
         const { commitSHAs } = dump;
         if (!Array.isArray(commitSHAs)) {
+            return false;
+        }
+    }
+    if ("knownDescendants" in dump) {
+        const { knownDescendants } = dump;
+        if (!Array.isArray(knownDescendants)) {
             return false;
         }
     }
@@ -194833,6 +194987,19 @@ async function getTreeSHAForPathOrNull(gitHubClient, options, logger) {
         return null;
     }
 }
+// If we can't tell whether the current ref is in the history of the tracked
+// ref, treat it as if it is: that means we fall back to only caring about
+// whether the tree SHA has changed, rather than potentially making no-op
+// changes to every file each time the tracked ref changes.
+async function isInHistoryOrUnknown(gitHubClient, options, logger) {
+    try {
+        return await gitHubClient.isAncestor(options);
+    }
+    catch (e) {
+        logger.warning(`Ignoring error checking if ${options.ancestorSHA} is an ancestor of ${options.descendantSHA} in ${options.repoURL}: ${e}`);
+        return true;
+    }
+}
 async function checkRefsAgainstGitHubAndModifyScalars(trackables, gitHubClient, logger) {
     for (const trackable of trackables) {
         const trackedRefCommitSHA = await gitHubClient.resolveRefToSHA({
@@ -194898,6 +195065,25 @@ async function checkRefsAgainstGitHubAndModifyScalars(trackables, gitHubClient, 
                 // Commit sha is already whats written so no changes
                 logger.info("(matches docker, unchanged)");
             }
+        }
+        else if (currentRefCommitSHA &&
+            currentTreeSHA === trackedTreeSHA &&
+            !(await isInHistoryOrUnknown(gitHubClient, {
+                repoURL: trackable.repoURL,
+                ancestorSHA: currentRefCommitSHA,
+                descendantSHA: trackedRefCommitSHA,
+                descendantRef: trackable.trackMutableRef,
+            }, logger))) {
+            // Normally we avoid no-op changes, but we also want `ref` to be a commit
+            // that's actually in the history of the ref we're tracking. The usual
+            // way to get here is that the environment temporarily tracked a PR
+            // branch which was then squash-merged, and now the environment is
+            // tracking the main branch again: the tree is the same but the commit in
+            // `ref` is from the PR branch, not from main. If we left it alone, then
+            // (among other things) later promotions out of this environment would
+            // not be able to describe which commits they contain.
+            logger.info("(tree unchanged, but current ref is not in the history of the tracked ref; updated to latest from ref!)");
+            trackable.refScalarTokenWriter.write(trackedRefCommitSHA);
         }
         else if (currentRefCommitSHA && currentTreeSHA === trackedTreeSHA) {
             if (currentRefCommitSHA !== trackable.ref) {

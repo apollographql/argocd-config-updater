@@ -21,6 +21,9 @@ const mockGitHubClient: GitHubClient = {
   async getCommitSHAsForPath() {
     return [];
   },
+  async isAncestor() {
+    return true;
+  },
   async getPullRequest() {
     return { state: "open", title: "Test PR", closedAt: null };
   },
@@ -94,6 +97,9 @@ describe("action", () => {
       async getCommitSHAsForPath() {
         return [];
       },
+      async isAncestor() {
+        return true;
+      },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
       },
@@ -123,6 +129,71 @@ describe("action", () => {
     ).toMatchSnapshot();
   });
 
+  it("changes ref when tree sha is unchanged but current ref is not in the tracked ref's history", async () => {
+    // This simulates an environment which temporarily tracked a PR branch
+    // that has since been squash-merged, and now tracks main again: `ref` is
+    // still the commit from the PR branch ('old'), which has the same tree as
+    // main ('new') but isn't in its history.
+    let isAncestorResult: boolean | Error = false;
+    const isAncestorCalls: string[] = [];
+    const mockGithubClientNotAncestor: GitHubClient = {
+      async resolveRefToSHA({ ref }) {
+        return ref === "main" ? "new" : "old";
+      },
+      async getTreeSHAForPath() {
+        return "aaaa";
+      },
+      async getSymlinkTarget() {
+        return null;
+      },
+      async getCommitSHAsForPath() {
+        return [];
+      },
+      async isAncestor({ ancestorSHA, descendantSHA }) {
+        isAncestorCalls.push(`${ancestorSHA}...${descendantSHA}`);
+        if (isAncestorResult instanceof Error) {
+          throw isAncestorResult;
+        }
+        return isAncestorResult;
+      },
+      async getPullRequest() {
+        return { state: "open", title: "Test PR", closedAt: null };
+      },
+    };
+
+    const contents = await fixture("tree-sha.yaml");
+    const updated = await updateGitRefs(
+      contents,
+      mockGithubClientNotAncestor,
+      new Set<string>(),
+      logger,
+    );
+    expect(updated).toBe(contents.replace("ref: old", "ref: new"));
+    expect(isAncestorCalls).toStrictEqual(["old...new"]);
+
+    // If the current ref is in the tracked ref's history, leave it alone.
+    isAncestorResult = true;
+    expect(
+      await updateGitRefs(
+        contents,
+        mockGithubClientNotAncestor,
+        new Set<string>(),
+        logger,
+      ),
+    ).toBe(contents);
+
+    // If we can't tell, leave it alone.
+    isAncestorResult = new Error("GitHub is sad");
+    expect(
+      await updateGitRefs(
+        contents,
+        mockGithubClientNotAncestor,
+        new Set<string>(),
+        logger,
+      ),
+    ).toBe(contents);
+  });
+
   it("handles unknown current ref", async () => {
     const mockGithubClientTreeSHA: GitHubClient = {
       async resolveRefToSHA({ ref }) {
@@ -139,6 +210,9 @@ describe("action", () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async isAncestor() {
+        return true;
       },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
@@ -170,6 +244,9 @@ describe("action", () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async isAncestor() {
+        return true;
       },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
@@ -204,6 +281,9 @@ describe("action", () => {
       },
       async getCommitSHAsForPath() {
         return [];
+      },
+      async isAncestor() {
+        return true;
       },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };

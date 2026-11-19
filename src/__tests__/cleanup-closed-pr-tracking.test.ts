@@ -21,6 +21,9 @@ function createMockGitHubClient(
     async getCommitSHAsForPath() {
       return [];
     },
+    async isAncestor() {
+      return true;
+    },
     async getPullRequest({ prNumber }) {
       const state = prStates[prNumber];
       if (state === "error") {

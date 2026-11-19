@@ -102,6 +102,9 @@ describe("getGitConfigRefPromotionInfo", () => {
       async getCommitSHAsForPath() {
         return [];
       },
+      async isAncestor() {
+        return true;
+      },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
       },
@@ -139,6 +142,9 @@ describe("getGitConfigRefPromotionInfo", () => {
       },
       async getCommitSHAsForPath() {
         return ["commit1"];
+      },
+      async isAncestor() {
+        return true;
       },
       async getPullRequest() {
         return { state: "open", title: "Test PR", closedAt: null };
