@@ -41,6 +41,24 @@ export interface GetPullRequestForNumberOptions {
   prNumber: number;
 }
 
+export interface GetCommitInfoOptions {
+  repoURL: string;
+  // Usually a full commit SHA, but may be an abbreviated one (eg, one that
+  // came from a Docker tag).
+  commitSHA: string;
+}
+
+// Human-oriented information about a commit, used when describing promotions.
+export interface CommitInfo {
+  // The first line of the commit message.
+  title: string;
+  // The login of the GitHub user that GitHub associates with the commit's
+  // author, if any. For apps, this ends with `[bot]`.
+  authorLogin: string | null;
+  // The author name recorded in the git commit itself.
+  authorName: string | null;
+}
+
 export type PullRequestState = "open" | "closed";
 
 export interface PullRequest {
@@ -60,6 +78,8 @@ export interface GitHubClient {
   // commit SHAs, not mutable refs.
   isAncestor(options: IsAncestorOptions): Promise<boolean>;
   getPullRequest(options: GetPullRequestForNumberOptions): Promise<PullRequest>;
+  // Returns null if the commit can't be found in the repository.
+  getCommitInfo(options: GetCommitInfoOptions): Promise<CommitInfo | null>;
 }
 
 export interface OwnerAndRepo {
@@ -91,6 +111,10 @@ interface AllTreesForCommit {
   // If true, GitHub's response to the recursive tree fetch was truncated, so on
   // cache miss we fall back to the getContent API.
   truncated: boolean;
+}
+
+function commitTitle(message: string): string {
+  return message.split("\n", 1)[0].trim();
 }
 
 function isSHA(s: string): boolean {
@@ -422,22 +446,92 @@ export class OctokitGitHubClient {
     path,
   }: GetCommitSHAsForPathOptions): Promise<string[]> {
     const { owner, repo } = parseRepoURL(repoURL);
-    return (
-      await this.callAPI(
-        "repos.listCommits",
-        `${owner}/${repo}@${ref} ${path}`,
-        async () =>
-          this.octokit.rest.repos.listCommits({
-            owner,
-            repo,
-            path,
-            sha: ref,
-            per_page: 100, // max allowed
-          }),
-      )
-    ).data
-      .map(({ sha }) => sha)
-      .reverse(); // Chronological order
+    const { data } = await this.callAPI(
+      "repos.listCommits",
+      `${owner}/${repo}@${ref} ${path}`,
+      async () =>
+        this.octokit.rest.repos.listCommits({
+          owner,
+          repo,
+          path,
+          sha: ref,
+          per_page: 100, // max allowed
+        }),
+    );
+    // This response happens to contain everything that getCommitInfo needs to
+    // know about these commits, so remember it in case we're asked.
+    for (const { sha, commit, author } of data) {
+      this.commitInfoFromListCommits.set(`${owner}/${repo}/${sha}`, {
+        title: commitTitle(commit.message),
+        authorLogin: author?.login ?? null,
+        authorName: commit.author?.name ?? null,
+      });
+    }
+    return data.map(({ sha }) => sha).reverse(); // Chronological order
+  }
+
+  // getCommitSHAsForPath (which we call to figure out which commits are in a
+  // promotion) gets back from GitHub all the information that getCommitInfo
+  // returns (which we call to describe those same commits), so we save it here
+  // to avoid an API call per commit. This only helps within a single
+  // execution; CachingGitHubClient is what remembers CommitInfos across
+  // executions.
+  private commitInfoFromListCommits = new LRUCache<string, CommitInfo>({
+    max: 4096,
+  });
+
+  async getCommitInfo({
+    repoURL,
+    commitSHA,
+  }: GetCommitInfoOptions): Promise<CommitInfo | null> {
+    const { owner, repo } = parseRepoURL(repoURL);
+    const fromListCommits = this.commitInfoFromListCommits.get(
+      `${owner}/${repo}/${commitSHA}`,
+    );
+    if (fromListCommits) {
+      return fromListCommits;
+    }
+    const data = await this.callAPI(
+      "repos.getCommit",
+      `${owner}/${repo} ${commitSHA} (commit info)`,
+      async () => {
+        try {
+          return (
+            await this.octokit.rest.repos.getCommit({
+              owner,
+              repo,
+              ref: commitSHA,
+              // The response includes the list of files changed by the commit
+              // (with diffs!), which we don't care about; this asks for as
+              // little of that as possible.
+              per_page: 1,
+            })
+          ).data;
+        } catch (e: unknown) {
+          // 404 means there's no such commit; 422 is what you get for
+          // something that doesn't resolve to a single commit (eg, an
+          // ambiguous abbreviated SHA). Anything else propagates up through
+          // callAPI to get wrapped with context.
+          if (
+            typeof e === "object" &&
+            e &&
+            "status" in e &&
+            (e.status === 404 || e.status === 422)
+          ) {
+            return null;
+          }
+          throw e;
+        }
+      },
+    );
+    if (data === null) {
+      return null;
+    }
+    return {
+      title: commitTitle(data.commit.message),
+      authorLogin: data.author?.login ?? null,
+      authorName: data.commit.author?.name ?? null,
+    };
   }
 
   async isAncestor({
@@ -509,6 +603,10 @@ export class CachingGitHubClient {
       // Support old cache files that don't have knownDescendants.
       if (dump.knownDescendants) {
         this.knownDescendantCache.load(dump.knownDescendants);
+      }
+      // Support old cache files that don't have commitInfos.
+      if (dump.commitInfos) {
+        this.getCommitInfoCache.load(dump.commitInfos);
       }
     }
   }
@@ -639,6 +737,28 @@ export class CachingGitHubClient {
 
   private knownDescendantCache = new LRUCache<string, string>({ max: 4096 });
 
+  // Commits are immutable, so we save this across executions. (Technically the
+  // GitHub user associated with a commit could change, eg if somebody adds the
+  // commit's email address to their account later or renames their account,
+  // but that's not worth re-fetching every commit for.)
+  //
+  // We do cache the fact that a commit could not be found (null) too. This
+  // happens for every commit in the list of Docker image changes if an image
+  // is built from a different repository than the one containing its Helm
+  // chart, and we don't want to make a doomed API call for each of those
+  // commits every time we regenerate a promotion PR's description.
+  private getCommitInfoCache = new LRUCache<
+    string,
+    // LRUCache can't store null, so we box it.
+    { boxed: CommitInfo | null },
+    GetCommitInfoOptions
+  >({
+    max: 4096,
+    fetchMethod: async (_key, _staleValue, { context }) => {
+      return { boxed: await this.wrapped.getCommitInfo(context) };
+    },
+  });
+
   // We mainly care about the state of the PR, a very dynamic value, so this cache is only
   // for avoiding repeated lookups within a single action run; we don't save it to the Actions cache.
   private getPullRequestCache = new LRUCache<
@@ -754,10 +874,26 @@ export class CachingGitHubClient {
     return this.wrapped.getSymlinkTarget(options);
   }
 
+  async getCommitInfo(
+    options: GetCommitInfoOptions,
+  ): Promise<CommitInfo | null> {
+    const cached = await this.getCommitInfoCache.fetch(
+      JSON.stringify(options),
+      { context: options },
+    );
+    if (!cached) {
+      throw Error(
+        "getCommitInfoCache.fetch should never resolve without a boxed value",
+      );
+    }
+    return cached.boxed;
+  }
+
   dump(): CachingGitHubClientDump {
     // We don't dump resolveRefToSHACache because it is not immutable (it tracks
     // the current commits on main, etc).
     return {
+      commitInfos: this.getCommitInfoCache.dump(),
       treeSHAs: this.getTreeSHAForPathCache.dump(),
       // While it's fine for us to cache the result of getCommitSHAsForPath
       // in-memory for mutable refs to reduce duplicate API calls within a
@@ -786,6 +922,7 @@ export class CachingGitHubClient {
 }
 
 export interface CachingGitHubClientDump {
+  commitInfos?: [string, LRUCache.Entry<{ boxed: CommitInfo | null }>][];
   treeSHAs: [
     string,
     LRUCache.Entry<{
@@ -808,6 +945,13 @@ export function isCachingGitHubClientDump(
   const { treeSHAs } = dump;
   if (!Array.isArray(treeSHAs)) {
     return false;
+  }
+
+  if ("commitInfos" in dump) {
+    const { commitInfos } = dump;
+    if (!Array.isArray(commitInfos)) {
+      return false;
+    }
   }
 
   if ("commitSHAs" in dump) {

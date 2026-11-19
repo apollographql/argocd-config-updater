@@ -50,6 +50,10 @@ inputs:
     description: 'Generates the promoted-commits-markdown output'
     default: 'false'
 
+  describe-promoted-commits:
+    description: 'TEMPORARY (will become the only behavior): if generate-promoted-commits-markdown is set, list each promoted commit with a mention of its author and either a reference to its PR or its title, instead of as a bare link to the commit'
+    default: 'false'
+
   link-template-file:
     description: 'If provided, a path to a YAML file mapping from template names to link templates. A template is a `text` and an `url`, each of which is a list of objects, each of which is of the form `{literal: "literal text"}` or `{variable: "variable-name"}.'
 
@@ -75,6 +79,9 @@ outputs:
 
   promoted-commits-markdown:
     description: 'Markdown describing the commits being promoted, if update-promoted-values and generate-promoted-commits-markdown are set. Kept within the 65536-character GitHub PR body limit; if the commit list had to be cut, the markdown ends with an explicit warning saying so.'
+
+  promoted-commits-commit-message:
+    description: 'A version of promoted-commits-markdown intended for the message of the commit that performs the promotion (rather than for the body of a PR). It does not contain the machine-readable metadata comment, and it always lists commits as bare links (regardless of describe-promoted-commits), so that the commit does not mention users or refer to PRs.'
 
   cleanup-changes-markdown:
     description: 'Markdown describing closed PR tracking references that were cleaned up, if cleanup-closed-pr-tracking is set.'

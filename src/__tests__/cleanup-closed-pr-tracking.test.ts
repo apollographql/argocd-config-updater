@@ -18,6 +18,9 @@ function createMockGitHubClient(
     async getSymlinkTarget() {
       return null;
     },
+    async getCommitInfo() {
+      return null;
+    },
     async getCommitSHAsForPath() {
       return [];
     },

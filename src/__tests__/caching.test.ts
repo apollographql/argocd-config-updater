@@ -55,6 +55,9 @@ describe("CachingGitHubClient caches", () => {
       async getSymlinkTarget() {
         return null;
       },
+      async getCommitInfo() {
+        return null;
+      },
       async getCommitSHAsForPath() {
         return [];
       },
@@ -98,6 +101,9 @@ describe("CachingGitHubClient caches", () => {
       async getSymlinkTarget() {
         return null;
       },
+      async getCommitInfo() {
+        return null;
+      },
       async getCommitSHAsForPath() {
         return [];
       },
@@ -128,6 +134,74 @@ describe("CachingGitHubClient caches", () => {
     await exp("x", "y", "pp", "4");
   });
 
+  it("getCommitInfo caches, including across executions and for missing commits", async () => {
+    const calls: string[] = [];
+    const wrapped: GitHubClient = {
+      async resolveRefToSHA() {
+        return "";
+      },
+      async getTreeSHAForPath() {
+        return "";
+      },
+      async getSymlinkTarget() {
+        return null;
+      },
+      async getCommitInfo({ commitSHA }) {
+        calls.push(commitSHA);
+        if (commitSHA === "missing") {
+          return null;
+        }
+        if (commitSHA === "broken") {
+          throw Error("GitHub is sad");
+        }
+        return {
+          title: `title of ${commitSHA}`,
+          authorLogin: "alice",
+          authorName: "Alice",
+        };
+      },
+      async getCommitSHAsForPath() {
+        return [];
+      },
+      async isAncestor() {
+        return true;
+      },
+      async getPullRequest() {
+        return { state: "open", title: "Test PR", closedAt: null };
+      },
+    };
+    const repoURL = "https://github.com/example/repo";
+    const client = new CachingGitHubClient(wrapped);
+    const a = await client.getCommitInfo({ repoURL, commitSHA: "a" });
+    expect(a?.title).toBe("title of a");
+    expect(await client.getCommitInfo({ repoURL, commitSHA: "a" })).toBe(a);
+    expect(
+      await client.getCommitInfo({ repoURL, commitSHA: "missing" }),
+    ).toBeNull();
+    await expect(
+      client.getCommitInfo({ repoURL, commitSHA: "broken" }),
+    ).rejects.toThrow("GitHub is sad");
+    expect(calls).toStrictEqual(["a", "missing", "broken"]);
+
+    calls.length = 0;
+    const client2 = new CachingGitHubClient(
+      wrapped,
+      JSON.parse(JSON.stringify(client.dump())) as CachingGitHubClientDump,
+    );
+    expect(
+      await client2.getCommitInfo({ repoURL, commitSHA: "a" }),
+    ).toStrictEqual(a);
+    expect(
+      await client2.getCommitInfo({ repoURL, commitSHA: "missing" }),
+    ).toBeNull();
+    expect(calls).toStrictEqual([]);
+    // Errors (as opposed to missing commits) are not cached.
+    await expect(
+      client2.getCommitInfo({ repoURL, commitSHA: "broken" }),
+    ).rejects.toThrow("GitHub is sad");
+    expect(calls).toStrictEqual(["broken"]);
+  });
+
   it("isAncestor uses transitivity to avoid calls", async () => {
     // History is a1 <- a2 <- m1 <- m2 <- m3, with `branch` forked off of a1.
     const order = ["a1", "a2", "m1", "m2", "m3"];
@@ -140,6 +214,9 @@ describe("CachingGitHubClient caches", () => {
         return "";
       },
       async getSymlinkTarget() {
+        return null;
+      },
+      async getCommitInfo() {
         return null;
       },
       async getCommitSHAsForPath() {

@@ -176602,6 +176602,9 @@ function getWebURL(repoURL) {
     const { owner, repo } = parseRepoURL(repoURL);
     return `https://github.com/${owner}/${repo}`;
 }
+function commitTitle(message) {
+    return message.split("\n", 1)[0].trim();
+}
 function isSHA(s) {
     return !!s.match(/^[0-9a-f]{40}$/);
 }
@@ -176843,15 +176846,73 @@ class OctokitGitHubClient {
     }
     async getCommitSHAsForPath({ repoURL, ref, path, }) {
         const { owner, repo } = parseRepoURL(repoURL);
-        return (await this.callAPI("repos.listCommits", `${owner}/${repo}@${ref} ${path}`, async () => this.octokit.rest.repos.listCommits({
+        const { data } = await this.callAPI("repos.listCommits", `${owner}/${repo}@${ref} ${path}`, async () => this.octokit.rest.repos.listCommits({
             owner,
             repo,
             path,
             sha: ref,
             per_page: 100, // max allowed
-        }))).data
-            .map(({ sha }) => sha)
-            .reverse(); // Chronological order
+        }));
+        // This response happens to contain everything that getCommitInfo needs to
+        // know about these commits, so remember it in case we're asked.
+        for (const { sha, commit, author } of data) {
+            this.commitInfoFromListCommits.set(`${owner}/${repo}/${sha}`, {
+                title: commitTitle(commit.message),
+                authorLogin: author?.login ?? null,
+                authorName: commit.author?.name ?? null,
+            });
+        }
+        return data.map(({ sha }) => sha).reverse(); // Chronological order
+    }
+    // getCommitSHAsForPath (which we call to figure out which commits are in a
+    // promotion) gets back from GitHub all the information that getCommitInfo
+    // returns (which we call to describe those same commits), so we save it here
+    // to avoid an API call per commit. This only helps within a single
+    // execution; CachingGitHubClient is what remembers CommitInfos across
+    // executions.
+    commitInfoFromListCommits = new U({
+        max: 4096,
+    });
+    async getCommitInfo({ repoURL, commitSHA, }) {
+        const { owner, repo } = parseRepoURL(repoURL);
+        const fromListCommits = this.commitInfoFromListCommits.get(`${owner}/${repo}/${commitSHA}`);
+        if (fromListCommits) {
+            return fromListCommits;
+        }
+        const data = await this.callAPI("repos.getCommit", `${owner}/${repo} ${commitSHA} (commit info)`, async () => {
+            try {
+                return (await this.octokit.rest.repos.getCommit({
+                    owner,
+                    repo,
+                    ref: commitSHA,
+                    // The response includes the list of files changed by the commit
+                    // (with diffs!), which we don't care about; this asks for as
+                    // little of that as possible.
+                    per_page: 1,
+                })).data;
+            }
+            catch (e) {
+                // 404 means there's no such commit; 422 is what you get for
+                // something that doesn't resolve to a single commit (eg, an
+                // ambiguous abbreviated SHA). Anything else propagates up through
+                // callAPI to get wrapped with context.
+                if (typeof e === "object" &&
+                    e &&
+                    "status" in e &&
+                    (e.status === 404 || e.status === 422)) {
+                    return null;
+                }
+                throw e;
+            }
+        });
+        if (data === null) {
+            return null;
+        }
+        return {
+            title: commitTitle(data.commit.message),
+            authorLogin: data.author?.login ?? null,
+            authorName: data.commit.author?.name ?? null,
+        };
     }
     async isAncestor({ repoURL, ancestorSHA, descendantSHA, }) {
         if (ancestorSHA === descendantSHA) {
@@ -176900,6 +176961,10 @@ class CachingGitHubClient {
             // Support old cache files that don't have knownDescendants.
             if (dump.knownDescendants) {
                 this.knownDescendantCache.load(dump.knownDescendants);
+            }
+            // Support old cache files that don't have commitInfos.
+            if (dump.commitInfos) {
+                this.getCommitInfoCache.load(dump.commitInfos);
             }
         }
     }
@@ -177006,6 +177071,22 @@ class CachingGitHubClient {
         },
     });
     knownDescendantCache = new U({ max: 4096 });
+    // Commits are immutable, so we save this across executions. (Technically the
+    // GitHub user associated with a commit could change, eg if somebody adds the
+    // commit's email address to their account later or renames their account,
+    // but that's not worth re-fetching every commit for.)
+    //
+    // We do cache the fact that a commit could not be found (null) too. This
+    // happens for every commit in the list of Docker image changes if an image
+    // is built from a different repository than the one containing its Helm
+    // chart, and we don't want to make a doomed API call for each of those
+    // commits every time we regenerate a promotion PR's description.
+    getCommitInfoCache = new U({
+        max: 4096,
+        fetchMethod: async (_key, _staleValue, { context }) => {
+            return { boxed: await this.wrapped.getCommitInfo(context) };
+        },
+    });
     // We mainly care about the state of the PR, a very dynamic value, so this cache is only
     // for avoiding repeated lookups within a single action run; we don't save it to the Actions cache.
     getPullRequestCache = new U({
@@ -177087,10 +177168,18 @@ class CachingGitHubClient {
         // client's allTreesForCommitCache.
         return this.wrapped.getSymlinkTarget(options);
     }
+    async getCommitInfo(options) {
+        const cached = await this.getCommitInfoCache.fetch(JSON.stringify(options), { context: options });
+        if (!cached) {
+            throw Error("getCommitInfoCache.fetch should never resolve without a boxed value");
+        }
+        return cached.boxed;
+    }
     dump() {
         // We don't dump resolveRefToSHACache because it is not immutable (it tracks
         // the current commits on main, etc).
         return {
+            commitInfos: this.getCommitInfoCache.dump(),
             treeSHAs: this.getTreeSHAForPathCache.dump(),
             // While it's fine for us to cache the result of getCommitSHAsForPath
             // in-memory for mutable refs to reduce duplicate API calls within a
@@ -177122,6 +177211,12 @@ function isCachingGitHubClientDump(dump) {
     const { treeSHAs } = dump;
     if (!Array.isArray(treeSHAs)) {
         return false;
+    }
+    if ("commitInfos" in dump) {
+        const { commitInfos } = dump;
+        if (!Array.isArray(commitInfos)) {
+            return false;
+        }
     }
     if ("commitSHAs" in dump) {
         const { commitSHAs } = dump;
@@ -209668,13 +209763,167 @@ function reorganizePromotionInfoForMessage(promotionsByFileThenEnvironment) {
     }
     return organizedPromotionsByTargetEnvironment;
 }
-function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
+/**
+ * Returns every commit that will be listed by formatPromotedCommits (without
+ * duplicates), so that the caller can look up information about them.
+ */
+function collectPromotedCommits(promotionsByFileThenEnvironment) {
+    const promotedCommits = new Map();
+    for (const promotionsByTargetEnvironment of promotionsByFileThenEnvironment.values()) {
+        for (const { promotionSet: { trimmedRepoURL, gitConfigPromotionInfo, dockerImagePromotionInfo, }, } of promotionsByTargetEnvironment.values()) {
+            for (const promotionInfo of [
+                gitConfigPromotionInfo,
+                dockerImagePromotionInfo,
+            ]) {
+                if (promotionInfo?.type === "commits") {
+                    for (const commitSHA of promotionInfo.commitSHAs) {
+                        promotedCommits.set(commitURL(trimmedRepoURL, commitSHA), {
+                            trimmedRepoURL,
+                            commitSHA,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    return [...promotedCommits.values()];
+}
+/**
+ * Asks GitHub about every commit that will be listed by formatPromotedCommits,
+ * and returns a CommitInfoLookup to pass to it.
+ *
+ * If we can't look up a commit, we just warn about it: the description is
+ * still useful if that commit is shown as a bare URL.
+ */
+async function lookUpCommitInfos(promotionsByFileThenEnvironment, gitHubClient, parallelism, warn) {
+    const commitInfos = new Map();
+    await eachLimit$1(collectPromotedCommits(promotionsByFileThenEnvironment), parallelism, async ({ trimmedRepoURL, commitSHA }) => {
+        try {
+            commitInfos.set(commitURL(trimmedRepoURL, commitSHA), await gitHubClient.getCommitInfo({
+                repoURL: trimmedRepoURL,
+                commitSHA,
+            }));
+        }
+        catch (e) {
+            warn(`Error looking up commit ${commitSHA} in ${trimmedRepoURL}; it will be listed without its author and title: ${e}`);
+        }
+    });
+    return ({ trimmedRepoURL, commitSHA }) => commitInfos.get(commitURL(trimmedRepoURL, commitSHA));
+}
+function commitURL(trimmedRepoURL, commitSHA) {
+    return `${trimmedRepoURL}/commit/${commitSHA}`;
+}
+// Commit titles longer than this are cut off. Git convention is to keep titles
+// much shorter than this, so this is only intended to affect titles that are
+// truly enormous (eg, somebody put their whole commit message on one line).
+const MAX_COMMIT_TITLE_LENGTH = 120;
+// Backslash-escapes the characters that could mean something in the middle of
+// a line of Markdown (emphasis, code, links, HTML, strikethrough, entities).
+function escapeMarkdown(text) {
+    return text.replace(/[\\`*_[\]<>~&]/g, "\\$&");
+}
+// Makes a commit title safe to use as the text of a Markdown link. We leave
+// (simple) code spans alone, since they are common in commit titles and it's
+// nice for them to render as code, and escape everything else. Note that
+// GitHub does not turn `@mentions` or `#123` references into links when they
+// are already inside a link, so we don't have to worry about a title
+// mentioning the wrong person or linking to an unrelated issue.
+function escapeTitleForLinkText(title) {
+    return title
+        .split(/(`[^`]+`)/)
+        .map((part, i) => (i % 2 === 1 ? part : escapeMarkdown(part)))
+        .join("");
+}
+function formatAuthor({ authorLogin, authorName }) {
+    if (authorLogin) {
+        // Apps have logins like `renovate[bot]`. There's no point in mentioning
+        // them, and the brackets need to be escaped.
+        return authorLogin.endsWith("[bot]")
+            ? escapeMarkdown(authorLogin)
+            : `@${authorLogin}`;
+    }
+    if (authorName) {
+        // GitHub doesn't know which user wrote this commit, so all we have is the
+        // name from the git commit. Make sure that we don't accidentally mention
+        // some unrelated user if that name happens to contain an @.
+        return escapeMarkdown(authorName.replaceAll("@", ""));
+    }
+    return "";
+}
+// Recognizes the ways that GitHub puts a PR number in the title of the commit
+// it creates when merging a PR.
+function pullRequestNumberFromTitle(title) {
+    return (
+    // Squash and rebase merges: "Title of the PR (#123)".
+    title.match(/\(#([0-9]+)\)$/)?.[1] ??
+        // Merge commits: "Merge pull request #123 from org/branch".
+        title.match(/^Merge pull request #([0-9]+) from /)?.[1] ??
+        null);
+}
+function truncateTitle(title) {
+    // Count by code points so we don't cut an emoji in half.
+    const titleCodePoints = Array.from(title);
+    if (titleCodePoints.length <= MAX_COMMIT_TITLE_LENGTH) {
+        return title;
+    }
+    return `${titleCodePoints
+        .slice(0, MAX_COMMIT_TITLE_LENGTH - 1)
+        .join("")
+        .trimEnd()}…`;
+}
+/**
+ * Formats a single promoted commit as (the contents of) a Markdown list item.
+ *
+ * If the commit's title tells us which PR it came from (which it does for
+ * commits that GitHub creates when merging a PR), it looks like:
+ *
+ *     @author org/repo#123 ([commit](https://github.com/org/repo/commit/SHA))
+ *
+ * We don't need to show the commit's title in this case, because when GitHub
+ * renders a reference to a PR in a list, it shows the PR's title. We qualify
+ * the reference with the repository name so that GitHub links to the right PR
+ * (the promotion PR itself is generally in a different repository).
+ *
+ * Otherwise, it looks like:
+ *
+ *     @author [Title of the commit](https://github.com/org/repo/commit/SHA)
+ */
+function formatPromotedCommit(promotedCommit, commitInfo) {
+    const { trimmedRepoURL, commitSHA } = promotedCommit;
+    const url = commitURL(trimmedRepoURL, commitSHA);
+    if (!commitInfo) {
+        return url;
+    }
+    const author = formatAuthor(commitInfo);
+    const authorPrefix = author ? `${author} ` : "";
+    const title = commitInfo.title.trim();
+    const pullRequestNumber = pullRequestNumberFromTitle(title);
+    if (pullRequestNumber) {
+        let ownerAndRepo;
+        try {
+            ownerAndRepo = parseRepoURL(trimmedRepoURL);
+        }
+        catch {
+            // Not a GitHub repo. This shouldn't happen (how did we get a
+            // CommitInfo?) but if it does, we'll just show the title.
+        }
+        if (ownerAndRepo) {
+            return `${authorPrefix}${ownerAndRepo.owner}/${ownerAndRepo.repo}#${pullRequestNumber} ([commit](${url}))`;
+        }
+    }
+    // A link with no text doesn't render as anything you can click on.
+    const linkText = title
+        ? escapeTitleForLinkText(truncateTitle(title))
+        : commitSHA;
+    return `${authorPrefix}[${linkText}](${url})`;
+}
+function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata, commitInfoLookup = () => null) {
     const validatedPrMetadata = PRMetadata(prMetadata);
     if (validatedPrMetadata instanceof type.errors) {
         validatedPrMetadata.throw();
     }
     const organizedPromotionsByTargetEnvironment = reorganizePromotionInfoForMessage(promotionsByFileThenEnvironment);
-    const body = [...organizedPromotionsByTargetEnvironment.entries()]
+    const renderBody = (formatCommitEntry) => [...organizedPromotionsByTargetEnvironment.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([targetEnvironment, organizedPromotionsByPromotionSetJSON]) => {
         const environmentHeader = `### Promoting to ${targetEnvironment}\n`;
@@ -209687,6 +209936,10 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
             .map((entry) => {
             const { promotionSet, apps } = entry[1];
             const { trimmedRepoURL, gitConfigPromotionInfo, dockerImagePromotionInfo, links, } = promotionSet;
+            const formatCommit = (commitSHA) => {
+                const promotedCommit = { trimmedRepoURL, commitSHA };
+                return formatCommitEntry(promotedCommit, commitInfoLookup(promotedCommit));
+            };
             const text = [
                 `Apps:\n${apps
                     .sort((a, b) => a.appDirectory.localeCompare(b.appDirectory))
@@ -209723,7 +209976,7 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
                         ? [
                             `Cannot determine set of changes to the Docker image: ${dockerImagePromotionInfo.message}`,
                         ]
-                        : dockerImagePromotionInfo.commitSHAs.map((commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`)).map((line) => `- ${line}\n`));
+                        : dockerImagePromotionInfo.commitSHAs.map(formatCommit)).map((line) => `- ${line}\n`));
                 text.push("\n");
             }
             if (gitConfigPromotionInfo.type !== "no-change" &&
@@ -209742,7 +209995,7 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
                         ? [
                             `Cannot determine set of changes to the Helm chart: ${gitConfigPromotionInfo.message}`,
                         ]
-                        : gitConfigPromotionInfo.commitSHAs.map((commitSHA) => `${trimmedRepoURL}/commit/${commitSHA}`)).map((line) => `- ${line}\n`));
+                        : gitConfigPromotionInfo.commitSHAs.map(formatCommit)).map((line) => `- ${line}\n`));
             }
             return text.join("");
         });
@@ -209750,7 +210003,10 @@ function formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata) {
     })
         .join("");
     const metadataComment = `<!-- prMetadata:${Buffer.from(JSON.stringify(prMetadata)).toString("base64")} -->\n\n`;
-    return assemblePRBody(metadataComment, body);
+    return {
+        ...assemblePRBody(metadataComment, renderBody(formatPromotedCommit)),
+        promotedCommitsCommitMessage: assemblePRBody("", renderBody(({ trimmedRepoURL, commitSHA }) => commitURL(trimmedRepoURL, commitSHA))).promotedCommitsMarkdown,
+    };
 }
 // peter-evans/create-pull-request (which opens promotion PRs from this
 // action's output) silently truncates PR bodies longer than this before
@@ -210283,20 +210539,20 @@ async function main() {
                 error$1(error, annotation);
             }
         }
-        else {
-            await finalizeGitHubClient?.();
-            await finalizeDockerRegistryClient?.();
-            if (apiCacheFileName) {
-                await promises.writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
-            }
-        }
         if (generatePromotedCommitsMarkdown &&
             getBooleanInput("update-promoted-values")) {
-            const { promotedCommitsMarkdown, truncated } = formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata);
+            // `describe-promoted-commits` is a temporary flag for rolling this out
+            // gradually. If it's not set, we don't look anything up, so every commit
+            // is listed as a bare link (which is how it always used to work).
+            const commitInfoLookup = getBooleanInput("describe-promoted-commits") && gitHubClient
+                ? await lookUpCommitInfos(promotionsByFileThenEnvironment, gitHubClient, parallelism, (message) => warning(message))
+                : undefined;
+            const { promotedCommitsMarkdown, truncated, promotedCommitsCommitMessage, } = formatPromotedCommits(promotionsByFileThenEnvironment, prMetadata, commitInfoLookup);
             if (truncated) {
                 warning(`The promoted-commits-markdown output exceeded ${MAX_PR_BODY_LENGTH} characters and its commit list was truncated. The PR body says so explicitly; consider promoting fewer apps at a time.`);
             }
             setOutput("promoted-commits-markdown", promotedCommitsMarkdown);
+            setOutput("promoted-commits-commit-message", promotedCommitsCommitMessage);
         }
         if (doCleanupClosedPrTracking && allCleanupChanges.length > 0) {
             setOutput("cleanup-changes-markdown", formatCleanupChanges(allCleanupChanges));
@@ -210304,6 +210560,15 @@ async function main() {
         if (getInput("rollback-env")) {
             setOutput("rollback-summary-markdown", formatRollbacks(allRollbacks));
             setOutput("rollback-summary-json", JSON.stringify({ rollbacks: allRollbacks }));
+        }
+        // Save the API cache. We do this last so that it includes everything we
+        // learned from every API call above.
+        if (!errors.length) {
+            await finalizeGitHubClient?.();
+            await finalizeDockerRegistryClient?.();
+            if (apiCacheFileName) {
+                await promises.writeFile(apiCacheFileName, JSON.stringify(finalAPICache));
+            }
         }
     }
     catch (error) {
